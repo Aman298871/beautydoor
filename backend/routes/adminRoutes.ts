@@ -1,0 +1,479 @@
+import { Router, Request, Response } from 'express';
+import { db } from '../db/database.ts';
+import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
+
+export const adminRouter = Router();
+
+// Apply requireAdminAuth to all administrative endpoints
+adminRouter.use(requireAdminAuth);
+
+// 1. Executive Dashboard KPIs
+adminRouter.get('/overview', (req: Request, res: Response): void => {
+  const totalBookings = (db.prepare('SELECT COUNT(*) as count FROM bookings').get() as any).count;
+  const today = new Date().toISOString().split('T')[0];
+  const todayBookings = (db.prepare('SELECT COUNT(*) as count FROM bookings WHERE appointment_date = ?').get(today) as any).count;
+
+  const revenueRow = db.prepare(`
+    SELECT 
+      SUM(CASE WHEN booking_status != 'cancelled' THEN total_payable ELSE 0 END) as total_revenue,
+      SUM(CASE WHEN payment_status IN ('collected', 'verified') THEN total_payable ELSE 0 END) as collected_revenue
+    FROM bookings
+  `).get() as any;
+
+  const statusCountsRaw = db.prepare(`
+    SELECT booking_status, COUNT(*) as count 
+    FROM bookings 
+    GROUP BY booking_status
+  `).all() as { booking_status: string; count: number }[];
+
+  const statusCounts: Record<string, number> = {
+    pending: 0,
+    confirmed: 0,
+    assigned: 0,
+    in_service: 0,
+    completed: 0,
+    cancelled: 0
+  };
+  statusCountsRaw.forEach(r => { statusCounts[r.booking_status] = r.count; });
+
+  const activeServices = (db.prepare('SELECT COUNT(*) as count FROM services WHERE is_active = 1').get() as any).count;
+  const activeSpecialists = (db.prepare("SELECT COUNT(*) as count FROM beauticians WHERE is_active = 1 AND status = 'available'").get() as any).count;
+  const activeTerritories = (db.prepare('SELECT COUNT(*) as count FROM territories WHERE is_active = 1').get() as any).count;
+  const activeCampaigns = (db.prepare(`
+    SELECT COUNT(*) as count FROM campaigns 
+    WHERE is_published = 1 AND datetime('now') BETWEEN datetime(start_time) AND datetime(end_time)
+  `).get() as any).count;
+
+  res.json({
+    totalBookings,
+    todayBookings,
+    totalRevenue: revenueRow.total_revenue || 0,
+    collectedRevenue: revenueRow.collected_revenue || 0,
+    statusCounts,
+    activeServices,
+    activeSpecialists,
+    activeTerritories,
+    activeCampaigns
+  });
+});
+
+// 2. Bookings Management & Dispatch Board
+adminRouter.get('/bookings', (_req: Request, res: Response): void => {
+  const bookings = db.prepare('SELECT * FROM bookings ORDER BY created_at DESC').all() as any[];
+  const populated = bookings.map((b) => {
+    const items = db.prepare('SELECT * FROM booking_items WHERE booking_id = ?').all(b.id) as any[];
+    const beautician = b.assigned_beautician_id 
+      ? db.prepare('SELECT id, name, phone, rating FROM beauticians WHERE id = ?').get(b.assigned_beautician_id)
+      : null;
+    return {
+      ...b,
+      beautician,
+      items: items.map((i) => ({
+        ...i,
+        addonIds: JSON.parse(i.addon_ids_json || '[]'),
+        addonNames: JSON.parse(i.addon_names_json || '[]')
+      }))
+    };
+  });
+  res.json({ bookings: populated });
+});
+
+adminRouter.patch('/bookings/:id/assign', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { beauticianId, notes } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  // Conflict validation: verify beautician is not already assigned to an overlapping slot on the same date
+  if (beauticianId) {
+    const conflict = db.prepare(`
+      SELECT id FROM bookings 
+      WHERE assigned_beautician_id = ? 
+        AND appointment_date = ? 
+        AND appointment_slot = ? 
+        AND id != ? 
+        AND booking_status NOT IN ('cancelled', 'completed')
+    `).get(beauticianId, booking.appointment_date, booking.appointment_slot, id);
+
+    if (conflict) {
+      res.status(400).json({ error: 'Conflict detected: Selected beautician is already committed to another appointment during this exact slot.' });
+      return;
+    }
+  }
+
+  const newStatus = beauticianId ? 'assigned' : 'confirmed';
+  const updatedNotes = notes 
+    ? `${booking.internal_notes || ''} | Dispatch [${adminUser}]: ${notes}`
+    : booking.internal_notes;
+
+  db.prepare(`
+    UPDATE bookings 
+    SET assigned_beautician_id = ?, 
+        booking_status = ?, 
+        internal_notes = ? 
+    WHERE id = ?
+  `).run(beauticianId || null, newStatus, updatedNotes, id);
+
+  recordAuditLog(adminUser, 'DISPATCH_ASSIGN', 'BOOKING', id, { beauticianId, newStatus }, req.ip);
+
+  res.json({ success: true, message: `Beautician successfully assigned. Booking is now ${newStatus}.` });
+});
+
+adminRouter.patch('/bookings/:id/status', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { bookingStatus, paymentStatus, notes } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE bookings 
+    SET booking_status = COALESCE(?, booking_status),
+        payment_status = COALESCE(?, payment_status),
+        internal_notes = CASE WHEN ? IS NOT NULL THEN internal_notes || ' | ' || ? ELSE internal_notes END
+    WHERE id = ?
+  `).run(bookingStatus || null, paymentStatus || null, notes || null, notes || null, id);
+
+  recordAuditLog(adminUser, 'UPDATE_BOOKING_STATUS', 'BOOKING', id, { bookingStatus, paymentStatus }, req.ip);
+  res.json({ success: true });
+});
+
+// 3. Services Catalog & Dynamic Pricing CRUD
+adminRouter.get('/services', (_req: Request, res: Response): void => {
+  const rawServices = db.prepare('SELECT * FROM services ORDER BY created_at DESC').all() as any[];
+  const services = rawServices.map((s) => ({
+    ...s,
+    benefits: JSON.parse(s.benefits_json || '[]'),
+    whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+    variants: db.prepare('SELECT * FROM service_variants WHERE service_id = ?').all(s.id),
+    addons: db.prepare('SELECT * FROM service_addons WHERE service_id = ?').all(s.id)
+  }));
+  res.json({ services });
+});
+
+adminRouter.post('/services', (req: Request, res: Response): void => {
+  const s = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const serviceId = s.id || `srv-${Date.now()}`;
+  const slug = (s.slug || s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) + `-${Math.floor(Math.random() * 1000)}`;
+
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO services (
+        id, category_id, name, slug, description, benefits_json, duration_mins,
+        original_price, selling_price, discount_percent, whats_included_json,
+        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      serviceId,
+      s.categoryId || 'facial',
+      s.name,
+      slug,
+      s.description || '',
+      JSON.stringify(s.benefits || []),
+      Number(s.durationMins) || 60,
+      Number(s.originalPrice) || 1000,
+      Number(s.sellingPrice) || 1000,
+      Number(s.discountPercent) || 0,
+      JSON.stringify(s.whatsIncluded || []),
+      s.isActive ? 1 : 0,
+      s.isPopular ? 1 : 0,
+      s.isBestseller ? 1 : 0,
+      s.isFeaturedDeal ? 1 : 0,
+      s.dealBadge || null,
+      new Date().toISOString()
+    );
+
+    if (Array.isArray(s.variants)) {
+      const insertVar = db.prepare('INSERT INTO service_variants (id, service_id, name, price_delta, duration_delta, is_default) VALUES (?, ?, ?, ?, ?, ?)');
+      s.variants.forEach((v: any, idx: number) => {
+        insertVar.run(`var-${serviceId}-${idx + 1}`, serviceId, v.name, Number(v.priceDelta) || 0, Number(v.durationDelta) || 0, v.isDefault ? 1 : 0);
+      });
+    }
+
+    if (Array.isArray(s.addons)) {
+      const insertAdd = db.prepare('INSERT INTO service_addons (id, service_id, name, price, duration_mins) VALUES (?, ?, ?, ?, ?)');
+      s.addons.forEach((a: any, idx: number) => {
+        insertAdd.run(`add-${serviceId}-${idx + 1}`, serviceId, a.name, Number(a.price) || 0, Number(a.durationMins) || 10);
+      });
+    }
+  })();
+
+  recordAuditLog(adminUser, 'CREATE_SERVICE', 'CATALOG', serviceId, { name: s.name, price: s.sellingPrice }, req.ip);
+  res.status(201).json({ success: true, serviceId });
+});
+
+adminRouter.put('/services/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const s = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE services 
+      SET name = ?, description = ?, duration_mins = ?,
+          original_price = ?, selling_price = ?, discount_percent = ?,
+          category_id = ?, is_active = ?, is_popular = ?, is_bestseller = ?,
+          is_featured_deal = ?, deal_badge = ?, benefits_json = ?, whats_included_json = ?
+      WHERE id = ?
+    `).run(
+      s.name,
+      s.description,
+      Number(s.durationMins),
+      Number(s.originalPrice),
+      Number(s.sellingPrice),
+      Number(s.discountPercent),
+      s.categoryId,
+      s.isActive ? 1 : 0,
+      s.isPopular ? 1 : 0,
+      s.isBestseller ? 1 : 0,
+      s.isFeaturedDeal ? 1 : 0,
+      s.dealBadge || null,
+      JSON.stringify(s.benefits || []),
+      JSON.stringify(s.whatsIncluded || []),
+      id
+    );
+  })();
+
+  recordAuditLog(adminUser, 'UPDATE_SERVICE', 'CATALOG', id, { price: s.sellingPrice, active: s.isActive }, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/services/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('DELETE FROM services WHERE id = ?').run(id);
+  recordAuditLog(adminUser, 'DELETE_SERVICE', 'CATALOG', id, {}, req.ip);
+  res.json({ success: true });
+});
+
+// 4. Amazon-Style Promotional Campaigns CRUD
+adminRouter.get('/campaigns', (_req: Request, res: Response): void => {
+  const rawCampaigns = db.prepare('SELECT * FROM campaigns ORDER BY display_order ASC').all() as any[];
+  const campaigns = rawCampaigns.map((c) => ({
+    ...c,
+    targetCategoryIds: JSON.parse(c.target_category_ids_json || '[]'),
+    targetServiceIds: JSON.parse(c.target_service_ids_json || '[]')
+  }));
+  res.json({ campaigns });
+});
+
+adminRouter.post('/campaigns', (req: Request, res: Response): void => {
+  const c = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const campId = c.id || `camp-${Date.now()}`;
+  const slug = c.slug || c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  db.prepare(`
+    INSERT INTO campaigns (
+      id, title, slug, banner_title, banner_subtitle, banner_image_url,
+      cta_label, destination_url, start_time, end_time, is_flash_deal, is_published,
+      discount_type, discount_val, badge_text, target_category_ids_json, target_service_ids_json,
+      display_order, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    campId,
+    c.title,
+    slug,
+    c.banner_title || c.title,
+    c.banner_subtitle || '',
+    c.banner_image_url || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
+    c.cta_label || 'Shop Now',
+    c.destination_url || '/offers',
+    c.start_time || new Date().toISOString(),
+    c.end_time || new Date(Date.now() + 7 * 86400000).toISOString(),
+    c.is_flash_deal ? 1 : 0,
+    c.is_published ? 1 : 0,
+    c.discount_type || 'percentage',
+    Number(c.discount_val) || 0,
+    c.badge_text || null,
+    JSON.stringify(c.targetCategoryIds || []),
+    JSON.stringify(c.targetServiceIds || []),
+    Number(c.display_order) || 0,
+    new Date().toISOString()
+  );
+
+  recordAuditLog(adminUser, 'CREATE_CAMPAIGN', 'CAMPAIGN', campId, { title: c.title }, req.ip);
+  res.status(201).json({ success: true, campaignId: campId });
+});
+
+adminRouter.patch('/campaigns/:id/publish', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { isPublished } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('UPDATE campaigns SET is_published = ? WHERE id = ?').run(isPublished ? 1 : 0, id);
+  recordAuditLog(adminUser, 'TOGGLE_CAMPAIGN', 'CAMPAIGN', id, { isPublished }, req.ip);
+  res.json({ success: true });
+});
+
+// 5. Beauticians Roster CRUD
+adminRouter.get('/beauticians', (_req: Request, res: Response): void => {
+  const raw = db.prepare('SELECT * FROM beauticians ORDER BY name ASC').all() as any[];
+  const beauticians = raw.map((b) => ({
+    ...b,
+    specialties: JSON.parse(b.specialties_json || '[]'),
+    territories: JSON.parse(b.territories_json || '[]')
+  }));
+  res.json({ beauticians });
+});
+
+adminRouter.post('/beauticians', (req: Request, res: Response): void => {
+  const b = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const id = b.id || `beau-${Date.now()}`;
+
+  db.prepare(`
+    INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, 'available', 5.0, 0, ?)
+  `).run(
+    id,
+    b.name,
+    b.phone,
+    JSON.stringify(b.specialties || ['facial', 'waxing']),
+    JSON.stringify(b.territories || ['Delhi', 'Gurugram']),
+    Number(b.experienceYears) || 3,
+    new Date().toISOString()
+  );
+
+  recordAuditLog(adminUser, 'ONBOARD_BEAUTICIAN', 'STAFF', id, { name: b.name }, req.ip);
+  res.status(201).json({ success: true, beauticianId: id });
+});
+
+adminRouter.patch('/beauticians/:id/status', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { status, isActive } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE beauticians 
+    SET status = COALESCE(?, status),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(status || null, isActive !== undefined ? (isActive ? 1 : 0) : null, id);
+
+  recordAuditLog(adminUser, 'UPDATE_BEAUTICIAN_STATUS', 'STAFF', id, { status, isActive }, req.ip);
+  res.json({ success: true });
+});
+
+// 6. Delhi NCR Territories & Pincodes
+adminRouter.get('/territories', (_req: Request, res: Response): void => {
+  const territories = db.prepare('SELECT * FROM territories ORDER BY city, area_name').all();
+  res.json({ territories });
+});
+
+adminRouter.patch('/territories/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { isActive, deliveryFee, minOrderAmount } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE territories 
+    SET is_active = COALESCE(?, is_active),
+        delivery_fee = COALESCE(?, delivery_fee),
+        min_order_amount = COALESCE(?, min_order_amount)
+    WHERE id = ?
+  `).run(
+    isActive !== undefined ? (isActive ? 1 : 0) : null,
+    deliveryFee !== undefined ? Number(deliveryFee) : null,
+    minOrderAmount !== undefined ? Number(minOrderAmount) : null,
+    id
+  );
+
+  recordAuditLog(adminUser, 'UPDATE_TERRITORY', 'LOCATION', id, { isActive, deliveryFee }, req.ip);
+  res.json({ success: true });
+});
+
+// 7. Coupons CRUD
+adminRouter.get('/coupons', (_req: Request, res: Response): void => {
+  const coupons = db.prepare('SELECT * FROM coupons ORDER BY expires_at DESC').all();
+  res.json({ coupons });
+});
+
+adminRouter.post('/coupons', (req: Request, res: Response): void => {
+  const c = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const id = `cp-${Date.now()}`;
+
+  db.prepare(`
+    INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(
+    id,
+    c.code.toUpperCase(),
+    c.discountType,
+    Number(c.discountValue),
+    Number(c.minOrderAmount) || 0,
+    Number(c.maxDiscount) || 9999,
+    c.expiresAt || '2028-12-31',
+    c.description
+  );
+
+  recordAuditLog(adminUser, 'CREATE_COUPON', 'MARKETING', id, { code: c.code }, req.ip);
+  res.status(201).json({ success: true, couponId: id });
+});
+
+adminRouter.patch('/coupons/:id/toggle', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('UPDATE coupons SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id);
+  recordAuditLog(adminUser, 'TOGGLE_COUPON', 'MARKETING', id, { isActive }, req.ip);
+  res.json({ success: true });
+});
+
+// 8. Reviews Moderation (Approve genuine reviews, reject spam)
+adminRouter.get('/reviews', (_req: Request, res: Response): void => {
+  const reviews = db.prepare('SELECT * FROM reviews ORDER BY created_at DESC').all();
+  res.json({ reviews });
+});
+
+adminRouter.patch('/reviews/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { isApproved, isFeatured } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE reviews 
+    SET is_approved = COALESCE(?, is_approved),
+        is_featured = COALESCE(?, is_featured)
+    WHERE id = ?
+  `).run(isApproved !== undefined ? (isApproved ? 1 : 0) : null, isFeatured !== undefined ? (isFeatured ? 1 : 0) : null, id);
+
+  recordAuditLog(adminUser, 'MODERATE_REVIEW', 'FEEDBACK', id, { isApproved, isFeatured }, req.ip);
+  res.json({ success: true });
+});
+
+// 9. Audit Logs
+adminRouter.get('/audit-logs', (_req: Request, res: Response): void => {
+  const logs = db.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100').all();
+  res.json({ logs });
+});
+
+// 10. Settings & Content Management
+adminRouter.get('/settings', (_req: Request, res: Response): void => {
+  const raw = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+  const settings: Record<string, string> = {};
+  raw.forEach(r => { settings[r.key] = r.value; });
+  res.json({ settings });
+});
+
+adminRouter.patch('/settings', (req: Request, res: Response): void => {
+  const updates = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  db.transaction(() => {
+    for (const [k, v] of Object.entries(updates)) {
+      upsert.run(k, String(v));
+    }
+  })();
+
+  recordAuditLog(adminUser, 'UPDATE_SETTINGS', 'CONFIG', 'SYSTEM', updates, req.ip);
+  res.json({ success: true });
+});

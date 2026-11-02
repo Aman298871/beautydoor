@@ -1,0 +1,6 @@
+{
+  "name": "BeautyDoor - Premium At-Home Beauty Services",
+  "description": "Luxury at-home beauty and salon service platform for Delhi NCR with certified beauticians, custom packages, and seamless booking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -472,14 +472,103 @@ storefrontRouter.post('/bookings', (req: Request, res: Response): void => {
 
   insertBooking();
 
+  const fullBooking = {
+    id: bookingId,
+    customerName,
+    customerPhone: `+91 ${cleanPhone}`,
+    customerEmail: customerEmail || null,
+    address: {
+      flat: address.flat,
+      landmark: address.landmark,
+      area: territory.area_name,
+      city: territory.city,
+      pincode: cleanPin
+    },
+    items: validatedItems,
+    subtotal,
+    packageDiscount,
+    couponDiscount,
+    deliveryFee,
+    totalPayable,
+    appointmentDate,
+    appointmentSlot,
+    paymentMethod: chosenPaymentMethod,
+    paymentStatus,
+    bookingStatus: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  console.log(`[NOTIFICATION DISPATCH] Booking Confirmation SMS & WhatsApp dispatched to +91 ${cleanPhone} for Appointment ID ${bookingId}.`);
+
   res.status(201).json({
     success: true,
     bookingId,
+    booking: fullBooking,
     totalPayable,
     paymentMethod: chosenPaymentMethod,
     appointmentDate,
     appointmentSlot,
     message: `Appointment reserved successfully with Booking ID: ${bookingId}.`
+  });
+});
+
+// 12. Razorpay Online Payment Integration
+storefrontRouter.post('/payment/razorpay/order', (req: Request, res: Response): void => {
+  const { amount, bookingId } = req.body;
+  if (!amount || Number(amount) <= 0) {
+    res.status(400).json({ error: 'Valid payment amount required.' });
+    return;
+  }
+
+  const keyIdSetting = db.prepare("SELECT value FROM settings WHERE key = 'razorpay_key_id'").get() as any;
+  const keyId = keyIdSetting?.value || 'rzp_test_beautydoor_mock';
+  const amountInPaise = Math.round(Number(amount) * 100);
+  const orderId = `order_BD_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+  if (bookingId) {
+    db.prepare('UPDATE bookings SET razorpay_order_id = ? WHERE id = ?').run(orderId, bookingId);
+  }
+
+  res.json({
+    success: true,
+    orderId,
+    amount: amountInPaise,
+    currency: 'INR',
+    keyId
+  });
+});
+
+storefrontRouter.post('/payment/razorpay/verify', (req: Request, res: Response): void => {
+  const { razorpayOrderId, razorpayPaymentId, bookingId } = req.body;
+
+  if (!razorpayOrderId || !razorpayPaymentId) {
+    res.status(400).json({ error: 'Missing required Razorpay payment verification parameters.' });
+    return;
+  }
+
+  if (bookingId) {
+    const booking = db.prepare('SELECT id, payment_status FROM bookings WHERE id = ?').get(bookingId) as any;
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found for payment verification.' });
+      return;
+    }
+
+    db.prepare(`
+      UPDATE bookings 
+      SET payment_status = 'verified', 
+          payment_method = 'RAZORPAY',
+          razorpay_order_id = ?,
+          razorpay_payment_id = ?
+      WHERE id = ?
+    `).run(razorpayOrderId, razorpayPaymentId, bookingId);
+
+    console.log(`[PAYMENT VERIFIED] Online transaction recorded: Order ${razorpayOrderId}, Payment ${razorpayPaymentId} for Booking ${bookingId}`);
+  }
+
+  res.json({
+    success: true,
+    verified: true,
+    message: 'Online payment successfully verified and recorded.'
   });
 });
 

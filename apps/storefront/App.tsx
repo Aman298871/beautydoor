@@ -272,6 +272,7 @@ function StorefrontContent() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenPincodeModal={() => setIsPincodeModalOpen(true)}
         currentTerritoryName={selectedTerritory?.area_name}
+        categories={categories}
       />
 
       {/* 3. Main Multi-Page Content */}

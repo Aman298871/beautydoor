@@ -48,13 +48,15 @@ export default function AdminApp() {
 
   // Active Tab: 24 modules architecture
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dispatch' | 'services' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'reviews' | 'audit' | 'settings'
+    'overview' | 'dispatch' | 'services' | 'categories' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings'
   >('dispatch');
 
   // Module data
   const [overview, setOverview] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [beauticians, setBeauticians] = useState<any[]>([]);
   const [territories, setTerritories] = useState<any[]>([]);
@@ -63,6 +65,12 @@ export default function AdminApp() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(false);
+
+  // Category Modal state
+  const [isNewCategoryModal, setIsNewCategoryModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatOrder, setNewCatOrder] = useState('1');
 
   // Dispatch modal
   const [selectedBookingForDispatch, setSelectedBookingForDispatch] = useState<any | null>(null);
@@ -128,10 +136,12 @@ export default function AdminApp() {
     setLoading(true);
     const headers = { Authorization: `Bearer ${token}` };
     try {
-      const [ov, bk, srv, camp, beau, ter, coup, rev, aud, sett] = await Promise.all([
+      const [ov, bk, srv, cats, cust, camp, beau, ter, coup, rev, aud, sett] = await Promise.all([
         fetch('/api/admin/overview', { headers }).then(r => r.json()),
         fetch('/api/admin/bookings', { headers }).then(r => r.json()),
         fetch('/api/admin/services', { headers }).then(r => r.json()),
+        fetch('/api/admin/categories', { headers }).then(r => r.json()),
+        fetch('/api/admin/customers', { headers }).then(r => r.json()),
         fetch('/api/admin/campaigns', { headers }).then(r => r.json()),
         fetch('/api/admin/beauticians', { headers }).then(r => r.json()),
         fetch('/api/admin/territories', { headers }).then(r => r.json()),
@@ -150,6 +160,8 @@ export default function AdminApp() {
       setOverview(ov);
       setBookings(bk.bookings || []);
       setServices(srv.services || []);
+      setCategories(cats.categories || []);
+      setCustomers(cust.customers || []);
       setCampaigns(camp.campaigns || []);
       setBeauticians(beau.beauticians || []);
       setTerritories(ter.territories || []);
@@ -315,6 +327,73 @@ export default function AdminApp() {
     }
   };
 
+  // Category Handlers
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName) return;
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newCatName,
+          description: newCatDesc,
+          displayOrder: Number(newCatOrder) || 1
+        })
+      });
+      if (res.ok) {
+        notify('Category added successfully.');
+        setIsNewCategoryModal(false);
+        setNewCatName('');
+        setNewCatDesc('');
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleCategory = async (id: string, currentActive: number) => {
+    try {
+      await fetch(`/api/admin/categories/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isActive: currentActive === 1 ? 0 : 1 })
+      });
+      notify('Category visibility updated.');
+      fetchAdminData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Settings Handler
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(settings)
+      });
+      if (res.ok) {
+        notify('Business settings updated and active across storefront.');
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // If unauthenticated: render Dedicated Admin Login
   if (!token) {
     return (
@@ -475,6 +554,16 @@ export default function AdminApp() {
           </button>
 
           <button
+            onClick={() => setActiveTab('categories')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'categories' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5" />
+            <span>Categories ({categories.length})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('campaigns')}
             className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'campaigns' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
@@ -510,8 +599,18 @@ export default function AdminApp() {
               activeTab === 'coupons' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
             }`}
           >
-            <Tag className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5" />
             <span>Coupons</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('customers')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'customers' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Customers ({customers.length})</span>
           </button>
 
           <button
@@ -532,6 +631,16 @@ export default function AdminApp() {
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Audit Logs ({auditLogs.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'settings' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Settings & Policies</span>
           </button>
         </div>
       </header>
@@ -1029,6 +1138,348 @@ export default function AdminApp() {
           </div>
         )}
 
+        {/* 10. CATEGORIES MANAGEMENT */}
+        {activeTab === 'categories' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Service Categories Management
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Organize treatments into customer-facing categories. Active categories are reflected on the storefront navigation menu.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setIsNewCategoryModal(true)}
+                className="px-4 py-2 bg-[#4A0417] text-white text-xs font-semibold rounded-md shadow-xs hover:bg-[#36020F] flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <Plus className="w-4 h-4 text-[#C5A880]" />
+                <span>Add Category</span>
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-[#E8DDD3] overflow-hidden shadow-xs">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAF7F2] text-[#4A0417] uppercase tracking-wider font-semibold border-b border-[#E8DDD3]">
+                  <tr>
+                    <th className="py-3 px-4">Order</th>
+                    <th className="py-3 px-4">Category Name</th>
+                    <th className="py-3 px-4">Slug</th>
+                    <th className="py-3 px-4">Description</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F4EFEA]">
+                  {categories.map((c) => (
+                    <tr key={c.id} className="hover:bg-[#FAF7F2]">
+                      <td className="py-3 px-4 font-bold tabular-nums text-[#8C7A7C]">{c.display_order}</td>
+                      <td className="py-3 px-4 font-semibold text-[#1F1A1C]">{c.name}</td>
+                      <td className="py-3 px-4 font-mono text-[#6B5A5C]">{c.slug}</td>
+                      <td className="py-3 px-4 text-[#6B5A5C] max-w-xs truncate">{c.description || '—'}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          c.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700'
+                        }`}>
+                          {c.is_active === 1 ? 'Active' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleToggleCategory(c.id, c.is_active)}
+                          className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors ${
+                            c.is_active === 1 ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          }`}
+                        >
+                          {c.is_active === 1 ? 'Disable' : 'Enable'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 11. CUSTOMER DIRECTORY */}
+        {activeTab === 'customers' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                Customer Directory & Lifetime Value
+              </h3>
+              <p className="text-xs text-[#7A6B6D]">
+                Verified customer profiles derived from real appointments in the database.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-[#E8DDD3] overflow-hidden shadow-xs">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAF7F2] text-[#4A0417] uppercase tracking-wider font-semibold border-b border-[#E8DDD3]">
+                  <tr>
+                    <th className="py-3 px-4">Customer Name</th>
+                    <th className="py-3 px-4">Mobile Phone</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Service Area</th>
+                    <th className="py-3 px-4 text-center">Bookings</th>
+                    <th className="py-3 px-4 text-right">Total Spend</th>
+                    <th className="py-3 px-4 text-right">Last Appointment</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F4EFEA]">
+                  {customers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-[#8C7A7C] italic">
+                        No registered customer orders recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    customers.map((c) => (
+                      <tr key={c.id} className="hover:bg-[#FAF7F2]">
+                        <td className="py-3 px-4 font-semibold text-[#1F1A1C]">{c.name}</td>
+                        <td className="py-3 px-4 font-mono text-[#4A0417]">{c.phone}</td>
+                        <td className="py-3 px-4 text-[#6B5A5C]">{c.email || '—'}</td>
+                        <td className="py-3 px-4 text-[#6B5A5C]">{c.city} ({c.pincode})</td>
+                        <td className="py-3 px-4 text-center font-bold tabular-nums">{c.total_bookings}</td>
+                        <td className="py-3 px-4 text-right font-bold text-[#1F1A1C] tabular-nums">
+                          ₹{(c.total_spend || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-4 text-right text-[#8C7A7C] tabular-nums">
+                          {c.last_booking_at?.split('T')[0] || '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 12. BUSINESS SETTINGS & POLICIES */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                Business Settings & Operating Policies
+              </h3>
+              <p className="text-xs text-[#7A6B6D]">
+                Manage promotional banners, optional loyalty & referral programs, customer support details, and payment gateway configuration.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              {/* Section A: Announcement Bar */}
+              <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-[#C5A880]" />
+                  <span>Promotional Announcement Bar</span>
+                </h4>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-semibold block mb-1">Announcement Text</label>
+                    <input
+                      type="text"
+                      value={settings.announcement_text || ''}
+                      onChange={(e) => setSettings({ ...settings, announcement_text: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="e.g. ✨ Delhi NCR: Up to 35% OFF on select rituals | Pay after service"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="announcement_active"
+                      checked={settings.announcement_active === 'true'}
+                      onChange={(e) => setSettings({ ...settings, announcement_active: e.target.checked ? 'true' : 'false' })}
+                      className="accent-[#4A0417]"
+                    />
+                    <label htmlFor="announcement_active" className="font-semibold cursor-pointer">
+                      Display Announcement Bar on Customer Storefront
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section B: Membership & Referral Modules */}
+              <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                  <span>Membership Privé & Referral Modules (Optional)</span>
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                  {/* Membership */}
+                  <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#1F1A1C]">BeautyDoor Privé Club</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.membership_enabled === 'true'}
+                        onChange={(e) => setSettings({ ...settings, membership_enabled: e.target.checked ? 'true' : 'false' })}
+                        className="accent-[#4A0417]"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold block mb-1">Annual Membership Fee (₹)</label>
+                      <input
+                        type="number"
+                        value={settings.membership_fee || '499'}
+                        onChange={(e) => setSettings({ ...settings, membership_fee: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold block mb-1">Member Exclusive Discount (%)</label>
+                      <input
+                        type="number"
+                        value={settings.membership_discount_percent || '10'}
+                        onChange={(e) => setSettings({ ...settings, membership_discount_percent: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Referral */}
+                  <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#1F1A1C]">Referral Rewards Program</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.referral_enabled === 'true'}
+                        onChange={(e) => setSettings({ ...settings, referral_enabled: e.target.checked ? 'true' : 'false' })}
+                        className="accent-[#4A0417]"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold block mb-1">Referral Credit to Referrer (₹)</label>
+                      <input
+                        type="number"
+                        value={settings.referral_bonus_amount || '200'}
+                        onChange={(e) => setSettings({ ...settings, referral_bonus_amount: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md"
+                      />
+                    </div>
+                    <p className="text-[11px] text-[#7A6B6D]">
+                      When enabled, customer accounts show a shareable referral code.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section C: Business Concierge & Hours */}
+              <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-[#C5A880]" />
+                  <span>Support & Operational Guidelines</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <label className="font-semibold block mb-1">Helpline Phone</label>
+                    <input
+                      type="text"
+                      value={settings.contact_phone || '+91 99991 23456'}
+                      onChange={(e) => setSettings({ ...settings, contact_phone: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1">WhatsApp Support</label>
+                    <input
+                      type="text"
+                      value={settings.support_whatsapp || '+91 99991 23456'}
+                      onChange={(e) => setSettings({ ...settings, support_whatsapp: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1">Support Email</label>
+                    <input
+                      type="email"
+                      value={settings.contact_email || 'concierge@beautydoor.in'}
+                      onChange={(e) => setSettings({ ...settings, contact_email: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+                  <div>
+                    <label className="font-semibold block mb-1">Cancellation Window (Hours)</label>
+                    <input
+                      type="number"
+                      value={settings.cancellation_window_hours || '4'}
+                      onChange={(e) => setSettings({ ...settings, cancellation_window_hours: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1">Minimum Booking Order (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.min_order_amount || '499'}
+                      onChange={(e) => setSettings({ ...settings, min_order_amount: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section D: Payment Gateway */}
+              <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-[#C5A880]" />
+                  <span>Razorpay Payment Gateway</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-semibold block mb-1">Razorpay Key ID</label>
+                    <input
+                      type="text"
+                      value={settings.razorpay_key_id || 'rzp_test_beautydoor_mock'}
+                      onChange={(e) => setSettings({ ...settings, razorpay_key_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-6">
+                    <input
+                      type="checkbox"
+                      id="razorpay_enabled"
+                      checked={settings.razorpay_enabled === 'true'}
+                      onChange={(e) => setSettings({ ...settings, razorpay_enabled: e.target.checked ? 'true' : 'false' })}
+                      className="accent-[#4A0417]"
+                    />
+                    <label htmlFor="razorpay_enabled" className="font-semibold cursor-pointer">
+                      Enable Razorpay Online Payments (Cards/UPI)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit */}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-[#4A0417] text-white text-xs font-semibold rounded-md shadow-md hover:bg-[#36020F] transition-all"
+                >
+                  Save All Settings & Policies
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
       </main>
 
       {/* DISPATCH ASSIGNMENT MODAL */}
@@ -1268,6 +1719,71 @@ export default function AdminApp() {
                   className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
                 >
                   Publish Campaign
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW CATEGORY MODAL */}
+      {isNewCategoryModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">Add New Service Category</h4>
+              <button onClick={() => setIsNewCategoryModal(false)} className="p-1 text-[#6B5A5C]">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold block mb-1">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="e.g. Body Polishing & Scrubs"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={newCatDesc}
+                  onChange={(e) => setNewCatDesc(e.target.value)}
+                  placeholder="e.g. Full body exfoliations and skin brightening wraps."
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Display Order</label>
+                <input
+                  type="number"
+                  value={newCatOrder}
+                  onChange={(e) => setNewCatOrder(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
+                <button
+                  type="button"
+                  onClick={() => setIsNewCategoryModal(false)}
+                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
+                >
+                  Create Category
                 </button>
               </div>
             </form>

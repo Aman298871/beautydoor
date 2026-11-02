@@ -477,3 +477,79 @@ adminRouter.patch('/settings', (req: Request, res: Response): void => {
   recordAuditLog(adminUser, 'UPDATE_SETTINGS', 'CONFIG', 'SYSTEM', updates, req.ip);
   res.json({ success: true });
 });
+
+// 11. Categories Management CRUD
+adminRouter.get('/categories', (_req: Request, res: Response): void => {
+  const categories = db.prepare('SELECT * FROM categories ORDER BY display_order ASC').all();
+  res.json({ categories });
+});
+
+adminRouter.post('/categories', (req: Request, res: Response): void => {
+  const { name, slug, description, displayOrder } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const id = req.body.id || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const catSlug = slug || id;
+
+  db.prepare(`
+    INSERT INTO categories (id, name, slug, description, display_order, is_active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(id, name, catSlug, description || '', Number(displayOrder) || 0);
+
+  recordAuditLog(adminUser, 'CREATE_CATEGORY', 'CATALOG', id, { name }, req.ip);
+  res.status(201).json({ success: true, categoryId: id });
+});
+
+adminRouter.put('/categories/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { name, slug, description, displayOrder, isActive } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE categories 
+    SET name = COALESCE(?, name),
+        slug = COALESCE(?, slug),
+        description = COALESCE(?, description),
+        display_order = COALESCE(?, display_order),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(
+    name || null,
+    slug || null,
+    description !== undefined ? description : null,
+    displayOrder !== undefined ? Number(displayOrder) : null,
+    isActive !== undefined ? (isActive ? 1 : 0) : null,
+    id
+  );
+
+  recordAuditLog(adminUser, 'UPDATE_CATEGORY', 'CATALOG', id, { name, isActive }, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/categories/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  recordAuditLog(adminUser, 'DELETE_CATEGORY', 'CATALOG', id, {}, req.ip);
+  res.json({ success: true });
+});
+
+// 12. Customer Directory & Booking History
+adminRouter.get('/customers', (_req: Request, res: Response): void => {
+  const customers = db.prepare(`
+    SELECT 
+      customer_id as id,
+      customer_name as name,
+      customer_phone as phone,
+      customer_email as email,
+      COUNT(id) as total_bookings,
+      SUM(total_payable) as total_spend,
+      MAX(created_at) as last_booking_at,
+      city,
+      pincode
+    FROM bookings
+    GROUP BY customer_id
+    ORDER BY last_booking_at DESC
+  `).all();
+  res.json({ customers });
+});

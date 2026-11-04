@@ -116,10 +116,13 @@ export const BookingDrawer: React.FC<Props> = ({
   const packageDiscount = Math.round((subtotal * bundlePercent) / 100);
   const amountAfterBundle = subtotal - packageDiscount;
 
+  // Slot surcharge: ₹100 for 08:00 AM or 06:00 PM
+  const slotCharge = (selectedSlot === '08:00 AM' || selectedSlot === '06:00 PM') ? 100 : 0;
+
   // Coupon discount
   const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
   const deliveryFee = matchedTerritory ? matchedTerritory.deliveryFee : 0;
-  const finalTotal = Math.max(0, amountAfterBundle - couponDiscount + deliveryFee);
+  const finalTotal = Math.max(0, amountAfterBundle - couponDiscount + deliveryFee + slotCharge);
 
   // Validate pincode against loaded territories
   const handlePincodeChange = (val: string) => {
@@ -154,11 +157,14 @@ export const BookingDrawer: React.FC<Props> = ({
         body: JSON.stringify({
           items: cartItems.map(i => ({
             serviceId: i.service.id,
+            isPackage: i.isPackage,
+            packageId: i.isPackage ? i.service.id : undefined,
             variantId: i.selectedVariant?.id,
             addonIds: i.selectedAddons.map(a => a.id)
           })),
           couponCode: couponCode.trim(),
-          pincode
+          pincode,
+          appointmentSlot: selectedSlot
         })
       });
       const data = await res.json();
@@ -203,6 +209,8 @@ export const BookingDrawer: React.FC<Props> = ({
       },
       items: cartItems.map(i => ({
         serviceId: i.service.id,
+        isPackage: i.isPackage,
+        packageId: i.isPackage ? i.service.id : undefined,
         variantId: i.selectedVariant?.id,
         addonIds: i.selectedAddons.map(a => a.id)
       })),
@@ -572,25 +580,36 @@ export const BookingDrawer: React.FC<Props> = ({
                       <label className="text-xs font-semibold text-[#1F1A1C] flex items-center justify-between">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                          Available Time Slots (Punctual Arrival)
+                          Available Time Slots (8:00 AM – 6:00 PM)
                         </span>
                         {slotsLoading && <span className="text-[11px] text-[#8C7A7C]">Checking slots...</span>}
                       </label>
+                      <p className="text-[11px] text-[#8C7A7C]">
+                        Slots from 8:00 AM to 6:00 PM. Note: 8:00 AM early-morning and 6:00 PM evening slots include a nominal ₹100 specialist surcharge.
+                      </p>
 
                       <div className="grid grid-cols-3 gap-2">
                         {availableSlots.map((slot) => {
                           const isSelected = selectedSlot === slot;
+                          const hasSurcharge = slot === '08:00 AM' || slot === '06:00 PM';
                           return (
                             <button
                               key={slot}
                               onClick={() => setSelectedSlot(slot)}
-                              className={`py-2 px-2 text-xs font-semibold rounded-md border transition-all tabular-nums ${
+                              className={`py-2 px-2 text-xs font-semibold rounded-md border transition-all tabular-nums flex flex-col items-center justify-center relative ${
                                 isSelected
                                   ? 'bg-[#4A0417] text-white border-[#4A0417]'
                                   : 'bg-white hover:bg-[#FAF7F2] border-[#E8DDD3] text-[#1F1A1C]'
                               }`}
                             >
-                              {slot}
+                              <span>{slot}</span>
+                              {hasSurcharge && (
+                                <span className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1 py-0.2 rounded ${
+                                  isSelected ? 'bg-amber-400 text-stone-900' : 'bg-amber-100 text-amber-900'
+                                }`}>
+                                  +₹100 Extra
+                                </span>
+                              )}
                             </button>
                           );
                         })}
@@ -872,6 +891,12 @@ export const BookingDrawer: React.FC<Props> = ({
                     <div className="flex justify-between text-emerald-800 font-medium">
                       <span>Bundle Discount:</span>
                       <span className="tabular-nums">-₹{packageDiscount}</span>
+                    </div>
+                  )}
+                  {slotCharge > 0 && (
+                    <div className="flex justify-between text-amber-900 font-medium">
+                      <span>Early/Evening Slot Surcharge ({selectedSlot}):</span>
+                      <span className="tabular-nums">+₹{slotCharge}</span>
                     </div>
                   )}
                   {couponDiscount > 0 && (

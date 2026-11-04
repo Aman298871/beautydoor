@@ -179,52 +179,68 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
 
           </div>
 
-          {/* Right Column: High-Grade Editorial Visual Showcase */}
+          {/* Right Column: High-Grade Editorial Visual Showcase with Banner Image */}
           <div className="lg:col-span-5">
             <div className="relative rounded-2xl overflow-hidden bg-white border border-[#E8DDD3] shadow-md p-3 sm:p-4">
-              <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-[#4A0417] to-[#1F1A1C] text-[#FAF7F2] aspect-[4/3] flex flex-col justify-between p-6 sm:p-7 shadow-inner">
-                
-                <div className="relative flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5A880] bg-black/40 px-3 py-1 rounded backdrop-blur-xs border border-[#C5A880]/30">
-                    Doorstep Ritual
-                  </span>
-                  <span className="text-xs font-medium text-[#FAF7F2]/80">
-                    Delhi NCR
-                  </span>
-                </div>
-
-                <div className="relative my-auto space-y-2 py-4">
-                  <p className="font-serif text-2xl sm:text-3xl text-white font-normal leading-snug">
-                    “Hospital-grade hygiene meets five-star salon indulgence.”
-                  </p>
-                  <p className="text-xs text-[#E8DDD3]/90 font-light">
-                    100% Single-use sealed kits · Autoclave instruments · Punctual certified estheticians
-                  </p>
-                </div>
-
-                <div className="relative pt-3 border-t border-white/15 flex items-center justify-between text-xs text-[#FAF7F2]/90">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#C5A880]" />
-                    <span>Verified Female Specialists</span>
+              
+              {/* Banner Visual Display Container */}
+              <div className="relative rounded-xl overflow-hidden bg-[#FAF6F0] border border-[#E8DDD3] aspect-[16/10] flex items-center justify-center group shadow-inner">
+                {activeCampaign.banner_image_url ? (
+                  <img
+                    src={activeCampaign.banner_image_url}
+                    alt={activeCampaign.banner_title || 'BeautyDoor Service Ritual'}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-102"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#4A0417] to-[#1F1A1C] text-[#FAF7F2] p-6 flex flex-col justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5A880]">
+                      Doorstep Ritual · Delhi NCR
+                    </span>
+                    <p className="font-serif text-2xl text-white font-normal">
+                      “Hospital-grade hygiene meets five-star salon indulgence.”
+                    </p>
+                    <span className="text-xs text-[#FAF7F2]/80">100% Single-use sealed kits</span>
                   </div>
-                  <span className="text-[#C5A880] font-semibold">Pay After Service (COD)</span>
-                </div>
+                )}
 
+                {/* Overlaid Pill Badge */}
+                <div className="absolute top-3 left-3 bg-[#1F1A1C]/75 backdrop-blur-xs text-[#FAF7F2] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border border-white/20">
+                  {activeCampaign.badge_text || 'Premium Ritual'}
+                </div>
+              </div>
+
+              {/* Interactive Banner Switcher Pills */}
+              <div className="mt-3 pt-3 border-t border-[#F0E6DE] flex items-center justify-between gap-1.5">
+                {campaigns.map((c, idx) => (
+                  <button
+                    key={c.id || idx}
+                    type="button"
+                    onClick={() => setCurrentIdx(idx)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-center transition-all truncate border ${
+                      currentIdx === idx
+                        ? 'bg-[#4A0417] text-[#FAF7F2] border-[#4A0417] shadow-xs'
+                        : 'bg-[#FAF7F2] text-[#6E5D60] border-[#E8DDD3] hover:border-[#C5A880]'
+                    }`}
+                  >
+                    {idx === 0 ? 'Waxing' : idx === 1 ? 'Facial' : idx === 2 ? 'Pedicure' : c.cta_label || `Banner ${idx + 1}`}
+                  </button>
+                ))}
               </div>
 
               {/* 3 Pillar Summary Strip */}
-              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#F0E6DE] text-center">
-                <div className="p-2 bg-[#FAF7F2] rounded-lg">
-                  <p className="text-xs font-bold text-[#4A0417]">Zero Commute</p>
-                  <p className="text-[11px] text-[#6E5D60]">Save 2+ hours</p>
+              <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-[#F0E6DE] text-center">
+                <div className="p-1.5 bg-[#FAF7F2] rounded-lg">
+                  <p className="text-[11px] font-bold text-[#4A0417]">Zero Commute</p>
+                  <p className="text-[10px] text-[#6E5D60]">Save 2+ hours</p>
                 </div>
-                <div className="p-2 bg-[#FAF7F2] rounded-lg">
-                  <p className="text-xs font-bold text-[#4A0417]">Pay After</p>
-                  <p className="text-[11px] text-[#6E5D60]">Cash or UPI</p>
+                <div className="p-1.5 bg-[#FAF7F2] rounded-lg">
+                  <p className="text-[11px] font-bold text-[#4A0417]">Pay After</p>
+                  <p className="text-[10px] text-[#6E5D60]">Cash or UPI</p>
                 </div>
-                <div className="p-2 bg-[#FAF7F2] rounded-lg">
-                  <p className="text-xs font-bold text-[#4A0417]">Free Cancel</p>
-                  <p className="text-[11px] text-[#6E5D60]">Up to 4h prior</p>
+                <div className="p-1.5 bg-[#FAF7F2] rounded-lg">
+                  <p className="text-[11px] font-bold text-[#4A0417]">Free Cancel</p>
+                  <p className="text-[10px] text-[#6E5D60]">Up to 4h prior</p>
                 </div>
               </div>
 

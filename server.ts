@@ -7,6 +7,7 @@ import { initDatabase } from './backend/db/database.ts';
 import { authRouter } from './backend/routes/authRoutes.ts';
 import { storefrontRouter } from './backend/routes/storefrontRoutes.ts';
 import { adminRouter } from './backend/routes/adminRoutes.ts';
+import { faqRouter } from './backend/routes/faqRoutes.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,8 @@ async function startServer() {
   app.use('/api/auth', authRouter);
   app.use('/api/storefront', storefrontRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/faq', faqRouter);
+  app.use('/api/admin/faqs', faqRouter); // Convenient alias for admin FAQ management
 
   // Backward compatibility alias for any existing clients
   app.use('/api', storefrontRouter);

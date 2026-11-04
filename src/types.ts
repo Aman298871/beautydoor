@@ -72,6 +72,8 @@ export interface CartItem {
   selectedAddons: ServiceAddon[];
   totalItemPrice: number;
   totalDurationMins: number;
+  isPackage?: boolean;
+  packageId?: string;
 }
 
 export interface BookingItem {

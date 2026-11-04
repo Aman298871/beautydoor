@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" fill="none">
+  <defs>
+    <!-- Background Luxury Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FAF6F0"/>
+      <stop offset="50%" stop-color="#F5EFE6"/>
+      <stop offset="100%" stop-color="#ECE2D4"/>
+    </linearGradient>
+
+    <!-- Warm Golden Honey Glow -->
+    <radialGradient id="honeyGlow" cx="68%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#DFB773" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#C5A880" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#FAF6F0" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Burgundy Accent Radial -->
+    <radialGradient id="burgundyGlow" cx="20%" cy="30%" r="50%">
+      <stop offset="0%" stop-color="#4A0417" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#4A0417" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Wax Pot Metallic Gradient -->
+    <linearGradient id="goldPotGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5C799"/>
+      <stop offset="40%" stop-color="#C5A880"/>
+      <stop offset="70%" stop-color="#A4835A"/>
+      <stop offset="100%" stop-color="#84643F"/>
+    </linearGradient>
+
+    <!-- Molten Wax Surface Gradient -->
+    <linearGradient id="moltenWax" x1="0%" y1="30%" x2="100%" y2="70%">
+      <stop offset="0%" stop-color="#FBE6BD"/>
+      <stop offset="35%" stop-color="#E7BA71"/>
+      <stop offset="75%" stop-color="#C89745"/>
+      <stop offset="100%" stop-color="#9C6F2A"/>
+    </linearGradient>
+
+    <!-- Wood Spatula Gradient -->
+    <linearGradient id="woodGrad" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#F2DEC2"/>
+      <stop offset="30%" stop-color="#E2C19B"/>
+      <stop offset="70%" stop-color="#BF976C"/>
+      <stop offset="100%" stop-color="#9E7348"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#4A0417" flood-opacity="0.12"/>
+    </filter>
+    <filter id="deepShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="36" flood-color="#2A020D" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Base Canvas -->
+  <rect width="1600" height="900" fill="url(#bgGrad)"/>
+  <rect width="1600" height="900" fill="url(#honeyGlow)"/>
+  <rect width="1600" height="900" fill="url(#burgundyGlow)"/>
+
+  <!-- Subtle Minimalist Grid & Micro Crosses -->
+  <g opacity="0.08" stroke="#4A0417" stroke-width="1">
+    <line x1="120" y1="0" x2="120" y2="900"/>
+    <line x1="480" y1="0" x2="480" y2="900"/>
+    <line x1="840" y1="0" x2="840" y2="900"/>
+    <line x1="1200" y1="0" x2="1200" y2="900"/>
+    <line x1="0" y1="180" x2="1600" y2="180"/>
+    <line x1="0" y1="450" x2="1600" y2="450"/>
+    <line x1="0" y1="720" x2="1600" y2="720"/>
+  </g>
+
+  <!-- Decorative Minimalist Circular Rings -->
+  <circle cx="1120" cy="450" r="320" stroke="#C5A880" stroke-width="1" stroke-dasharray="4 8" opacity="0.4"/>
+  <circle cx="1120" cy="450" r="390" stroke="#4A0417" stroke-width="1" opacity="0.12"/>
+
+  <!-- Left Side: Editorial Typography & Brand Narrative -->
+  <g transform="translate(140, 220)">
+    <!-- Badge -->
+    <rect x="0" y="0" width="260" height="36" rx="18" fill="#4A0417" fill-opacity="0.08"/>
+    <rect x="0" y="0" width="260" height="36" rx="18" stroke="#4A0417" stroke-width="1" stroke-opacity="0.2"/>
+    <circle cx="18" cy="18" r="4" fill="#4A0417"/>
+    <text x="32" y="22" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" letter-spacing="2.5" fill="#4A0417" text-transform="uppercase">
+      BEAUTYDOOR RITUALS
+    </text>
+
+    <!-- Main Title -->
+    <text x="0" y="110" font-family="'Playfair Display', serif" font-size="64" font-weight="400" fill="#1F1A1C" letter-spacing="-1">
+      Italian Liposoluble
+    </text>
+    <text x="0" y="185" font-family="'Playfair Display', serif" font-size="64" font-style="italic" font-weight="500" fill="#4A0417" letter-spacing="-1">
+      &amp; Peel-Off Waxing.
+    </text>
+
+    <!-- Subtitle -->
+    <text x="0" y="245" font-family="'Plus Jakarta Sans', sans-serif" font-size="19" font-weight="400" fill="#6B5A5C" line-height="30">
+      <tspan x="0" dy="0">Colophony-free Italian RICA &amp; stripless Brazilian formulas.</tspan>
+      <tspan x="0" dy="30">98% less redness with strictly zero double-dipping.</tspan>
+    </text>
+
+    <!-- Feature Tags -->
+    <g transform="translate(0, 330)">
+      <g transform="translate(0, 0)">
+        <rect width="180" height="42" rx="8" fill="#FFFFFF" stroke="#E8DDD3" stroke-width="1" filter="url(#softShadow)"/>
+        <text x="18" y="26" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#4A0417">100% Single-Use</text>
+      </g>
+      <g transform="translate(196, 0)">
+        <rect width="190" height="42" rx="8" fill="#FFFFFF" stroke="#E8DDD3" stroke-width="1" filter="url(#softShadow)"/>
+        <text x="18" y="26" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#4A0417">Painless Peel-Off</text>
+      </g>
+      <g transform="translate(402, 0)">
+        <rect width="180" height="42" rx="8" fill="#FFFFFF" stroke="#E8DDD3" stroke-width="1" filter="url(#softShadow)"/>
+        <text x="18" y="26" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#4A0417">Doorstep Delhi NCR</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Right Side: Luxury Waxing Still Life Vector Art -->
+  <g transform="translate(1120, 460)">
+    <!-- Ambient Base Podium -->
+    <ellipse cx="0" cy="180" rx="280" ry="60" fill="#DFD2C2" fill-opacity="0.5" filter="url(#softShadow)"/>
+    <ellipse cx="0" cy="170" rx="260" ry="50" fill="#EAE0D3"/>
+
+    <!-- Ceramic Spa Platter -->
+    <ellipse cx="10" cy="120" rx="220" ry="40" fill="#FFFFFF" filter="url(#deepShadow)"/>
+    <ellipse cx="10" cy="116" rx="215" ry="37" fill="#FAF6F0"/>
+    <ellipse cx="10" cy="114" rx="205" ry="34" stroke="#C5A880" stroke-width="1.5" fill="none"/>
+
+    <!-- Heated Wax Pot Exterior -->
+    <g filter="url(#deepShadow)">
+      <!-- Outer Cylinder Shadow -->
+      <path d="M -110,-40 C -110,-40 -120,80 0,80 C 120,80 110,-40 110,-40 Z" fill="#755635"/>
+      <!-- Outer Metal Body -->
+      <path d="M -110,-40 C -110,-40 -115,70 0,70 C 115,70 110,-40 110,-40 Z" fill="url(#goldPotGrad)"/>
+      <!-- Rim Outer -->
+      <ellipse cx="0" cy="-40" rx="110" ry="32" fill="#E8CDA3"/>
+      <!-- Rim Lip Inner -->
+      <ellipse cx="0" cy="-38" rx="100" ry="28" fill="#84643F"/>
+      <!-- Molten Honey Wax Liquid Surface -->
+      <ellipse cx="0" cy="-36" rx="94" ry="25" fill="url(#moltenWax)"/>
+      <!-- Molten Wax Glow Reflections -->
+      <ellipse cx="-20" cy="-40" rx="55" ry="12" fill="#FFF2D6" fill-opacity="0.6"/>
+      <ellipse cx="30" cy="-34" rx="35" ry="8" fill="#FDE4B0" fill-opacity="0.4"/>
+    </g>
+
+    <!-- Dipped Honey Spatula Resting Elegantly -->
+    <g transform="rotate(-32, 40, -90)" filter="url(#softShadow)">
+      <!-- Wood Handle -->
+      <rect x="-12" y="-220" width="24" height="260" rx="12" fill="url(#woodGrad)"/>
+      <path d="M -10,-210 L -10,20" stroke="#7A5630" stroke-width="1" stroke-opacity="0.3"/>
+      <!-- Honey Wax Coating on Spatula Tip -->
+      <path d="M -12,-10 C -12,20 -16,45 0,55 C 16,45 12,20 12,-10 Z" fill="url(#moltenWax)"/>
+      <!-- Hanging Wax Droplet -->
+      <ellipse cx="0" cy="62" rx="6" ry="10" fill="#E7BA71"/>
+      <ellipse cx="-2" cy="60" rx="2" ry="4" fill="#FFF6DE"/>
+    </g>
+
+    <!-- Rolled Spa Towel Beside Pot -->
+    <g transform="translate(-160, 50)" filter="url(#softShadow)">
+      <ellipse cx="0" cy="20" rx="45" ry="25" fill="#D5C9BE"/>
+      <path d="M -45,20 C -45,-30 45,-30 45,20 L 45,60 C 45,110 -45,110 -45,60 Z" fill="#FFFFFF"/>
+      <ellipse cx="0" cy="20" rx="42" ry="22" fill="#FAF6F0"/>
+      <!-- Waffle Weave Texture Lines -->
+      <path d="M -30,0 C -15,10 15,10 30,0" stroke="#C5A880" stroke-width="1" stroke-opacity="0.4"/>
+      <path d="M -35,15 C -15,25 15,25 35,15" stroke="#C5A880" stroke-width="1" stroke-opacity="0.4"/>
+      <path d="M -30,30 C -15,40 15,40 30,30" stroke="#C5A880" stroke-width="1" stroke-opacity="0.4"/>
+    </g>
+
+    <!-- Chamomile Botanical Sprig -->
+    <g transform="translate(130, 40) rotate(25)" filter="url(#softShadow)">
+      <!-- Stem -->
+      <path d="M 0,80 Q 20,20 40,-40" stroke="#7E8767" stroke-width="2.5" fill="none"/>
+      <ellipse cx="40" cy="-40" rx="10" ry="10" fill="#E8A938"/>
+      <!-- Petals -->
+      <ellipse cx="40" cy="-55" rx="5" ry="12" fill="#FFFFFF"/>
+      <ellipse cx="40" cy="-25" rx="5" ry="12" fill="#FFFFFF"/>
+      <ellipse cx="25" cy="-40" rx="12" ry="5" fill="#FFFFFF"/>
+      <ellipse cx="55" cy="-40" rx="12" ry="5" fill="#FFFFFF"/>
+      <ellipse cx="30" cy="-50" rx="10" ry="6" transform="rotate(-45 30 -50)" fill="#FFFFFF"/>
+      <ellipse cx="50" cy="-30" rx="10" ry="6" transform="rotate(-45 50 -30)" fill="#FFFFFF"/>
+    </g>
+
+    <!-- Soothing Post-Wax Serum Glass Dropper Bottle -->
+    <g transform="translate(140, -10)" filter="url(#softShadow)">
+      <!-- Amber Glass Body -->
+      <rect x="-18" y="-10" width="36" height="70" rx="8" fill="#4A0417" fill-opacity="0.75"/>
+      <rect x="-15" y="-7" width="8" height="64" rx="4" fill="#FFFFFF" fill-opacity="0.3"/>
+      <!-- Label -->
+      <rect x="-17" y="10" width="34" height="35" fill="#FAF6F0"/>
+      <rect x="-12" y="18" width="24" height="2" fill="#4A0417"/>
+      <rect x="-8" y="24" width="16" height="1.5" fill="#C5A880"/>
+      <!-- Dropper Neck & Cap -->
+      <rect x="-10" y="-22" width="20" height="12" rx="2" fill="#2A020D"/>
+      <rect x="-7" y="-30" width="14" height="8" rx="3" fill="#1F1A1C"/>
+    </g>
+  </g>
+
+  <!-- Bottom Accent Strip -->
+  <rect x="0" y="892" width="1600" height="8" fill="#4A0417"/>
+  <rect x="0" y="892" width="480" height="8" fill="#C5A880"/>
+</svg>

@@ -174,12 +174,21 @@ export const StorefrontNavbar: React.FC<Props> = ({
             </button>
 
             <button
+              onClick={() => navigate('/rate-card')}
+              className={`hover:text-[#4A0417] transition-colors whitespace-nowrap shrink-0 hover:underline underline-offset-8 flex items-center gap-1 ${
+                path === '/rate-card' ? 'text-[#4A0417] font-semibold underline' : ''
+              }`}
+            >
+              <span>Rate Card</span>
+            </button>
+
+            <button
               onClick={() => navigate('/packages')}
               className={`hover:text-[#4A0417] transition-colors whitespace-nowrap shrink-0 hover:underline underline-offset-8 ${
                 path === '/packages' ? 'text-[#4A0417] font-semibold underline' : ''
               }`}
             >
-              Custom Packages
+              Packages
             </button>
 
             <button

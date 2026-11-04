@@ -6,7 +6,7 @@ export const storefrontRouter = Router();
 // 1. Catalog & Active Settings
 storefrontRouter.get('/catalog', (_req: Request, res: Response): void => {
   const categories = db.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY display_order ASC').all();
-  const rawServices = db.prepare('SELECT * FROM services WHERE is_active = 1 ORDER BY created_at DESC').all() as any[];
+  const rawServices = db.prepare('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 ORDER BY created_at DESC').all() as any[];
 
   // Attach variants and addons
   const services = rawServices.map((s) => {
@@ -21,13 +21,62 @@ storefrontRouter.get('/catalog', (_req: Request, res: Response): void => {
     };
   });
 
+  const rawPackages = db.prepare('SELECT * FROM packages WHERE is_published = 1 ORDER BY display_order ASC').all() as any[];
+  const packages = rawPackages.map((p) => ({
+    ...p,
+    inclusions: JSON.parse(p.inclusions_json || '[]'),
+    benefits: JSON.parse(p.benefits_json || '[]')
+  }));
+
+  const hygieneCommitments = db.prepare('SELECT * FROM hygiene_commitments WHERE is_active = 1 ORDER BY display_order ASC').all();
+
   const rawSettings = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
   const settings: Record<string, string> = {};
   rawSettings.forEach((r) => {
     settings[r.key] = r.value;
   });
 
-  res.json({ categories, services, settings });
+  res.json({ categories, services, packages, hygieneCommitments, settings });
+});
+
+// 1b. Packages List & Detail
+storefrontRouter.get('/packages', (_req: Request, res: Response): void => {
+  const rawPackages = db.prepare('SELECT * FROM packages WHERE is_published = 1 ORDER BY display_order ASC').all() as any[];
+  const packages = rawPackages.map((p) => ({
+    ...p,
+    inclusions: JSON.parse(p.inclusions_json || '[]'),
+    benefits: JSON.parse(p.benefits_json || '[]')
+  }));
+  res.json({ packages });
+});
+
+storefrontRouter.get('/packages/:slug', (req: Request, res: Response): void => {
+  const { slug } = req.params;
+  const p = db.prepare('SELECT * FROM packages WHERE slug = ? OR id = ?').get(slug, slug) as any;
+  if (!p) {
+    res.status(404).json({ error: 'Package not found' });
+    return;
+  }
+  res.json({
+    package: {
+      ...p,
+      inclusions: JSON.parse(p.inclusions_json || '[]'),
+      benefits: JSON.parse(p.benefits_json || '[]')
+    }
+  });
+});
+
+// 1c. Hygiene Commitments
+storefrontRouter.get('/hygiene', (_req: Request, res: Response): void => {
+  const commitments = db.prepare('SELECT * FROM hygiene_commitments WHERE is_active = 1 ORDER BY display_order ASC').all();
+  const heading = db.prepare('SELECT value FROM settings WHERE key = ?').get('hygiene_heading') as any;
+  const subheading = db.prepare('SELECT value FROM settings WHERE key = ?').get('hygiene_subheading') as any;
+
+  res.json({
+    heading: heading?.value || 'Your Beauty. Your Comfort. Our Hygiene Promise.',
+    subheading: subheading?.value || 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.',
+    commitments
+  });
 });
 
 // 2. Dynamic Campaigns & Merchandising (Amazon-style, expires automatically)
@@ -163,13 +212,21 @@ storefrontRouter.post('/check-pincode', (req: Request, res: Response): void => {
   }
 });
 
-// 8. Available Appointment Slots (Checking actual bookings)
+// 8. Available Appointment Slots (8:00 AM to 6:00 PM with ₹100 Early/Evening Surcharge)
 storefrontRouter.get('/slots', (req: Request, res: Response): void => {
   const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
   const allSlots = [
-    '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-    '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM',
-    '05:00 PM', '06:00 PM', '07:00 PM'
+    { slot: '08:00 AM', extraCharge: 100, label: '08:00 AM (Early Slot +₹100)' },
+    { slot: '09:00 AM', extraCharge: 0, label: '09:00 AM' },
+    { slot: '10:00 AM', extraCharge: 0, label: '10:00 AM' },
+    { slot: '11:00 AM', extraCharge: 0, label: '11:00 AM' },
+    { slot: '12:00 PM', extraCharge: 0, label: '12:00 PM' },
+    { slot: '01:00 PM', extraCharge: 0, label: '01:00 PM' },
+    { slot: '02:00 PM', extraCharge: 0, label: '02:00 PM' },
+    { slot: '03:00 PM', extraCharge: 0, label: '03:00 PM' },
+    { slot: '04:00 PM', extraCharge: 0, label: '04:00 PM' },
+    { slot: '05:00 PM', extraCharge: 0, label: '05:00 PM' },
+    { slot: '06:00 PM', extraCharge: 100, label: '06:00 PM (Evening Slot +₹100)' }
   ];
 
   const bookingsOnDate = db.prepare(`
@@ -184,18 +241,26 @@ storefrontRouter.get('/slots', (req: Request, res: Response): void => {
     bookedMap[b.appointment_slot] = b.count;
   });
 
-  const availableSlots = allSlots.filter((slot) => (bookedMap[slot] || 0) < 4);
+  const availableSlots = allSlots
+    .filter((s) => (bookedMap[s.slot] || 0) < 4)
+    .map((s) => s.slot);
 
   res.json({
     date,
     availableSlots,
-    allSlots
+    allSlots: allSlots.map(s => s.slot),
+    slotDetails: allSlots,
+    workingHours: '8:00 AM – 6:00 PM',
+    slotSurcharges: {
+      '08:00 AM': 100,
+      '06:00 PM': 100
+    }
   });
 });
 
 // 9. Server-Side Accurate Price Calculation (No frontend calculation trust)
-storefrontRouter.post('/calculate-pricing', (req: Request, res: Response): void => {
-  const { items, couponCode, pincode } = req.body;
+const calculatePricingHandler = (req: Request, res: Response): void => {
+  const { items, couponCode, pincode, appointmentSlot } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: 'At least one service is required.' });
     return;
@@ -205,6 +270,24 @@ storefrontRouter.post('/calculate-pricing', (req: Request, res: Response): void 
   const validatedItems: any[] = [];
 
   for (const it of items) {
+    const pkg = (it.packageId || it.serviceId) ? db.prepare('SELECT * FROM packages WHERE id = ? AND is_published = 1').get(it.packageId || it.serviceId) as any : null;
+    if (pkg) {
+      subtotal += pkg.selling_price;
+      validatedItems.push({
+        serviceId: pkg.id,
+        serviceName: pkg.name,
+        variantId: null,
+        variantName: null,
+        addonIds: [],
+        addonNames: [],
+        unitPrice: pkg.selling_price,
+        finalItemPrice: pkg.selling_price,
+        durationMins: pkg.duration_mins,
+        isPackage: true
+      });
+      continue;
+    }
+
     const srv = db.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').get(it.serviceId) as any;
     if (!srv) continue;
 
@@ -281,7 +364,13 @@ storefrontRouter.post('/calculate-pricing', (req: Request, res: Response): void 
     if (ter) deliveryFee = ter.delivery_fee;
   }
 
-  const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee);
+  // Appointment Slot Surcharge: ₹100 for 08:00 AM or 06:00 PM
+  let slotCharge = 0;
+  if (appointmentSlot === '08:00 AM' || appointmentSlot === '06:00 PM') {
+    slotCharge = 100;
+  }
+
+  const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);
 
   res.json({
     items: validatedItems,
@@ -291,7 +380,55 @@ storefrontRouter.post('/calculate-pricing', (req: Request, res: Response): void 
     couponDiscount,
     appliedCoupon,
     deliveryFee,
+    slotCharge,
     totalPayable
+  });
+};
+
+storefrontRouter.post('/calculate-pricing', calculatePricingHandler);
+storefrontRouter.post('/calculate-price', calculatePricingHandler);
+
+// 9b. Dynamic Rate Card Endpoint (For A4 Print / PDF / Storefront View)
+storefrontRouter.get('/rate-card', (_req: Request, res: Response): void => {
+  const categories = db.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY display_order ASC').all() as any[];
+  const services = db.prepare(`
+    SELECT s.*, c.name as category_name, c.slug as category_slug
+    FROM services s
+    JOIN categories c ON s.category_id = c.id
+    WHERE s.is_active = 1 AND s.is_published = 1
+    ORDER BY c.display_order ASC, s.selling_price ASC
+  `).all() as any[];
+
+  const packages = db.prepare('SELECT * FROM packages WHERE is_published = 1 ORDER BY display_order ASC').all() as any[];
+
+  const grouped: Record<string, { category: any; services: any[] }> = {};
+  for (const cat of categories) {
+    grouped[cat.id] = {
+      category: cat,
+      services: services.filter(s => s.category_id === cat.id)
+    };
+  }
+
+  res.json({
+    storeName: 'BeautyDoor',
+    tagline: 'Salon-Quality Beauty Services at Home Across Delhi NCR',
+    serviceArea: 'Delhi, Gurugram, Noida, Greater Noida, Ghaziabad, Faridabad',
+    operatingHours: '8:00 AM – 6:00 PM',
+    categories,
+    groupedServices: grouped,
+    packages: packages.map(p => ({
+      ...p,
+      inclusions: JSON.parse(p.inclusions_json || '[]'),
+      benefits: JSON.parse(p.benefits_json || '[]')
+    })),
+    hygieneCommitments: [
+      'Single-use disposable wooden spatulas (Zero double-dipping)',
+      'Fresh disposable bedsheet & headband sealed for each client',
+      'Hospital-grade sanitized and autoclaved metal tools',
+      'Monodose sealed skincare packs unsealed before you',
+      'Strictly verified female professionals'
+    ],
+    generatedAt: new Date().toISOString()
   });
 });
 
@@ -328,6 +465,24 @@ storefrontRouter.post('/bookings', (req: Request, res: Response): void => {
   const validatedItems: any[] = [];
 
   for (const it of items) {
+    const pkg = (it.packageId || it.serviceId) ? db.prepare('SELECT * FROM packages WHERE id = ? AND is_published = 1').get(it.packageId || it.serviceId) as any : null;
+    if (pkg) {
+      subtotal += pkg.selling_price;
+      validatedItems.push({
+        serviceId: pkg.id,
+        serviceName: pkg.name,
+        variantId: null,
+        variantName: null,
+        addonIds: [],
+        addonNames: [],
+        unitPrice: pkg.selling_price,
+        finalItemPrice: pkg.selling_price,
+        durationMins: pkg.duration_mins,
+        isPackage: true
+      });
+      continue;
+    }
+
     const srv = db.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').get(it.serviceId) as any;
     if (!srv) continue;
     let itemPrice = srv.selling_price;
@@ -401,7 +556,14 @@ storefrontRouter.post('/bookings', (req: Request, res: Response): void => {
   }
 
   const deliveryFee = territory.delivery_fee;
-  const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee);
+
+  // Slot Charge: ₹100 for 8 AM and 6 PM
+  let slotCharge = 0;
+  if (appointmentSlot === '08:00 AM' || appointmentSlot === '06:00 PM') {
+    slotCharge = 100;
+  }
+
+  const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);
 
   // Generate Unique Production Booking ID
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -418,9 +580,9 @@ storefrontRouter.post('/bookings', (req: Request, res: Response): void => {
         id, customer_id, customer_name, customer_phone, customer_email,
         flat, landmark, area, city, pincode,
         subtotal, package_discount, campaign_discount, coupon_discount, coupon_code,
-        delivery_fee, total_payable, appointment_date, appointment_slot,
+        delivery_fee, slot_charge, total_payable, appointment_date, appointment_slot,
         payment_method, payment_status, booking_status, internal_notes, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
     `).run(
       bookingId,
       `cust-${cleanPhone}`,
@@ -437,6 +599,7 @@ storefrontRouter.post('/bookings', (req: Request, res: Response): void => {
       couponDiscount,
       validCoupon,
       deliveryFee,
+      slotCharge,
       totalPayable,
       appointmentDate,
       appointmentSlot,

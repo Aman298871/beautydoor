@@ -212,28 +212,48 @@ adminRouter.put('/services/:id', (req: Request, res: Response): void => {
   const adminUser = req.adminUser?.username || 'admin';
 
   db.transaction(() => {
+    const current = db.prepare('SELECT selling_price, name FROM services WHERE id = ?').get(id) as any;
+    if (current && Number(s.sellingPrice) !== current.selling_price) {
+      db.prepare(`
+        INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+        VALUES (?, 'service', ?, ?, ?, ?, ?, ?)
+      `).run(`log-${Date.now()}`, id, current.name, current.selling_price, Number(s.sellingPrice), adminUser, new Date().toISOString());
+    }
+
     db.prepare(`
       UPDATE services 
-      SET name = ?, description = ?, duration_mins = ?,
+      SET name = ?, description = ?, detailed_description = ?, duration_mins = ?,
           original_price = ?, selling_price = ?, discount_percent = ?,
-          category_id = ?, is_active = ?, is_popular = ?, is_bestseller = ?,
-          is_featured_deal = ?, deal_badge = ?, benefits_json = ?, whats_included_json = ?
+          category_id = ?, is_active = ?, is_published = ?, pending_notes = ?,
+          is_popular = ?, is_bestseller = ?,
+          is_featured_deal = ?, deal_badge = ?, benefits_json = ?, whats_included_json = ?,
+          before_instructions = ?, after_instructions = ?, room_conditions = ?,
+          equipment_requirements = ?, hygiene_precautions = ?, updated_at = ?
       WHERE id = ?
     `).run(
       s.name,
       s.description,
+      s.detailedDescription || s.description,
       Number(s.durationMins),
-      Number(s.originalPrice),
+      s.originalPrice ? Number(s.originalPrice) : null,
       Number(s.sellingPrice),
-      Number(s.discountPercent),
+      Number(s.discountPercent || 0),
       s.categoryId,
       s.isActive ? 1 : 0,
+      s.isPublished !== false ? 1 : 0,
+      s.pendingNotes || null,
       s.isPopular ? 1 : 0,
       s.isBestseller ? 1 : 0,
       s.isFeaturedDeal ? 1 : 0,
       s.dealBadge || null,
       JSON.stringify(s.benefits || []),
       JSON.stringify(s.whatsIncluded || []),
+      s.beforeInstructions || null,
+      s.afterInstructions || null,
+      s.roomConditions || null,
+      s.equipmentRequirements || null,
+      s.hygienePrecautions || null,
+      new Date().toISOString(),
       id
     );
   })();
@@ -249,6 +269,138 @@ adminRouter.delete('/services/:id', (req: Request, res: Response): void => {
   db.prepare('DELETE FROM services WHERE id = ?').run(id);
   recordAuditLog(adminUser, 'DELETE_SERVICE', 'CATALOG', id, {}, req.ip);
   res.json({ success: true });
+});
+
+// 3b. Packages CRUD & Price Auditing
+adminRouter.get('/packages', (_req: Request, res: Response): void => {
+  const rawPackages = db.prepare('SELECT * FROM packages ORDER BY display_order ASC').all() as any[];
+  const packages = rawPackages.map((p) => ({
+    ...p,
+    inclusions: JSON.parse(p.inclusions_json || '[]'),
+    benefits: JSON.parse(p.benefits_json || '[]')
+  }));
+  res.json({ packages });
+});
+
+adminRouter.post('/packages', (req: Request, res: Response): void => {
+  const p = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const pkgId = p.id || `pkg-${Date.now()}`;
+  const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO packages (
+      id, name, slug, description, duration_mins, duration_label,
+      original_price, selling_price, inclusions_json, benefits_json,
+      image_url, is_published, is_featured, display_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    pkgId, p.name, slug, p.description, Number(p.durationMins) || 60, p.durationLabel || `${p.durationMins || 60} mins`,
+    p.originalPrice ? Number(p.originalPrice) : null, Number(p.sellingPrice),
+    JSON.stringify(p.inclusions || []), JSON.stringify(p.benefits || []),
+    p.imageUrl || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
+    p.isPublished !== false ? 1 : 0, p.isFeatured !== false ? 1 : 0,
+    Number(p.displayOrder) || 0, now, now
+  );
+
+  db.prepare(`
+    INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+    VALUES (?, 'package', ?, ?, NULL, ?, ?, ?)
+  `).run(`log-${Date.now()}`, pkgId, p.name, Number(p.sellingPrice), adminUser, now);
+
+  res.status(201).json({ success: true, packageId: pkgId });
+});
+
+adminRouter.put('/packages/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const p = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const now = new Date().toISOString();
+
+  const current = db.prepare('SELECT selling_price, name FROM packages WHERE id = ?').get(id) as any;
+  if (current && Number(p.sellingPrice) !== current.selling_price) {
+    db.prepare(`
+      INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+      VALUES (?, 'package', ?, ?, ?, ?, ?, ?)
+    `).run(`log-${Date.now()}`, id, current.name, current.selling_price, Number(p.sellingPrice), adminUser, now);
+  }
+
+  db.prepare(`
+    UPDATE packages SET
+      name = ?, description = ?, duration_mins = ?, duration_label = ?,
+      original_price = ?, selling_price = ?, inclusions_json = ?, benefits_json = ?,
+      image_url = ?, is_published = ?, is_featured = ?, display_order = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    p.name, p.description, Number(p.durationMins), p.durationLabel,
+    p.originalPrice ? Number(p.originalPrice) : null, Number(p.sellingPrice),
+    JSON.stringify(p.inclusions || []), JSON.stringify(p.benefits || []),
+    p.imageUrl, p.isPublished ? 1 : 0, p.isFeatured ? 1 : 0,
+    Number(p.displayOrder), now, id
+  );
+
+  res.json({ success: true });
+});
+
+adminRouter.delete('/packages/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM packages WHERE id = ?').run(id);
+  res.json({ success: true });
+});
+
+// 3c. Hygiene Commitments CRUD
+adminRouter.get('/hygiene', (_req: Request, res: Response): void => {
+  const commitments = db.prepare('SELECT * FROM hygiene_commitments ORDER BY display_order ASC').all();
+  res.json({ commitments });
+});
+
+adminRouter.post('/hygiene', (req: Request, res: Response): void => {
+  const h = req.body;
+  const hygId = h.id || `hyg-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO hygiene_commitments (id, title, description, icon_name, display_order, is_active, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(hygId, h.title, h.description, h.iconName || 'ShieldCheck', Number(h.displayOrder) || 0, h.isActive !== false ? 1 : 0, now);
+
+  res.status(201).json({ success: true, id: hygId });
+});
+
+adminRouter.put('/hygiene/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const h = req.body;
+
+  db.prepare(`
+    UPDATE hygiene_commitments SET
+      title = ?, description = ?, icon_name = ?, display_order = ?, is_active = ?
+    WHERE id = ?
+  `).run(h.title, h.description, h.iconName || 'ShieldCheck', Number(h.displayOrder) || 0, h.isActive ? 1 : 0, id);
+
+  res.json({ success: true });
+});
+
+adminRouter.delete('/hygiene/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM hygiene_commitments WHERE id = ?').run(id);
+  res.json({ success: true });
+});
+
+// 3d. Price Change Audit Logs
+adminRouter.get('/price-audits', (_req: Request, res: Response): void => {
+  const logs = db.prepare('SELECT * FROM price_audit_logs ORDER BY timestamp DESC LIMIT 100').all();
+  res.json({ logs });
+});
+
+// 3e. Pending / Incomplete Services (Missing Data View)
+adminRouter.get('/pending-services', (_req: Request, res: Response): void => {
+  const pendingServices = db.prepare(`
+    SELECT * FROM services 
+    WHERE is_published = 0 OR is_active = 0 OR selling_price = 0 OR pending_notes IS NOT NULL
+    ORDER BY category_id ASC
+  `).all();
+  res.json({ pendingServices });
 });
 
 // 4. Amazon-Style Promotional Campaigns CRUD
@@ -553,3 +705,191 @@ adminRouter.get('/customers', (_req: Request, res: Response): void => {
   `).all();
   res.json({ customers });
 });
+
+// 13. Package Management CRUD
+adminRouter.get('/packages', (_req: Request, res: Response): void => {
+  const rawPackages = db.prepare('SELECT * FROM packages ORDER BY display_order ASC').all() as any[];
+  const packages = rawPackages.map((p) => ({
+    ...p,
+    inclusions: JSON.parse(p.inclusions_json || '[]'),
+    benefits: JSON.parse(p.benefits_json || '[]')
+  }));
+  res.json({ packages });
+});
+
+adminRouter.post('/packages', (req: Request, res: Response): void => {
+  const p = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const id = p.id || `pkg-${Date.now()}`;
+  const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  db.prepare(`
+    INSERT INTO packages (
+      id, name, slug, subtitle, description, original_price, selling_price,
+      discount_percent, duration_mins, duration_display, inclusions_json,
+      benefits_json, is_published, badge, display_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    p.name,
+    slug,
+    p.subtitle || null,
+    p.description || '',
+    p.original_price ? Number(p.original_price) : null,
+    Number(p.selling_price),
+    Number(p.discount_percent || 0),
+    Number(p.duration_mins || 60),
+    p.duration_display || `${p.duration_mins} mins`,
+    JSON.stringify(p.inclusions || []),
+    JSON.stringify(p.benefits || []),
+    p.is_published !== false ? 1 : 0,
+    p.badge || null,
+    Number(p.display_order || 0),
+    new Date().toISOString(),
+    new Date().toISOString()
+  );
+
+  db.prepare(`
+    INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+    VALUES (?, 'package', ?, ?, null, ?, ?, ?)
+  `).run(`log-${Date.now()}`, id, p.name, Number(p.selling_price), adminUser, new Date().toISOString());
+
+  recordAuditLog(adminUser, 'CREATE_PACKAGE', 'CATALOG', id, { name: p.name, price: p.selling_price }, req.ip);
+  res.status(201).json({ success: true, packageId: id });
+});
+
+adminRouter.put('/packages/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const p = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.transaction(() => {
+    const current = db.prepare('SELECT selling_price, name FROM packages WHERE id = ?').get(id) as any;
+    if (current && Number(p.selling_price) !== current.selling_price) {
+      db.prepare(`
+        INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+        VALUES (?, 'package', ?, ?, ?, ?, ?, ?)
+      `).run(`log-${Date.now()}`, id, current.name, current.selling_price, Number(p.selling_price), adminUser, new Date().toISOString());
+    }
+
+    db.prepare(`
+      UPDATE packages 
+      SET name = ?, slug = ?, subtitle = ?, description = ?, original_price = ?,
+          selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
+          inclusions_json = ?, benefits_json = ?, is_published = ?, badge = ?,
+          display_order = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      p.name,
+      p.slug,
+      p.subtitle || null,
+      p.description || '',
+      p.original_price ? Number(p.original_price) : null,
+      Number(p.selling_price),
+      Number(p.discount_percent || 0),
+      Number(p.duration_mins || 60),
+      p.duration_display || `${p.duration_mins} mins`,
+      JSON.stringify(p.inclusions || []),
+      JSON.stringify(p.benefits || []),
+      p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
+      p.badge || null,
+      Number(p.display_order || 0),
+      new Date().toISOString(),
+      id
+    );
+  })();
+
+  recordAuditLog(adminUser, 'UPDATE_PACKAGE', 'CATALOG', id, { name: p.name, price: p.selling_price }, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/packages/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('DELETE FROM packages WHERE id = ?').run(id);
+  recordAuditLog(adminUser, 'DELETE_PACKAGE', 'CATALOG', id, {}, req.ip);
+  res.json({ success: true });
+});
+
+// 14. Hygiene Commitments CRUD
+adminRouter.get('/hygiene', (_req: Request, res: Response): void => {
+  const commitments = db.prepare('SELECT * FROM hygiene_commitments ORDER BY display_order ASC').all();
+  res.json({ commitments });
+});
+
+adminRouter.post('/hygiene', (req: Request, res: Response): void => {
+  const h = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const id = h.id || `hyg-${Date.now()}`;
+
+  db.prepare(`
+    INSERT INTO hygiene_commitments (id, title, description, icon_name, is_single_use, display_order, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    h.title,
+    h.description,
+    h.icon_name || 'ShieldCheck',
+    h.is_single_use !== false ? 1 : 0,
+    Number(h.display_order || 0),
+    h.is_active !== false ? 1 : 0
+  );
+
+  recordAuditLog(adminUser, 'CREATE_HYGIENE_COMMITMENT', 'CONTENT', id, { title: h.title }, req.ip);
+  res.status(201).json({ success: true, commitmentId: id });
+});
+
+adminRouter.put('/hygiene/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const h = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare(`
+    UPDATE hygiene_commitments
+    SET title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        icon_name = COALESCE(?, icon_name),
+        is_single_use = COALESCE(?, is_single_use),
+        display_order = COALESCE(?, display_order),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(
+    h.title || null,
+    h.description || null,
+    h.icon_name || null,
+    h.is_single_use !== undefined ? (h.is_single_use ? 1 : 0) : null,
+    h.display_order !== undefined ? Number(h.display_order) : null,
+    h.is_active !== undefined ? (h.is_active ? 1 : 0) : null,
+    id
+  );
+
+  recordAuditLog(adminUser, 'UPDATE_HYGIENE_COMMITMENT', 'CONTENT', id, { title: h.title }, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/hygiene/:id', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  db.prepare('DELETE FROM hygiene_commitments WHERE id = ?').run(id);
+  recordAuditLog(adminUser, 'DELETE_HYGIENE_COMMITMENT', 'CONTENT', id, {}, req.ip);
+  res.json({ success: true });
+});
+
+// 15. Price Change Audit Trail
+adminRouter.get('/price-audits', (_req: Request, res: Response): void => {
+  const audits = db.prepare('SELECT * FROM price_audit_logs ORDER BY timestamp DESC LIMIT 200').all();
+  res.json({ audits });
+});
+
+// 16. Missing Data / Pending Owner Confirmation
+adminRouter.get('/pending-services', (_req: Request, res: Response): void => {
+  const pending = db.prepare(`
+    SELECT * FROM services 
+    WHERE is_published = 0 OR pending_notes IS NOT NULL OR selling_price IS NULL OR selling_price = 0
+    ORDER BY created_at DESC
+  `).all();
+  res.json({ pending });
+});
+

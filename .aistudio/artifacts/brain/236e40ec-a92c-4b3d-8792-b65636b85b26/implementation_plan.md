@@ -118,14 +118,64 @@ A luxury editorial at-home beauty and salon booking platform connecting discerni
 
 ***
 
-## 5. Implementation Roadmap (Phases 2 through 12)
+## 5. Implementation Roadmap
+- [x] Phase 1: Architecture, data model, and user alignment.
+- [x] Phase 2: Design system & luxury typography (`Playfair Display`, `Plus Jakarta Sans`, `#4A0417` royal wine).
+- [x] Phase 3: Production backend persistence with SQLite in WAL mode, comprehensive Delhi NCR territories, 14 categories, catalog, beauticians, campaigns.
+- [x] Phase 4: Dynamic catalog, real-time filters, variant selectors, add-on configurator, and dynamic bundle discount builder.
+- [x] Phase 5: Multi-step booking drawer, real-time slot conflict detector, Cash on Delivery + Razorpay gateway endpoints.
+- [x] Phase 6: Customer account and booking tracking.
+- [x] Phase 7: Executive Admin Portal (`admin.beautydoor.in`) with dispatch conflict engine, service catalog CRUD, campaigns, coupons, and staff roster.
+- [x] Phase 8: Genuine verified review moderation and hospital-grade hygiene guarantees.
+- [x] Phase 9: Custom Rule-Based Customer FAQ Chatbot on `beautydoor.in` (12 predefined buttons, dynamic answers, Hinglish keyword matcher, WhatsApp/phone links).
+- [x] Phase 10: Custom Rule-Based Admin Operations Chatbot on `admin.beautydoor.in` (10 step-by-step guides, dashboard tab shortcuts).
+- [x] Phase 11: Admin Chatbot FAQ Knowledgebase Management section with CRUD, keyword alias configuration, and live interactive test bench.
+- [x] Phase 12: Zero-paid AI compliance audit: 100% deterministic, rule-based, database-driven solution.
 
-- **Phase 1 (Complete)**: Architecture, data model, and user alignment.
-- **Phase 2 (Design System & Shell)**: Tailwind theme configuration, luxury font loading (`Playfair Display`, `Plus Jakarta Sans`), Top Bar contract with official logo, and modal/drawer foundations.
-- **Phase 3 (Backend & Persistence)**: Express server with comprehensive seeded database for Delhi NCR (6 territories, 14 categories, 35+ realistic services, beauticians, and promo coupons).
-- **Phase 4 (Catalog & Custom Package Builder)**: Category grids, detailed service view modal with variants and add-ons, and dynamic bundle discount calculator.
-- **Phase 5 (Booking Engine & Pincode Checker)**: Real-time slot availability, address validation against NCR pincodes, coupon redemption, and instant COD booking generation.
-- **Phase 6 (Customer Account)**: Phone/OTP simulated sign-in, order history, cancel/reschedule dialogs, and genuine review submission.
-- **Phase 7 (Admin Dashboard)**: Operations console with real-time KPIs, visual dispatch board, catalog editor, staff roster, and location toggles.
-- **Phase 8 (Google Reviews & Trust)**: Verified Google Business Profile review showcase, write-review modal, and hospital-grade hygiene guarantee section.
-- **Phase 9 (Final Polish & Verification)**: Mobile responsiveness audit, zero-pill verification, single-line control check, compilation, and end-to-end booking verification.
+***
+
+## 6. Custom Rule-Based FAQ Chatbots Architecture
+
+### A. Customer Chatbot (`beautydoor.in`)
+- **Launcher**: Luxury floating widget in deep burgundy (`#4A0417`) and gold with pulse indicator and notification badge.
+- **Welcome Message**: *"Hi! Welcome to BeautyDoor ❤️ How can I help you today?"*
+- **12 Predefined Questions**:
+  1. How can I book a service?
+  2. What services do you offer? *(Dynamic: queries active services & categories)*
+  3. What are the service prices? *(Dynamic: computes live category starting rates)*
+  4. Do you provide at-home services? *(Explains single-use disposables, sanitization & doorstep setup)*
+  5. Is my area serviceable? *(Dynamic: queries live Delhi NCR territories & pincodes)*
+  6. What payment methods are available? *(Dynamic: returns Cash After Service / COD & Razorpay)*
+  7. How can I cancel my booking? *(Dynamic: returns 4-hour complimentary policy)*
+  8. How can I reschedule my booking?
+  9. How can I track my booking?
+  10. What offers are currently available? *(Dynamic: returns active campaigns & coupons)*
+  11. How can I contact customer support? *(Dynamic: returns live phone, WhatsApp link, and working hours)*
+  12. Other questions. *(Prompts text entry or one-tap WhatsApp / Call concierge)*
+- **Keyword & Intent Matcher**: High-precision normalization supporting Hindi/Hinglish terms (*"ghar pe aate ho"*, *"paise kitne lagenge"*, *"COD available"*, *"booking kaise kare"*, *"kya offer hai"*, etc.).
+- **Deterministic Fallback**: Shows *"Sorry, I couldn't find an answer to that question. Please select one of the options below or contact our support team."* along with suggested question pills and direct WhatsApp/Phone call links.
+
+### B. Admin Operations Chatbot (`admin.beautydoor.in`)
+- **Access**: Strictly isolated and private to authenticated staff (`/api/faq/admin` guarded by JWT).
+- **Welcome Message**: *"Welcome to BeautyDoor Admin Help. What would you like assistance with?"*
+- **10 Predefined Step-by-Step Guides**:
+  1. How to add a service?
+  2. How to update service pricing?
+  3. How to create a promotion?
+  4. How to create a coupon?
+  5. How to manage bookings?
+  6. How to assign professionals?
+  7. How to manage service areas?
+  8. How to update homepage banners?
+  9. How to check payment records?
+  10. How to manage customer accounts?
+- **Interactive Action Shortcuts**: Contextual buttons (e.g. *"Go to Services Catalog"*, *"Go to Dispatch & Bookings"*) that navigate directly between dashboard tabs.
+
+### C. Admin FAQ Knowledgebase Management
+- Accessible via new **Chatbot FAQs** tab in the Admin Dashboard.
+- **Complete CRUD**: Add, edit, delete questions, answers, and display order.
+- **Audience Segregation**: Customer FAQs and Admin Help FAQs stored and managed independently.
+- **Keyword Alias Configuration**: Configure custom keyword variations and Hinglish aliases.
+- **Dynamic Handlers**: Configure whether an FAQ executes dynamic queries (`get_services_catalog`, `get_service_pricing`, `get_service_areas`, `get_payment_methods`, `get_cancellation_policy`, `get_active_offers`, `get_support_contact`).
+- **Live Interactive Test Bench**: Instant test pane inside the admin dashboard to evaluate customer and admin queries in real time.
+- **Strict Constraint**: Zero generative AI calls, zero token consumption, deterministic and instant.

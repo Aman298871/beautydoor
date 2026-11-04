@@ -10,10 +10,13 @@ import { OffersPage } from './pages/OffersPage.tsx';
 import { HowItWorksPage } from './pages/HowItWorksPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
 import { AboutPage, ContactPage, FAQPage, PolicyPage } from './pages/InfoPages.tsx';
+import { PackagesPage } from './pages/PackagesPage.tsx';
+import { RateCardPage } from './pages/RateCardPage.tsx';
 import { PackageBuilderSection } from '../../src/components/PackageBuilderSection.tsx';
 import { BookingDrawer } from '../../src/components/BookingDrawer.tsx';
 import { PincodeCheckerModal } from '../../src/components/PincodeCheckerModal.tsx';
 import { WriteReviewModal } from '../../src/components/WriteReviewModal.tsx';
+import { CustomerChatbot } from './components/CustomerChatbot.tsx';
 import { Sparkles, ShoppingBag } from 'lucide-react';
 
 function StorefrontContent() {
@@ -22,6 +25,7 @@ function StorefrontContent() {
   // Data state
   const [categories, setCategories] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [packages, setPackages] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [bestsellers, setBestsellers] = useState<any[]>([]);
@@ -55,6 +59,7 @@ function StorefrontContent() {
 
       setCategories(catRes.categories || []);
       setServices(catRes.services || []);
+      setPackages(catRes.packages || []);
       setSettings(catRes.settings || null);
       setCampaigns(campRes.campaigns || []);
       setDeals(dealsRes.deals || []);
@@ -119,6 +124,30 @@ function StorefrontContent() {
     handleAddToCart(service, defaultVariant, []);
   };
 
+  const handleAddOfficialPackage = (pkg: any, selectedVariant?: string) => {
+    const pkgName = selectedVariant ? `${pkg.name} (${selectedVariant})` : pkg.name;
+    const newItem = {
+      cartItemId: `pkg-${pkg.id}-${Date.now()}`,
+      isPackage: true,
+      service: {
+        id: pkg.id,
+        name: pkgName,
+        sellingPrice: pkg.selling_price || pkg.sellingPrice,
+        durationMins: pkg.duration_mins || pkg.durationMins,
+        variants: [],
+        addons: []
+      },
+      selectedVariant: selectedVariant ? { id: selectedVariant, name: selectedVariant, priceDelta: 0, durationDelta: 0 } : undefined,
+      selectedAddons: [],
+      totalItemPrice: pkg.selling_price || pkg.sellingPrice,
+      totalDurationMins: pkg.duration_mins || pkg.durationMins
+    };
+
+    setCartItems(prev => [...prev, newItem]);
+    setIsCartOpen(true);
+    showToast(`Added official package "${pkg.name}" to your booking bag.`);
+  };
+
   const handleAddPackageToCart = (packageServices: any[]) => {
     packageServices.forEach(s => {
       handleQuickAdd(s);
@@ -157,6 +186,8 @@ function StorefrontContent() {
         campaigns={campaigns}
         deals={deals}
         bestsellers={bestsellers}
+        services={services}
+        packages={packages}
         reviews={reviews}
         googlePlaceId={settings?.google_place_id}
         onCheckPincode={handleCheckPincode}
@@ -165,6 +196,7 @@ function StorefrontContent() {
           showToast(`Selected area: ${t.area_name}, ${t.city}`);
         }}
         onQuickAdd={handleQuickAdd}
+        onAddPackage={handleAddOfficialPackage}
         cartItemIds={cartItemIds}
         onOpenWriteReview={() => setIsWriteReviewOpen(true)}
       />
@@ -189,6 +221,15 @@ function StorefrontContent() {
   } else if (path === '/offers') {
     pageContent = <OffersPage campaigns={campaigns} />;
   } else if (path === '/packages') {
+    pageContent = (
+      <PackagesPage
+        onAddPackageToCart={handleAddOfficialPackage}
+        cartItemIds={cartItemIds}
+      />
+    );
+  } else if (path === '/rate-card') {
+    pageContent = <RateCardPage />;
+  } else if (path === '/custom-package-builder') {
     pageContent = (
       <div className="py-10 bg-[#FAF7F2] min-h-[85vh]">
         <div className="max-w-7xl mx-auto px-4 mb-4">
@@ -359,6 +400,9 @@ function StorefrontContent() {
         onClose={() => setIsWriteReviewOpen(false)}
         onSubmitReview={handleSubmitReview}
       />
+
+      {/* Floating Rule-Based Customer FAQ Chatbot */}
+      <CustomerChatbot onOpenBookingModal={() => setIsCartOpen(true)} />
     </div>
   );
 }

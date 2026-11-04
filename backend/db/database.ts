@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
+import { MASTER_CATEGORIES, MASTER_SERVICES, MASTER_PACKAGES } from './masterCatalogue.ts';
 
 const DB_DIR = path.resolve(process.cwd(), 'data');
 if (!fs.existsSync(DB_DIR)) {
@@ -46,18 +47,36 @@ export function initDatabase() {
       name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
       description TEXT NOT NULL,
+      detailed_description TEXT,
       benefits_json TEXT NOT NULL DEFAULT '[]',
       duration_mins INTEGER NOT NULL,
-      original_price INTEGER NOT NULL,
+      original_price INTEGER,
       selling_price INTEGER NOT NULL,
       discount_percent INTEGER NOT NULL DEFAULT 0,
       whats_included_json TEXT NOT NULL DEFAULT '[]',
+      ingredients_json TEXT NOT NULL DEFAULT '[]',
+      steps_json TEXT NOT NULL DEFAULT '[]',
+      before_instructions TEXT,
+      after_instructions TEXT,
+      room_conditions TEXT,
+      equipment_requirements TEXT,
+      hygiene_precautions TEXT,
+      brand TEXT,
+      service_type TEXT NOT NULL DEFAULT 'single',
+      is_combo INTEGER NOT NULL DEFAULT 0,
+      combo_items_json TEXT NOT NULL DEFAULT '[]',
+      steps_count INTEGER,
+      sub_type TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      pending_notes TEXT,
       is_popular INTEGER NOT NULL DEFAULT 0,
       is_bestseller INTEGER NOT NULL DEFAULT 0,
       is_featured_deal INTEGER NOT NULL DEFAULT 0,
       deal_badge TEXT,
+      image_url TEXT,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
 
@@ -82,7 +101,55 @@ export function initDatabase() {
       FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
     );
 
-    -- Amazon-Style Campaigns & Merchandising Engine
+    -- Dedicated Beauty Packages
+    CREATE TABLE IF NOT EXISTS packages (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      subtitle TEXT,
+      description TEXT NOT NULL,
+      duration_mins INTEGER NOT NULL,
+      duration_label TEXT DEFAULT '',
+      duration_display TEXT,
+      original_price INTEGER,
+      selling_price INTEGER NOT NULL,
+      discount_percent INTEGER NOT NULL DEFAULT 0,
+      inclusions_json TEXT NOT NULL DEFAULT '[]',
+      benefits_json TEXT NOT NULL DEFAULT '[]',
+      badge TEXT,
+      image_url TEXT,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      is_featured INTEGER NOT NULL DEFAULT 1,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      vlcc_facial_variant TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Dedicated Hygiene Commitments
+    CREATE TABLE IF NOT EXISTS hygiene_commitments (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      icon_name TEXT NOT NULL DEFAULT 'ShieldCheck',
+      display_order INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    -- Price Change Audit History
+    CREATE TABLE IF NOT EXISTS price_audit_logs (
+      id TEXT PRIMARY KEY,
+      item_type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      old_price INTEGER,
+      new_price INTEGER NOT NULL,
+      changed_by TEXT NOT NULL,
+      timestamp TEXT NOT NULL
+    );
+
+    -- Promotional Campaigns & Merchandising Engine
     CREATE TABLE IF NOT EXISTS campaigns (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -161,6 +228,7 @@ export function initDatabase() {
       campaign_discount INTEGER NOT NULL DEFAULT 0,
       coupon_discount INTEGER NOT NULL DEFAULT 0,
       coupon_code TEXT,
+      slot_charge INTEGER NOT NULL DEFAULT 0,
       delivery_fee INTEGER NOT NULL DEFAULT 0,
       total_payable INTEGER NOT NULL,
       appointment_date TEXT NOT NULL,
@@ -192,7 +260,7 @@ export function initDatabase() {
       FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
     );
 
-    -- Genuine Customer Reviews (Moderated & verified by admin)
+    -- Customer Reviews
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       booking_id TEXT,
@@ -219,17 +287,36 @@ export function initDatabase() {
       ip_address TEXT
     );
 
-    -- Business Settings & Integrations Key-Value Store
+    -- Business Settings
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- Predefined & Dynamic FAQ Knowledgebase
+    CREATE TABLE IF NOT EXISTS faqs (
+      id TEXT PRIMARY KEY,
+      audience TEXT NOT NULL CHECK(audience IN ('customer', 'admin')),
+      category TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      keywords_json TEXT NOT NULL DEFAULT '[]',
+      display_order INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      is_dynamic INTEGER NOT NULL DEFAULT 0,
+      dynamic_handler TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   seedEssentialData();
+  seedFaqData();
 }
 
 function seedEssentialData() {
+  const now = new Date().toISOString();
+
   // 1. Ensure SuperAdmin exists (Password: "Admin@BeautyDoor2026")
   const existingAdmin = db.prepare('SELECT id FROM admin_users WHERE username = ?').get('admin');
   if (!existingAdmin) {
@@ -238,10 +325,10 @@ function seedEssentialData() {
     db.prepare(`
       INSERT INTO admin_users (id, username, email, password_hash, role, is_active, created_at)
       VALUES (?, ?, ?, ?, ?, 1, ?)
-    `).run('admin-super-1', 'admin', 'admin@beautydoor.in', hash, 'superadmin', new Date().toISOString());
+    `).run('admin-super-1', 'admin', 'admin@beautydoor.in', hash, 'superadmin', now);
   }
 
-  // 2. Initial Settings (No fake reviews; genuine official keys only)
+  // 2. Initial Settings
   const defaultSettings: Record<string, string> = {
     brand_name: 'BeautyDoor',
     tagline: 'Beauty at your doorstep',
@@ -249,16 +336,20 @@ function seedEssentialData() {
     contact_email: 'concierge@beautydoor.in',
     support_whatsapp: '+91 99991 23456',
     working_hours_start: '08:00 AM',
-    working_hours_end: '08:00 PM',
+    working_hours_end: '06:00 PM',
+    slot_charge_8am: '100',
+    slot_charge_6pm: '100',
     cancellation_window_hours: '4',
     cancellation_policy: 'Complimentary cancellation up to 4 hours prior to appointment.',
-    announcement_text: '✨ Delhi NCR Inaugural Offers: Up to 35% OFF on select skincare & waxing rituals | Pay after service',
+    announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
     razorpay_enabled: 'true',
     razorpay_key_id: 'rzp_test_beautydoor_mock',
     google_places_api_key: '',
     google_place_id: '',
-    min_order_amount: '499'
+    min_order_amount: '499',
+    hygiene_heading: 'Your Beauty. Your Comfort. Our Hygiene Promise.',
+    hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.'
   };
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -266,23 +357,12 @@ function seedEssentialData() {
     insertSetting.run(k, v);
   }
 
-  // 3. Categories
+  // 3. Official Service Categories
   const categoryCount = db.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
   if (categoryCount.count === 0) {
-    const categories = [
-      { id: 'waxing', name: 'Waxing Rituals', slug: 'waxing', desc: 'Italian Rica, Honey & sensitive skin roll-on body waxing.', order: 1 },
-      { id: 'facial', name: 'Facial & Cleanups', slug: 'facial', desc: 'Oxygenating glow facials, Korean glass-skin hydra infusions, and cleanups.', order: 2 },
-      { id: 'mani-pedi', name: 'Manicure & Pedicure', slug: 'mani-pedi', desc: 'Aroma rose bath bomb foot spas and crystal jelly manicure rituals.', order: 3 },
-      { id: 'hair-care', name: 'Hair Care & Spas', slug: 'hair-care', desc: "L'Oréal Mythic Oil deep spas, anti-frizz masks, and scalp revitalization.", order: 4 },
-      { id: 'de-tan', name: 'De-Tan & Bleach', slug: 'de-tan', desc: 'Milk protein de-tan peels and instant radiance herbal bleaches.', order: 5 },
-      { id: 'massage', name: 'Body Massage & Spas', slug: 'massage', desc: 'Deep relaxation Swedish therapy and soothing aromatherapy at home.', order: 6 },
-      { id: 'threading', name: 'Threading & Face Wax', slug: 'threading', desc: 'Organic cotton precision brow sculpting and gentle facial hair removal.', order: 7 },
-      { id: 'bridal', name: 'Bridal & Pre-Bridal', slug: 'bridal', desc: 'Comprehensive royal bridal packages and pre-wedding glow rituals.', order: 8 }
-    ];
-
     const insertCat = db.prepare('INSERT INTO categories (id, name, slug, description, display_order, is_active) VALUES (?, ?, ?, ?, ?, 1)');
-    for (const c of categories) {
-      insertCat.run(c.id, c.name, c.slug, c.desc, c.order);
+    for (const c of MASTER_CATEGORIES) {
+      insertCat.run(c.id, c.name, c.slug, c.description, c.display_order);
     }
   }
 
@@ -327,189 +407,247 @@ function seedEssentialData() {
     }
   }
 
-  // 6. Real Baseline Services
+  // 6. OFFICIAL SERVICES (RICA, Honey, Korean, Brazilian Peel-Off & Core Treatments)
+  // 6. OFFICIAL SERVICES & PACKAGES (Master Business Catalogue)
   const serviceCount = db.prepare('SELECT COUNT(*) as count FROM services').get() as { count: number };
   if (serviceCount.count === 0) {
-    const services = [
+    const insertSrv = db.prepare(`
+      INSERT INTO services (
+        id, category_id, name, slug, description, detailed_description,
+        benefits_json, duration_mins, original_price, selling_price, discount_percent,
+        whats_included_json, ingredients_json, steps_json,
+        before_instructions, after_instructions, room_conditions, equipment_requirements, hygiene_precautions,
+        brand, service_type, is_combo, combo_items_json, steps_count, sub_type,
+        is_active, is_published, pending_notes, is_popular, is_bestseller, is_featured_deal, deal_badge,
+        image_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const s of MASTER_SERVICES) {
+      insertSrv.run(
+        s.id,
+        s.category_id,
+        s.name,
+        s.slug,
+        s.description,
+        s.detailed_description || s.description,
+        JSON.stringify(s.is_combo ? (s.combo_items || []) : [s.name]),
+        s.duration_mins,
+        s.original_price || null,
+        s.selling_price,
+        s.discount_percent || 0,
+        JSON.stringify(s.combo_items || [s.name]),
+        JSON.stringify([]),
+        JSON.stringify([]),
+        s.before_instructions || null,
+        s.after_instructions || null,
+        s.room_conditions || null,
+        s.equipment_requirements || null,
+        s.hygiene_precautions || null,
+        s.brand || null,
+        s.service_type || 'single',
+        s.is_combo || 0,
+        JSON.stringify(s.combo_items || []),
+        s.steps_count || null,
+        s.sub_type || null,
+        1,
+        s.is_published,
+        s.pending_notes || null,
+        s.is_popular || 0,
+        s.is_bestseller || 0,
+        s.is_featured_deal || 0,
+        s.deal_badge || null,
+        '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
+        now,
+        now
+      );
+    }
+  }
+
+  // 7. OFFICIAL BEAUTYDOOR SIGNATURE PACKAGES (Exact 10 Packages from Business Owner)
+  const packageCount = db.prepare('SELECT COUNT(*) as count FROM packages').get() as { count: number };
+  if (packageCount.count === 0) {
+    const insertPkg = db.prepare(`
+      INSERT INTO packages (
+        id, name, slug, subtitle, description, duration_mins, duration_display,
+        original_price, selling_price, discount_percent, inclusions_json, benefits_json,
+        badge, is_published, display_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let pOrder = 1;
+    for (const p of MASTER_PACKAGES) {
+      insertPkg.run(
+        p.id,
+        p.name,
+        p.slug,
+        p.subtitle,
+        p.description,
+        p.duration_mins,
+        p.duration_display,
+        p.original_price,
+        p.selling_price,
+        p.discount_percent,
+        JSON.stringify(p.inclusions),
+        JSON.stringify(p.benefits),
+        p.badge || null,
+        1,
+        pOrder++,
+        now,
+        now
+      );
+    }
+  }
+
+  // 8. HYGIENE & SAFETY COMMITMENTS (Dedicated Checklist)
+  const hygieneCount = db.prepare('SELECT COUNT(*) as count FROM hygiene_commitments').get() as { count: number };
+  if (hygieneCount.count === 0) {
+    const insertHyg = db.prepare(`
+      INSERT INTO hygiene_commitments (id, title, description, icon_name, display_order, is_active, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?)
+    `);
+
+    const commitments = [
       {
-        id: 'srv-wax-full-arms-legs',
-        cat: 'waxing',
-        name: 'Full Arms + Full Legs + Underarms Waxing',
-        slug: 'full-arms-legs-underarms-waxing',
-        desc: 'Complete satiny smooth body hair removal with antiseptic pre-cleanse and soothing chamomile post-wax mist.',
-        benefits: JSON.stringify(['Hair-free smooth finish for 4 weeks', 'Reduces ingrown hairs', 'Gentle on delicate skin']),
-        dur: 60,
-        orig: 1199,
-        sell: 799,
-        disc: 33,
-        whatsInc: JSON.stringify(['Full arms waxing with underarms', 'Full legs waxing', 'Sanitized single-use strips', 'Post-wax calming soothing gel']),
-        isPop: 1,
-        isBest: 1,
-        isDeal: 1,
-        badge: "Today's Best Deal"
+        id: 'hyg-1',
+        title: 'Single-Use Disposable Waxing Spatulas',
+        desc: 'Fresh disposable wooden spatulas used for each wax application. We strictly observe zero double-dipping protocol.',
+        icon: 'Sparkles',
+        order: 1
       },
       {
-        id: 'srv-facial-o3-plus',
-        cat: 'facial',
-        name: 'O3+ Bridal Radiance & Oxygen Glow Facial',
-        slug: 'o3-plus-bridal-radiance-glow-facial',
-        desc: 'Celebrated oxygenating salon treatment that erases dullness, lifts stubborn sun tan, and infuses multi-vitamins.',
-        benefits: JSON.stringify(['Intense cellular oxygenation', 'Fades hyperpigmentation spots', 'Glass-skin glow']),
-        dur: 75,
-        orig: 2899,
-        sell: 1999,
-        disc: 31,
-        whatsInc: JSON.stringify(['O2 Cleansing', 'Enzyme exfoliation', 'Aromatherapeutic facial massage', 'Oxygen ampoule', 'Rubberized brightening mask']),
-        isPop: 1,
-        isBest: 1,
-        isDeal: 1,
-        badge: 'Trending Glow'
+        id: 'hyg-2',
+        title: 'Fresh Disposable Bedsheets & Headbands',
+        desc: 'A brand-new sealed disposable protective bedsheet and headband laid out in your room for every single visit.',
+        icon: 'ShieldCheck',
+        order: 2
       },
       {
-        id: 'srv-pedi-bomb-spa',
-        cat: 'mani-pedi',
-        name: 'Rose Bath Bomb Effervescent Foot Spa & Pedicure',
-        slug: 'rose-bath-bomb-foot-spa-pedicure',
-        desc: 'Damask rose petal bath soak, deep volcanic pumice heel detailing, cuticle care, and calf reflexology.',
-        benefits: JSON.stringify(['Heals cracked calluses', 'Dissolves muscular tension', 'Nourishes nail beds']),
-        dur: 55,
-        orig: 1199,
-        sell: 799,
-        disc: 33,
-        whatsInc: JSON.stringify(['Rose bath bomb soak', 'Pumice heel exfoliation', 'Cuticle oil buffing', 'Calf reflexology (15 mins)', 'Breathable polish']),
-        isPop: 1,
-        isBest: 1,
-        isDeal: 0,
-        badge: 'Client Favorite'
+        id: 'hyg-3',
+        title: 'Clean & Sanitized Metal Tools',
+        desc: 'All tweezers, scissors, and cuticle instruments are thoroughly sterilized and sealed in individual pouches before arrival.',
+        icon: 'CheckCircle2',
+        order: 3
       },
       {
-        id: 'srv-detan-o3-sara',
-        cat: 'de-tan',
-        name: 'O3+ Sara Milk Protein D-Tan (Face & Neck)',
-        slug: 'o3-plus-sara-milk-protein-detan',
-        desc: 'Instant tan reversal infused with cooling peppermint, eucalyptus, and bioactive milk proteins.',
-        benefits: JSON.stringify(['Reverses harsh UV sun damage', 'No yellow tint or burning', 'Gentle natural brighten']),
-        dur: 30,
-        orig: 699,
-        sell: 449,
-        disc: 36,
-        whatsInc: JSON.stringify(['Cleansing lotion', 'D-tan cream mask', 'Cool towel wipe', 'SPF fluid finish']),
-        isPop: 1,
-        isBest: 0,
-        isDeal: 1,
-        badge: 'Flash Deal'
+        id: 'hyg-4',
+        title: 'Fresh Clean Service Towels',
+        desc: 'Clean, freshly laundered towels delivered in sealed pouches for each client appointment.',
+        icon: 'Sparkles',
+        order: 4
       },
       {
-        id: 'srv-hair-loreal-spa',
-        cat: 'hair-care',
-        name: "L'Oréal Professionnel Mythic Oil Hair Spa",
-        slug: 'loreal-mythic-oil-hair-spa',
-        desc: 'Deep nourishing cream bath enriched with precious argan oils and ozone scalp steam for frizz-free silkiness.',
-        benefits: JSON.stringify(['Tames frizz in Delhi NCR weather', 'Hydrates chemically treated hair', 'Relieves tension']),
-        dur: 60,
-        orig: 1799,
-        sell: 1199,
-        disc: 33,
-        whatsInc: JSON.stringify(['Scalp diagnostic', 'Cream bath root massage (25 mins)', 'Portable nano steam', 'Serum polish']),
-        isPop: 1,
-        isBest: 0,
-        isDeal: 0,
-        badge: 'Nourishing'
+        id: 'hyg-5',
+        title: 'Monodosage Sealed Skincare Packs',
+        desc: 'Facials and cleanups utilize single-use, client-specific sealed tubes and packs unsealed exclusively before your eyes.',
+        icon: 'ShieldCheck',
+        order: 5
       },
       {
-        id: 'srv-bridal-pre-radiance',
-        cat: 'bridal',
-        name: 'The Royal Pre-Bridal Radiance Journey',
-        slug: 'royal-pre-bridal-radiance-journey',
-        desc: '3-hour all-inclusive head-to-toe bridal ritual executed by Senior Certified Estheticians.',
-        benefits: JSON.stringify(['Complete bridal glow', 'Rica Italian full waxing', 'O3+ facial + Crystal Mani-Pedi']),
-        dur: 180,
-        orig: 7999,
-        sell: 4999,
-        disc: 38,
-        whatsInc: JSON.stringify(['Full body Rica wax', 'O3+ Radiance facial', 'Crystal Spa Mani & Pedi', 'Full body de-tan', 'Hair Spa', 'Eyebrow styling']),
-        isPop: 1,
-        isBest: 1,
-        isDeal: 1,
-        badge: 'Royal Signature'
+        id: 'hyg-6',
+        title: 'Proper Hand & Product Hygiene',
+        desc: 'Specialists practice hand sanitization, wear fresh disposable masks and gloves, and follow professional handling procedures.',
+        icon: 'CheckCircle2',
+        order: 6
+      },
+      {
+        id: 'hyg-7',
+        title: 'Post-Service Area Cleaning & Sanitization',
+        desc: 'After treatments conclude, our specialist cleans and sanitizes your area, packing all single-use disposables away.',
+        icon: 'Sparkles',
+        order: 7
+      },
+      {
+        id: 'hyg-8',
+        title: 'Client Comfort, Sanctuary & Privacy',
+        desc: 'Strictly female-verified estheticians respecting your household sanctity and personal space at all times.',
+        icon: 'ShieldCheck',
+        order: 8
       }
     ];
 
-    const insertSrv = db.prepare(`
-      INSERT INTO services (
-        id, category_id, name, slug, description, benefits_json, duration_mins,
-        original_price, selling_price, discount_percent, whats_included_json,
-        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-    `);
-
-    for (const s of services) {
-      insertSrv.run(
-        s.id, s.cat, s.name, s.slug, s.desc, s.benefits, s.dur, s.orig, s.sell, s.disc,
-        s.whatsInc, s.isPop, s.isBest, s.isDeal, s.badge, new Date().toISOString()
-      );
+    for (const h of commitments) {
+      insertHyg.run(h.id, h.title, h.desc, h.icon, h.order, now);
     }
-
-    // Add Variants for Waxing & Facial
-    const insertVar = db.prepare('INSERT INTO service_variants (id, service_id, name, price_delta, duration_delta, is_default) VALUES (?, ?, ?, ?, ?, ?)');
-    insertVar.run('var-wax-1', 'srv-wax-full-arms-legs', 'Natural Honey Wax', 0, 0, 1);
-    insertVar.run('var-wax-2', 'srv-wax-full-arms-legs', 'Italian Rica White Chocolate (Colophony-Free)', 400, 10, 0);
-    insertVar.run('var-wax-3', 'srv-wax-full-arms-legs', 'Italian Rica Aloe Vera (Sensitive Skin)', 450, 10, 0);
-
-    insertVar.run('var-fac-1', 'srv-facial-o3-plus', 'O3+ Brightening 5-Step Formula', 0, 0, 1);
-    insertVar.run('var-fac-2', 'srv-facial-o3-plus', 'O3+ Whitening D-Tan Special Kit', 350, 10, 0);
-
-    // Add Add-ons
-    const insertAdd = db.prepare('INSERT INTO service_addons (id, service_id, name, price, duration_mins) VALUES (?, ?, ?, ?, ?)');
-    insertAdd.run('add-wax-1', 'srv-wax-full-arms-legs', 'Full Back Waxing', 449, 20);
-    insertAdd.run('add-wax-2', 'srv-wax-full-arms-legs', 'Rica Bikini Waxing', 699, 25);
-    insertAdd.run('add-fac-1', 'srv-facial-o3-plus', 'Cryo Ice Globe Lymphatic Drainage Massage', 299, 10);
-    insertAdd.run('add-fac-2', 'srv-facial-o3-plus', 'Hydrating Bio-Cellulose Under-Eye Treatment', 249, 10);
   }
 
-  // 7. Amazon-Style Promotional Campaigns
+  // 9. Verified Beauticians Roster
+  const beauticianCount = db.prepare('SELECT COUNT(*) as count FROM beauticians').get() as { count: number };
+  if (beauticianCount.count === 0) {
+    const beauticians = [
+      { id: 'beau-1', name: 'Priya Sharma', phone: '+91 98112 44321', specs: JSON.stringify(['rica-waxing', 'honey-waxing', 'korean-waxing', 'facial']), terrs: JSON.stringify(['Delhi', 'Gurugram']), exp: 8, rating: 4.9, jobs: 428 },
+      { id: 'beau-2', name: 'Meenakshi Sen', phone: '+91 98731 88920', specs: JSON.stringify(['brazilian-peel-off-waxing', 'massage', 'mani-pedi']), terrs: JSON.stringify(['Noida', 'Ghaziabad', 'Greater Noida']), exp: 6, rating: 4.9, jobs: 382 },
+      { id: 'beau-3', name: 'Ananya Verma', phone: '+91 99105 12433', specs: JSON.stringify(['rica-waxing', 'korean-waxing', 'threading', 'facial']), terrs: JSON.stringify(['Delhi', 'Faridabad']), exp: 9, rating: 5.0, jobs: 514 }
+    ];
+    const insertBeau = db.prepare("INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 'available', ?, ?, ?)");
+    for (const b of beauticians) {
+      insertBeau.run(b.id, b.name, b.phone, b.specs, b.terrs, b.exp, b.rating, b.jobs, now);
+    }
+  }
+
+  // 10. Campaigns
   const campaignCount = db.prepare('SELECT COUNT(*) as count FROM campaigns').get() as { count: number };
   if (campaignCount.count === 0) {
     const campaigns = [
       {
-        id: 'camp-summer-glow',
-        title: 'Delhi NCR Festive Glow Festival',
-        slug: 'festive-glow-festival',
-        banner_title: 'Festive Radiance at Home: Up to 35% OFF',
-        banner_subtitle: 'Book certified master beauticians at zero salon commute. Complimentary sanitization kits.',
-        banner_image_url: '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
-        cta_label: 'Explore Deals',
-        destination_url: '/offers',
+        id: 'camp-waxing-luxury',
+        title: 'Italian Liposoluble & Brazilian Waxing Rituals',
+        slug: 'waxing-rituals-delhi-ncr',
+        banner_title: 'Italian RICA & Brazilian Waxing from ₹280',
+        banner_subtitle: 'Colophony-free waxes for minimal redness, smooth satin skin, and strictly zero double-dipping across Delhi NCR.',
+        banner_image_url: '/banners/waxing_luxury_banner.svg',
+        cta_label: 'Explore Waxing',
+        destination_url: '/services?category=cat-rica',
         start_time: new Date(Date.now() - 86400000).toISOString(),
-        end_time: new Date(Date.now() + 15 * 86400000).toISOString(),
+        end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
         is_flash_deal: 0,
         is_published: 1,
         discount_type: 'percentage',
-        discount_val: 35,
-        badge_text: 'Limited Period',
-        target_category_ids: JSON.stringify(['facial', 'waxing', 'mani-pedi']),
-        target_service_ids: JSON.stringify(['srv-facial-o3-plus', 'srv-wax-full-arms-legs']),
+        discount_val: 20,
+        badge_text: 'Zero Double-Dipping',
+        target_category_ids: JSON.stringify(['cat-rica', 'cat-honey', 'cat-korean', 'cat-brazilian']),
+        target_service_ids: JSON.stringify(['srv-rica-full-arms-underarms-full-legs', 'srv-korean-full-arms-underarms-full-legs']),
         display_order: 1
       },
       {
-        id: 'camp-flash-mani-pedi',
-        title: 'Flash Hours: Rose Foot Spa & Waxing Combo',
-        slug: 'flash-spa-combo',
-        banner_title: 'Flash Deal: Extra ₹200 OFF Today',
-        banner_subtitle: 'Combine Rose Bath Bomb Pedicure with any Waxing ritual for instantaneous doorstep bliss.',
-        banner_image_url: '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
-        cta_label: 'Book Flash Deal',
-        destination_url: '/packages',
-        start_time: new Date(Date.now() - 3600000).toISOString(),
-        end_time: new Date(Date.now() + 24 * 3600000).toISOString(),
-        is_flash_deal: 1,
+        id: 'camp-botanical-facials',
+        title: 'Botanical Radiance & O3+ Derma Facials',
+        slug: 'botanical-facials-delhi-ncr',
+        banner_title: 'O3+ & Cheryl’s Monodose Facials at Home',
+        banner_subtitle: 'Oxygenating glow therapy with authentic salon kits unsealed directly at your vanity table with hospital-grade sanitization.',
+        banner_image_url: '/banners/facial_luxury_banner.svg',
+        cta_label: 'Explore Facials',
+        destination_url: '/services?category=cat-facial',
+        start_time: new Date(Date.now() - 86400000).toISOString(),
+        end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
+        is_flash_deal: 0,
         is_published: 1,
-        discount_type: 'flat',
-        discount_val: 200,
-        badge_text: 'Ends Tonight',
-        target_category_ids: JSON.stringify(['mani-pedi', 'waxing']),
-        target_service_ids: JSON.stringify(['srv-pedi-bomb-spa', 'srv-wax-full-arms-legs']),
+        discount_type: 'percentage',
+        discount_val: 25,
+        badge_text: 'Monodose Sealed',
+        target_category_ids: JSON.stringify(['cat-facial']),
+        target_service_ids: JSON.stringify(['srv-facial-o3-whitening', 'srv-facial-cheryls-glovite']),
         display_order: 2
+      },
+      {
+        id: 'camp-pedicure-wellness',
+        title: 'Rose Petal Mani-Pedi & Foot Spa Therapies',
+        slug: 'rose-pedicure-delhi-ncr',
+        banner_title: 'Effervescent Rose Petal Foot Spas at Home',
+        banner_subtitle: 'Autoclaved stainless steel tools, botanical effervescent bath soaks, and intensive heel callus smoothing.',
+        banner_image_url: '/banners/pedicure_luxury_banner.svg',
+        cta_label: 'Explore Mani-Pedi',
+        destination_url: '/services?category=cat-manicure',
+        start_time: new Date(Date.now() - 86400000).toISOString(),
+        end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
+        is_flash_deal: 0,
+        is_published: 1,
+        discount_type: 'percentage',
+        discount_val: 15,
+        badge_text: 'Autoclaved Tools',
+        target_category_ids: JSON.stringify(['cat-manicure']),
+        target_service_ids: JSON.stringify(['srv-mani-pedi-rose-spa']),
+        display_order: 3
       }
     ];
 
@@ -527,22 +665,317 @@ function seedEssentialData() {
         cp.id, cp.title, cp.slug, cp.banner_title, cp.banner_subtitle, cp.banner_image_url,
         cp.cta_label, cp.destination_url, cp.start_time, cp.end_time, cp.is_flash_deal, cp.is_published,
         cp.discount_type, cp.discount_val, cp.badge_text, cp.target_category_ids, cp.target_service_ids,
-        cp.display_order, new Date().toISOString()
+        cp.display_order, now
       );
     }
   }
+}
 
-  // 8. Beauticians Roster (Initial verified staff records)
-  const beauticianCount = db.prepare('SELECT COUNT(*) as count FROM beauticians').get() as { count: number };
-  if (beauticianCount.count === 0) {
-    const beauticians = [
-      { id: 'beau-1', name: 'Priya Sharma', phone: '+91 98112 44321', specs: JSON.stringify(['facial', 'bridal', 'de-tan']), terrs: JSON.stringify(['Delhi', 'Gurugram']), exp: 8, rating: 4.9, jobs: 428 },
-      { id: 'beau-2', name: 'Meenakshi Sen', phone: '+91 98731 88920', specs: JSON.stringify(['massage', 'waxing', 'mani-pedi']), terrs: JSON.stringify(['Noida', 'Ghaziabad', 'Greater Noida']), exp: 6, rating: 4.9, jobs: 382 },
-      { id: 'beau-3', name: 'Ananya Verma', phone: '+91 99105 12433', specs: JSON.stringify(['waxing', 'facial', 'threading']), terrs: JSON.stringify(['Delhi', 'Faridabad']), exp: 9, rating: 5.0, jobs: 514 }
-    ];
-    const insertBeau = db.prepare("INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 'available', ?, ?, ?)");
-    for (const b of beauticians) {
-      insertBeau.run(b.id, b.name, b.phone, b.specs, b.terrs, b.exp, b.rating, b.jobs, new Date().toISOString());
+function seedFaqData() {
+  const faqCount = db.prepare('SELECT COUNT(*) as count FROM faqs').get() as { count: number };
+  if (faqCount.count > 0) return;
+
+  const now = new Date().toISOString();
+
+  // Predefined Customer FAQs
+  const customerFaqs = [
+    {
+      id: 'faq-cust-how-to-book',
+      audience: 'customer',
+      category: 'Booking & Appointments',
+      question: 'How can I book a service?',
+      answer: `Booking your at-home salon appointment with BeautyDoor takes less than 60 seconds:
+1. Browse our service catalogue or search for your desired treatment (RICA, Honey, Korean, Brazilian waxing, or Beauty Packages).
+2. Click "Add to Cart" or "Book Package".
+3. Open your Cart, verify your selected treatments, and click "Book Appointment".
+4. Select your preferred date, convenient 2-hour arrival slot, and service address in Delhi NCR.
+5. Choose your payment method (Online via UPI/Card or Cash after service).
+6. Instant confirmation will be sent with details of your assigned certified beauty specialist.`,
+      keywords: ['book', 'how to book', 'booking', 'schedule', 'appointment', 'reserve', 'kaise book kare', 'booking kaise kare', 'book service', 'slot book', 'order kaise kare'],
+      display_order: 1,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-cust-services-offered',
+      audience: 'customer',
+      category: 'Services & Treatments',
+      question: 'What services do you offer?',
+      answer: 'BeautyDoor brings full salon-grade treatments right to your doorstep.',
+      keywords: ['services', 'what services', 'offer', 'menu', 'treatments', 'facial', 'waxing', 'pedicure', 'manicure', 'massage', 'service list', 'kya kya service hai'],
+      display_order: 2,
+      is_dynamic: 1,
+      dynamic_handler: 'get_services_catalog'
+    },
+    {
+      id: 'faq-cust-service-prices',
+      audience: 'customer',
+      category: 'Pricing & Packages',
+      question: 'What are the service prices?',
+      answer: 'Our rates are transparent with no hidden travel or kit charges.',
+      keywords: ['price', 'pricing', 'cost', 'charges', 'rate', 'rate card', 'kitna kharcha', 'paise kitne', 'kitne ka hai', 'price list', 'facial price', 'waxing price'],
+      display_order: 3,
+      is_dynamic: 1,
+      dynamic_handler: 'get_service_pricing'
+    },
+    {
+      id: 'faq-cust-at-home-service',
+      audience: 'customer',
+      category: 'Hygiene & Doorstep Model',
+      question: 'Do you provide at-home services?',
+      answer: `Yes! BeautyDoor is 100% an at-home salon service. You never have to step outside or face traffic:
+• Our background-verified female beauty professionals arrive at your doorstep equipped with complete salon setups.
+• We bring single-use disposable bedsheets, headbands, wax strips, single-use wooden spatulas (no double-dipping), and sanitized tools.
+• Air-conditioned room required for optimal waxing consistency.
+• Post-service, our specialist cleans and sanitizes your area completely, leaving your home spotless.`,
+      keywords: ['at home', 'home service', 'doorstep', 'ghar pe', 'ghar par', 'do you come home', 'visit home', 'salon at home', 'ghar me service', 'ghar pe aate ho'],
+      display_order: 4,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-cust-serviceable-areas',
+      audience: 'customer',
+      category: 'Service Areas',
+      question: 'Is my area serviceable?',
+      answer: 'We serve major residential sectors and localities across Delhi NCR.',
+      keywords: ['area', 'location', 'serviceable', 'delhi', 'noida', 'gurugram', 'gurgaon', 'ghaziabad', 'faridabad', 'greater noida', 'pincode', 'where do you provide', 'kahan service dete ho'],
+      display_order: 5,
+      is_dynamic: 1,
+      dynamic_handler: 'get_service_areas'
+    },
+    {
+      id: 'faq-cust-payment-methods',
+      audience: 'customer',
+      category: 'Payments & Billing',
+      question: 'What payment methods are available?',
+      answer: 'We offer flexible, customer-friendly payment options.',
+      keywords: ['payment', 'pay', 'cod', 'cash', 'cash on delivery', 'online payment', 'upi', 'gpay', 'phonepe', 'card', 'paise kaise de', 'cod available'],
+      display_order: 6,
+      is_dynamic: 1,
+      dynamic_handler: 'get_payment_methods'
+    },
+    {
+      id: 'faq-cust-cancel-booking',
+      audience: 'customer',
+      category: 'Cancellations & Refunds',
+      question: 'How can I cancel my booking?',
+      answer: 'We provide free cancellations with a hassle-free refund policy.',
+      keywords: ['cancel', 'cancellation', 'cancel booking', 'cancel order', 'booking cancel', 'cancel kaise kare', 'refund', 'booking hatana'],
+      display_order: 7,
+      is_dynamic: 1,
+      dynamic_handler: 'get_cancellation_policy'
+    },
+    {
+      id: 'faq-cust-reschedule-booking',
+      audience: 'customer',
+      category: 'Booking & Appointments',
+      question: 'How can I reschedule my booking?',
+      answer: `Need to modify your appointment timing? Rescheduling is completely free:
+1. Log into your account at beautydoor.in and navigate to "My Bookings".
+2. Click "Reschedule Appointment" next to your active booking.
+3. Pick your newly preferred date and time slot.
+4. Or message our Concierge Helpline on WhatsApp at least 2 hours before your scheduled arrival time.`,
+      keywords: ['reschedule', 'change time', 'change date', 'postpone', 'prepone', 'slot change', 'timing change', 'time badalna'],
+      display_order: 8,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-cust-track-booking',
+      audience: 'customer',
+      category: 'Booking & Appointments',
+      question: 'How can I track my booking?',
+      answer: `You receive end-to-end transparent visibility of your appointment:
+1. Real-time Status: Check your booking status (Confirmed, Specialist Assigned, En Route, In Service) in "My Bookings".
+2. Specialist Profile: View your verified specialist's name, photograph, hygiene certification badge, and rating.
+3. Live SMS & WhatsApp alerts: You'll receive instant updates when the professional departs and reaches your doorstep.`,
+      keywords: ['track', 'tracking', 'status', 'booking status', 'where is beautician', 'kaise track kare', 'kab aayegi', 'specialist kahan hai'],
+      display_order: 9,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-cust-current-offers',
+      audience: 'customer',
+      category: 'Pricing & Packages',
+      question: 'What offers are currently available?',
+      answer: 'BeautyDoor runs attractive seasonal campaigns and packages.',
+      keywords: ['offers', 'offer', 'discount', 'coupons', 'coupon', 'promo', 'deal', 'deals', 'kya offer hai', 'discount code', 'best deals'],
+      display_order: 10,
+      is_dynamic: 1,
+      dynamic_handler: 'get_active_offers'
+    },
+    {
+      id: 'faq-cust-contact-support',
+      audience: 'customer',
+      category: 'Support & Assistance',
+      question: 'How can I contact customer support?',
+      answer: 'Our dedicated customer support concierge is ready to help you.',
+      keywords: ['support', 'contact', 'help', 'customer care', 'phone number', 'whatsapp', 'call', 'baat karni hai', 'number', 'email', 'helpline'],
+      display_order: 11,
+      is_dynamic: 1,
+      dynamic_handler: 'get_support_contact'
+    },
+    {
+      id: 'faq-cust-other-questions',
+      audience: 'customer',
+      category: 'Support & Assistance',
+      question: 'Other questions',
+      answer: `Have a specific beauty question, custom bridal package requirement, or special request?
+• You can type your question right here in the chatbox (e.g., "facial price", "service in Noida", "refund policy", "waxing options").
+• Our intelligent rule-based knowledge engine will instantly assist you.
+• Or tap the "Contact Support" button below to chat directly with our concierge desk on WhatsApp.`,
+      keywords: ['other', 'more', 'help', 'question', 'kuch aur', 'aur sawaal'],
+      display_order: 12,
+      is_dynamic: 0,
+      dynamic_handler: null
     }
+  ];
+
+  // Predefined Admin Help FAQs
+  const adminFaqs = [
+    {
+      id: 'faq-admin-add-service',
+      audience: 'admin',
+      category: 'Catalog Management',
+      question: 'How to add a service?',
+      answer: `To add a new beauty treatment or ritual:
+1. In the Admin Dashboard, click on "Services Catalog".
+2. Click the "+ Add New Service" button.
+3. Fill in the service name, select category (e.g. RICA, Honey, Korean, Brazilian Peel-Off).
+4. Enter duration in minutes, selling price, before/aftercare instructions, and room conditions.
+5. Toggle "Active & Published" and click "Create Service". The service is live immediately on the storefront.`,
+      keywords: ['add service', 'new service', 'create service', 'service add'],
+      display_order: 1,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-update-pricing',
+      audience: 'admin',
+      category: 'Catalog Management',
+      question: 'How to update service pricing?',
+      answer: `To adjust pricing:
+1. Go to "Services Catalog" or "Packages".
+2. Locate the service or package and click "Edit".
+3. Update the "Selling Price". All price changes are automatically recorded in the Price Audit Log.
+4. Click "Save Changes". The new price reflects immediately across the storefront and booking engine.`,
+      keywords: ['update pricing', 'change price', 'price update', 'service price', 'pricing'],
+      display_order: 2,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-create-promotion',
+      audience: 'admin',
+      category: 'Marketing & Campaigns',
+      question: 'How to create a promotion?',
+      answer: 'Go to Campaigns tab, click New Campaign, specify discount type, dates, target categories, and publish.',
+      keywords: ['create promotion', 'new campaign', 'banner promotion'],
+      display_order: 3,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-create-coupon',
+      audience: 'admin',
+      category: 'Marketing & Campaigns',
+      question: 'How to create a coupon?',
+      answer: 'Navigate to Coupons tab, click Create Coupon Code, define discount value and minimum order amount, and save.',
+      keywords: ['create coupon', 'new coupon', 'add coupon', 'promo code'],
+      display_order: 4,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-manage-bookings',
+      audience: 'admin',
+      category: 'Operations & Dispatch',
+      question: 'How to manage bookings?',
+      answer: 'Go to Bookings & Dispatch tab to view, assign beauticians, reschedule, mark completed, or update notes.',
+      keywords: ['manage bookings', 'view bookings', 'booking status', 'orders'],
+      display_order: 5,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-assign-professionals',
+      audience: 'admin',
+      category: 'Operations & Dispatch',
+      question: 'How to assign professionals?',
+      answer: 'In Dispatch Board, select unassigned booking, pick verified specialist matching territory and specialty, and confirm.',
+      keywords: ['assign professionals', 'assign beautician', 'specialist assignment'],
+      display_order: 6,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-manage-service-areas',
+      audience: 'admin',
+      category: 'Territory Management',
+      question: 'How to manage service areas?',
+      answer: 'Navigate to Pincodes & Hubs tab to view or toggle active status of Delhi NCR zones and minimum order values.',
+      keywords: ['manage service areas', 'territories', 'add pincode', 'service area'],
+      display_order: 7,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-update-banners',
+      audience: 'admin',
+      category: 'Content & Merchandising',
+      question: 'How to update homepage banners?',
+      answer: 'Go to Settings & Policies or Campaigns to update announcement bar text or promotional banners.',
+      keywords: ['update banners', 'homepage banner', 'announcement bar'],
+      display_order: 8,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-check-payments',
+      audience: 'admin',
+      category: 'Finance & Payments',
+      question: 'How to check payment records?',
+      answer: 'Open Bookings to filter by payment status (COD collected vs pending, online payment verified).',
+      keywords: ['check payments', 'payment records', 'revenue', 'cash collection'],
+      display_order: 9,
+      is_dynamic: 0,
+      dynamic_handler: null
+    },
+    {
+      id: 'faq-admin-manage-customers',
+      audience: 'admin',
+      category: 'Customer CRM',
+      question: 'How to manage customer accounts?',
+      answer: 'Navigate to Customers tab to view customer profiles, lifetime bookings, spend totals, and address history.',
+      keywords: ['manage customers', 'customer accounts', 'crm', 'user profiles'],
+      display_order: 10,
+      is_dynamic: 0,
+      dynamic_handler: null
+    }
+  ];
+
+  const insertFaq = db.prepare(`
+    INSERT INTO faqs (
+      id, audience, category, question, answer, keywords_json,
+      display_order, is_active, is_dynamic, dynamic_handler, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const f of customerFaqs) {
+    insertFaq.run(
+      f.id, f.audience, f.category, f.question, f.answer,
+      JSON.stringify(f.keywords), f.display_order, 1, f.is_dynamic, f.dynamic_handler,
+      now, now
+    );
+  }
+
+  for (const f of adminFaqs) {
+    insertFaq.run(
+      f.id, f.audience, f.category, f.question, f.answer,
+      JSON.stringify(f.keywords), f.display_order, 1, f.is_dynamic, f.dynamic_handler,
+      now, now
+    );
   }
 }

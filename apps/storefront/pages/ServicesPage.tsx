@@ -23,6 +23,7 @@ export const ServicesPage: React.FC<Props> = ({
   const [priceFilter, setPriceFilter] = useState<'all' | 'under1000' | '1000to2500' | 'above2500'>('all');
   const [durationFilter, setDurationFilter] = useState<'all' | 'under45' | '45to90' | 'above90'>('all');
   const [sortBy, setSortBy] = useState<'popular' | 'priceAsc' | 'priceDesc' | 'durationAsc'>('popular');
+  const [waxingTypeFilter, setWaxingTypeFilter] = useState<'all' | 'single' | 'combo' | 'full_body'>('all');
 
   // Sync category from URL parameter
   useEffect(() => {
@@ -35,17 +36,26 @@ export const ServicesPage: React.FC<Props> = ({
     }
   }, [path]);
 
+  // Is current category a waxing category?
+  const isWaxingCategory = ['cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing'].includes(selectedCat);
+
   // Filtering logic
   const filtered = services.filter((s) => {
     // Category
     if (selectedCat !== 'all' && s.category_id !== selectedCat) return false;
+
+    // Waxing Sub-Type Filter (Single Services vs Combos vs Full Body)
+    if (isWaxingCategory && waxingTypeFilter !== 'all') {
+      if (s.service_type !== waxingTypeFilter) return false;
+    }
 
     // Search query
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchName = (s.name || '').toLowerCase().includes(q);
       const matchDesc = (s.description || '').toLowerCase().includes(q);
-      if (!matchName && !matchDesc) return false;
+      const matchBrand = (s.brand || '').toLowerCase().includes(q);
+      if (!matchName && !matchDesc && !matchBrand) return false;
     }
 
     // Price Filter
@@ -96,13 +106,23 @@ export const ServicesPage: React.FC<Props> = ({
               </p>
             </div>
 
-            <button
-              onClick={() => navigate('/packages')}
-              className="self-start md:self-auto px-4 py-2.5 bg-white text-[#4A0417] hover:bg-[#F4EFEA] border border-[#C5A880] text-xs font-semibold rounded-md shadow-2xs flex items-center gap-1.5 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-              <span>Custom Package Builder (Save 20%)</span>
-            </button>
+            <div className="flex items-center gap-2 self-start md:self-auto">
+              <button
+                onClick={() => navigate('/rate-card')}
+                className="px-4 py-2.5 bg-[#4A0417] text-white hover:bg-[#36020F] text-xs font-semibold rounded-md shadow-xs flex items-center gap-1.5 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Official Rate Card</span>
+              </button>
+
+              <button
+                onClick={() => navigate('/packages')}
+                className="px-4 py-2.5 bg-white text-[#4A0417] hover:bg-[#F4EFEA] border border-[#C5A880] text-xs font-semibold rounded-md shadow-2xs flex items-center gap-1.5 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                <span>Packages (10 Official)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -125,7 +145,10 @@ export const ServicesPage: React.FC<Props> = ({
             {categories.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setSelectedCat(c.id)}
+                onClick={() => {
+                  setSelectedCat(c.id);
+                  setWaxingTypeFilter('all');
+                }}
                 className={`px-3.5 py-2 rounded-md whitespace-nowrap transition-colors ${
                   selectedCat === c.id
                     ? 'bg-[#4A0417] text-white shadow-xs'
@@ -136,6 +159,55 @@ export const ServicesPage: React.FC<Props> = ({
               </button>
             ))}
           </div>
+
+          {/* Waxing Sub-Category Hierarchy Toggles (Single Services vs Combos vs Full Body) */}
+          {isWaxingCategory && (
+            <div className="pt-2 pb-1 border-t border-[#FAF7F2] flex items-center gap-2 overflow-x-auto text-xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A6B6D] shrink-0">
+                Browse Format:
+              </span>
+              <button
+                onClick={() => setWaxingTypeFilter('all')}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  waxingTypeFilter === 'all'
+                    ? 'bg-[#1F1A1C] text-white'
+                    : 'bg-[#FAF7F2] text-[#554749] hover:bg-[#EAE2D8]'
+                }`}
+              >
+                All Options
+              </button>
+              <button
+                onClick={() => setWaxingTypeFilter('single')}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  waxingTypeFilter === 'single'
+                    ? 'bg-[#1F1A1C] text-white'
+                    : 'bg-[#FAF7F2] text-[#554749] hover:bg-[#EAE2D8]'
+                }`}
+              >
+                Single Body Parts
+              </button>
+              <button
+                onClick={() => setWaxingTypeFilter('combo')}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  waxingTypeFilter === 'combo'
+                    ? 'bg-[#1F1A1C] text-white'
+                    : 'bg-[#FAF7F2] text-[#554749] hover:bg-[#EAE2D8]'
+                }`}
+              >
+                Combos & Bundles (Save More)
+              </button>
+              <button
+                onClick={() => setWaxingTypeFilter('full_body')}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  waxingTypeFilter === 'full_body'
+                    ? 'bg-[#1F1A1C] text-white'
+                    : 'bg-[#FAF7F2] text-[#554749] hover:bg-[#EAE2D8]'
+                }`}
+              >
+                Full Body Rituals
+              </button>
+            </div>
+          )}
 
           {/* Bottom Row: Search, Price Filters, Duration & Sort */}
           <div className="pt-3 border-t border-[#FAF7F2] flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">

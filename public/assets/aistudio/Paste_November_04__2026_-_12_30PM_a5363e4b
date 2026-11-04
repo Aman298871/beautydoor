@@ -1,0 +1,1046 @@
+# BEAUTYDOOR — MASTER BUSINESS CATALOGUE, WEBSITE, ADMIN PANEL & BOOKING IMPLEMENTATION
+
+You are working on the existing BeautyDoor project.
+
+This specification combines the business owner's WhatsApp messages, audio instructions, service prices, timings, package list, additional combo rates and hygiene requirements.
+
+Your job is to implement the actual BeautyDoor business catalogue and a complete customer booking experience, with a completely separate admin application.
+
+This is a real business implementation, NOT a demo.
+
+## 0. NON-NEGOTIABLE RULES
+
+1. Preserve all existing working features.
+2. Use the supplied business prices exactly.
+3. Do not silently change any supplied price.
+4. Do not merge different wax types or their pricing.
+5. Keep single services and discounted combos separate.
+6. Do not invent missing prices, durations, ingredients, steps or service instructions.
+7. Store all business information in the database.
+8. Admin must be able to manage services, prices, packages, offers, timings, banners and content without changing source code.
+9. Do not publish unconfirmed information to customers.
+10. Every customer-facing price must be validated by the backend.
+11. Do not copy competitor logos, photographs, banners or copyrighted descriptions.
+12. Create original premium BeautyDoor designs inspired by the convenience and customer journey of established beauty booking websites.
+
+## 1. APPLICATION STRUCTURE
+
+Maintain two independent applications:
+
+**Customer website**
+- Domain: beautydoor.in
+- Public service catalogue.
+- Packages and offers.
+- Booking and payments.
+- Customer account.
+- Custom FAQ chatbot.
+
+**Admin application**
+- Domain: admin.beautydoor.in
+- Separate frontend and deployment.
+- Private admin login.
+- Role-based access.
+- Business management.
+- Catalogue and pricing management.
+- Booking and payment management.
+- Reports and settings.
+
+Both applications should communicate with a shared secure backend and PostgreSQL database.
+
+Preferred architecture:
+- Next.js + TypeScript storefront.
+- Next.js + TypeScript admin.
+- Django REST Framework backend.
+- PostgreSQL database.
+- Redis/Celery where useful.
+
+If the existing project uses another architecture, first audit it and document the migration plan. Do not perform an uncontrolled rewrite.
+
+# 2. COMPLETE SERVICE CATALOGUE
+
+Create these major customer-facing categories:
+
+1. Waxing.
+2. Brazilian Peel-Off Waxing.
+3. Threading.
+4. Facials.
+5. Cleanup.
+6. Bleach.
+7. De-Tan.
+8. Manicure.
+9. Pedicure.
+10. Body Scrub and Body Pack.
+11. Massage.
+12. BeautyDoor Packages.
+
+The catalogue must be easy to browse on desktop and mobile.
+
+For waxing, use separate tabs:
+
+- Single Services.
+- Combos.
+- Full Body Options.
+
+For facials and other categories, use their own category pages.
+
+# 3. RICA WAXING — SINGLE SERVICES AND COMBOS
+
+Create a category named RICA Waxing.
+
+## Individual and standard combo services
+
+| Service | Price |
+|---|---:|
+| Full Arms + Underarms + Full Legs | ₹849 |
+| Full Arms + Underarms + Half Legs | ₹799 |
+| Full Arms + Underarms | ₹449 |
+| Half Arms | ₹350 |
+| Full Legs | ₹475 |
+| Underarms | ₹100 |
+| Half Legs | ₹375 |
+| Full Back | ₹419 |
+| Full Front | ₹419 |
+| Full Body excluding Bikini | ₹1,639 |
+| Full Body + Bikini | ₹2,049 |
+| Bikini | ₹700 |
+| Butt Wax | ₹350 |
+
+## Additional RICA combos
+
+The owner supplied these separately:
+
+| Combo | Price |
+|---|---:|
+| RICA Front + Back | ₹699 |
+
+Keep this as a separate combo from the individual Full Front and Full Back services.
+
+# 4. RICA ROLL-ON WAXING — SEPARATE PRODUCT TYPE
+
+The owner supplied a separate RICA Roll-On rate list.
+
+Do NOT mix these prices with standard RICA Waxing.
+
+Create a separate subcategory:
+
+**RICA Roll-On Wax**
+
+| Service / Combo | Price |
+|---|---:|
+| Full Arms + Underarms + Full Legs | ₹1,045 |
+| Front + Back Wax | ₹949 |
+| Full Arms + Underarms | ₹549 |
+| Full Legs | ₹649 |
+| Half Legs | ₹565 |
+| Half Arms | ₹449 |
+| Full Back | ₹549 |
+| Full Front | ₹549 |
+
+Keep all these rates separate from standard RICA wax.
+
+The customer should be able to understand that RICA Wax and RICA Roll-On are different service options.
+
+# 5. HONEY WAXING
+
+Create a category named Honey Waxing.
+
+## Single services and combos
+
+| Service | Price |
+|---|---:|
+| Full Arms + Underarms + Full Legs | ₹550 |
+| Full Arms + Underarms | ₹280 |
+| Underarms | ₹50 |
+| Half Arms | ₹230 |
+| Full Legs | ₹300 |
+| Half Legs | ₹260 |
+| Full Back | ₹250 |
+| Full Front | ₹250 |
+| Full Body excluding Bikini | ₹949 |
+| Full Body + Bikini | ₹1,199 |
+| Bikini | ₹499 |
+| Butt Wax | ₹250 |
+| Front + Back Wax Combo | ₹399 |
+
+# 6. KOREAN WAXING
+
+Create a category named Korean Waxing.
+
+| Service | Price |
+|---|---:|
+| Full Arms + Underarms + Full Legs | ₹800 |
+| Full Arms + Underarms + Half Legs | ₹750 |
+| Full Arms + Underarms | ₹400 |
+| Full Legs | ₹450 |
+| Half Legs | ₹350 |
+| Half Arms | ₹300 |
+| Full Back | ₹380 |
+| Full Front | ₹380 |
+| Full Body + Bikini | ₹1,950 |
+| Full Body excluding Bikini | ₹1,550 |
+| Front + Back Wax Combo | ₹649 |
+
+Do not invent other Korean waxing prices.
+
+# 7. BRAZILIAN PEEL-OFF WAXING
+
+Create a separate category named Brazilian Peel-Off Waxing.
+
+| Service | Price |
+|---|---:|
+| Brazilian Peel-Off Bikini | ₹850 |
+| Brazilian Peel-Off Underarms | ₹150 |
+| Brazilian Peel-Off Face Waxing | ₹250 |
+| Brazilian Wax Upper Lip | ₹60 |
+| Brazilian Wax Chin | ₹60 |
+| Brazilian Wax Side Locks | ₹80 |
+
+The owner also mentioned Forehead and Full Face services.
+
+Their separate prices are not confirmed.
+
+Keep them unpublished until configured by the admin.
+
+# 8. THREADING
+
+Create a separate Threading category.
+
+| Service | Price |
+|---|---:|
+| Eyebrows | ₹25 |
+| Upper Lip | ₹25 |
+| Chin | ₹25 |
+| Forehead | ₹25 |
+
+Allow customers to purchase individual threading services.
+
+Allow the admin to create threading combos later.
+
+Do not invent combo pricing.
+
+# 9. WAXING AND THREADING DURATIONS
+
+Use the owner's supplied duration information.
+
+| Service | Duration |
+|---|---:|
+| Full Arms Waxing | 45 minutes |
+| Full Legs Waxing | 45 minutes |
+| Bikini Waxing | 25 minutes |
+| Arms Waxing | 25 minutes |
+| Legs Waxing | 25 minutes |
+| Butt Waxing | 15 minutes |
+| Face Waxing | 25 minutes |
+| Upper Lip | 10 minutes |
+| Chin | 10 minutes |
+| Forehead | 10 minutes |
+| Side Locks | 10 minutes |
+
+The owner stated that applicable timings are the same across wax types.
+
+Apply durations to the corresponding service variants.
+
+Do not automatically add overlapping durations for a combo.
+
+For combos without a confirmed duration, allow admin configuration.
+
+Threading individual service durations should be configurable; do not assume that the ₹25 service price means 25 minutes.
+
+Full Face waxing duration still requires confirmation.
+
+# 10. FACIALS — COMPLETE PRICE LIST
+
+Create a separate Facials category.
+
+Each facial must have its own service detail page and support brand, number of steps, duration, price, description, ingredients and instructions.
+
+Use the following prices and durations:
+
+| Facial | Price | Duration | Steps |
+|---|---:|---:|---:|
+| Moonstar Korean Facial | ₹875 | 1 hour | 6 |
+| VLCC Fruit Facial | ₹599 | 45 min | 5 |
+| VLCC Anti-Tan Facial | ₹629 | 45 min | 5 |
+| VLCC Insta Glow Facial | ₹599 | 45 min | 4 |
+| VLCC Skin Tightening Facial | ₹650 | 45 min | 4 |
+| Sara Gold Facial | ₹899 | 1 hour | 6 |
+| Lotus Gold Facial | ₹799 | 1 hour | 4 |
+| Lotus Diamond Facial | ₹949 | 1 hour | 4 |
+| Lotus White Glow Facial | ₹749 | 1 hour | 4 |
+| Lotus Pearl Facial | ₹775 | 50 min | 4 |
+| FYC Wine Facial | ₹899 | 1 hour | 6 |
+| Astaberry Wine Facial | ₹749 | 50 min | 7 |
+| Raaga Anti-Aging Facial | ₹999 | 1 hour | 7 |
+| Raaga Fairness Facial | ₹150 | 1 hour | 6 |
+| Vedicline Bio White Anti-Aging Facial | ₹950 | 1 hour | 7 |
+| O3+ Anti-Aging Facial | ₹1,300 | 50 min | 4 |
+| O3+ Shine & Glow Facial | ₹1,450 | 1 hour | 7 |
+| O3+ Bridal Glow Vitamin C Facial | ₹1,849 | 1 hour 20 min | 9 |
+| Blossom Kochhar Aroma Magic Skin Glow Facial | ₹720 | 50 min | 6 |
+| Blossom Kochhar Aroma Magic Bridal Glow Facial | ₹799 | 1 hour | 7 |
+| FYC De-Tan Facial | ₹949 | 1 hour | 6 |
+| FYC Korean Glass Facial | ₹1,549 | 1 hour 10 min | 9 |
+| Vedicline Moroccan Argan Oil Facial | ₹850 | 1 hour | 6 |
+
+IMPORTANT VERIFICATION:
+- Raaga Fairness Facial price was transcribed as ₹150. This appears unusually low compared with the other facial prices. Preserve ₹150 as an unverified draft value and require admin confirmation before publishing.
+- O3+ Shine & Glow was corrected to 7 steps in the audio.
+- FYC Korean Glass was stated as ₹1,549 and 9 steps.
+- Do not silently correct or change any other price.
+
+Facial service pages must support:
+- Product brand.
+- Facial type.
+- Number of steps.
+- Duration.
+- Actual ingredients.
+- Step-by-step process.
+- Benefits.
+- Preparation instructions.
+- Aftercare instructions.
+- Product photos.
+
+Do not invent ingredients or medical benefits.
+
+# 11. CLEANUP SERVICES
+
+Create a separate Cleanup category.
+
+| Cleanup | Price | Duration | Steps |
+|---|---:|---:|---:|
+| VLCC Fruit Cleanup | ₹400 | 30 min | 3 |
+| VLCC Anti-Tan Cleanup | ₹445 | 30 min | 3 |
+
+The owner also mentioned VLCC Cleanup in the BeautyDoor Special RICA package.
+
+Do not invent an additional cleanup service or price.
+
+# 12. BLEACH SERVICES
+
+Create a separate Bleach category.
+
+| Service | Price | Duration |
+|---|---:|---:|
+| Oxy Bleach — Face + Neck | ₹230 | 15 min |
+| Full Body Bleach including Face + Neck | ₹800 | 30 min |
+| Full Body Bleach excluding Face | ₹700 | 30 min |
+| Full Back Bleach | ₹300 | Pending |
+| Full Front Bleach | ₹300 | Pending |
+| Full Legs Bleach | ₹280 | Pending |
+| Full Arms Bleach | ₹250 | Pending |
+
+The audio clearly gives 15 minutes for the Oxy face/neck bleach and 30 minutes for full-body bleach.
+
+Do not apply those durations to individual body-part bleach services without confirmation.
+
+# 13. DE-TAN SERVICES
+
+Create a separate De-Tan category.
+
+| Service | Price | Duration |
+|---|---:|---:|
+| Raaga De-Tan — Face + Neck | ₹250 | 15 min |
+| Ozone Full Body De-Tan including Face + Neck | ₹700 | Pending |
+| Full Legs De-Tan | ₹300 | 15 min |
+| Full Arms De-Tan | ₹250 | 15 min |
+| Full Back De-Tan | ₹250 | Pending |
+| Full Front De-Tan | ₹250 | Pending |
+
+Keep De-Tan and Bleach as different services.
+
+Do not mix their prices or descriptions.
+
+# 14. BEAUTYDOOR SIGNATURE PACKAGES
+
+Create a separate premium Packages section.
+
+Each package must display:
+- Package name.
+- Package price.
+- Duration.
+- Full list of included services.
+- Clearly marked free inclusions.
+- View Details.
+- Book Now.
+
+Use the exact following package data.
+
+## BeautyDoor Glow & Smooth
+
+Price: ₹1,649
+
+Duration: 1 hour 35 minutes
+
+Includes:
+- VLCC Fruit Facial.
+- FYC Pedicure — 3 Step.
+- Korean Wax — Full Arms.
+- Korean Wax — Underarms.
+- Korean Wax — Full Legs.
+
+## BeautyDoor Honey & Brazilian Bikini Wax
+
+Price: ₹1,299
+
+Duration: 1 hour 20 minutes
+
+Includes:
+- Honey Wax — Full Arms.
+- Honey Wax — Full Legs.
+- Honey Wax — Underarms.
+- Brazilian Bikini Wax.
+- Eyebrow + Upper Lip.
+
+## BeautyDoor Monthly Glow
+
+Price: ₹1,699
+
+Duration: 2 hours 20 minutes
+
+Includes:
+- VLCC Tan Facial.
+- Oxy Bleach — Face & Neck.
+- VLCC Mani-Pedi.
+- Honey Wax — Full Arms.
+- Honey Wax — Underarms.
+- Honey Wax — Full Legs.
+- Full Face Threading.
+- Free Bikini Wax.
+
+## BeautyDoor Korean Glow
+
+Price: ₹2,099
+
+Duration: 2 hours 30 minutes
+
+Includes:
+- Korean Facial — 6 Step.
+- Korean Wax — Full Arms + Underarms.
+- Korean Wax — Full Legs.
+- Korean Mani-Pedi — 5 Step.
+- Free Eyebrow + Upper Lip.
+
+## BeautyDoor Special RICA
+
+Price: ₹1,695
+
+Duration: 2 hours
+
+Includes:
+- VLCC Cleanup.
+- RICA Wax — Full Arms.
+- RICA Wax — Underarms.
+- RICA Wax — Full Legs.
+- RICA Brazilian Bikini.
+- Free Threading.
+
+## BeautyDoor Signature Beauty
+
+Price: ₹3,199
+
+Duration: 3 hours 20 minutes
+
+Includes:
+- O3+ Shine & Glow Facial.
+- O3+ Bleach — Face & Neck.
+- O3+ Mani-Pedi.
+- RICA Wax — Full Arms.
+- RICA Wax — Underarms.
+- RICA Wax — Full Legs.
+- Eyebrows + Upper Lip + Forehead.
+
+## BeautyDoor Beauty Bliss
+
+Price: ₹1,649
+
+Duration: 3 hours
+
+Includes:
+- Lotus White Glow Facial.
+- Oxy Bleach — Face & Neck.
+- Honey Wax — Full Arms.
+- Honey Wax — Underarms.
+- Honey Wax — Full Legs.
+- Body Scrub + Body Pack.
+- Eyebrows + Upper Lip + Forehead.
+
+## BeautyDoor Smooth & Silky
+
+Price: ₹1,399
+
+Duration: 2 hours
+
+Includes:
+- VLCC Facial — Insta Glow / Anti-Tan.
+- Raaga De-Tan — Face & Neck.
+- Honey Wax — Full Arms.
+- Honey Wax — Full Legs.
+- Honey Wax — Underarms.
+- Threading — Eyebrows + Upper Lip + Forehead.
+- Free Bikini Wax.
+
+## BeautyDoor Just Relax
+
+Price: ₹2,295
+
+Duration: 2 hours 30 minutes
+
+Includes:
+- Sara Gold Facial.
+- RICA Wax — Full Arms.
+- RICA Wax — Full Legs.
+- RICA Wax — Underarms.
+- Full Body Massage — Olive Oil.
+- Free Bleach — Face & Neck.
+
+## BeautyDoor Glamour Essentials
+
+Price: ₹2,095
+
+Duration: 2 hours 30 minutes
+
+Includes:
+- VLCC Facial — Anti-Tan / Insta Glow.
+- RICA Wax — Full Arms.
+- RICA Wax — Full Legs.
+- RICA Wax — Underarms.
+- Brazilian Wax — Bikini.
+- Classic FYC Manicure.
+- Classic FYC Pedicure.
+- Threading — Eyebrows + Upper Lip + Forehead.
+
+IMPORTANT:
+- Keep package inclusions exactly as supplied.
+- Do not charge separately for services already included in a package.
+- Do not invent original package prices or savings.
+- If a package contains a service whose individual price is still pending, the package itself may still be published at its supplied price.
+- Allow admin to edit package inclusions and duration.
+
+# 15. APPOINTMENT TIME SLOTS AND EXTRA CHARGES
+
+The owner supplied the following WhatsApp instruction:
+
+"Slots subah 8 baje se start, shaam ke 6 baje tak. Subah 8 baje par slot charges ₹100 extra, 6 baje wale par bhi ₹100."
+
+Implement a configurable booking schedule.
+
+Initial business configuration:
+- First appointment slot: 8:00 AM.
+- Last appointment slot: 6:00 PM.
+- Additional charge for the 8:00 AM slot: ₹100.
+- Additional charge for the 6:00 PM slot: ₹100.
+
+The additional charge should appear clearly in the checkout price breakdown.
+
+Example:
+Service price + eligible slot charge + applicable coupon adjustment = payable amount.
+
+Do not charge ₹100 for every slot.
+
+Only the specifically configured 8 AM and 6 PM slots receive the extra charge.
+
+Admin must be able to configure:
+- Working hours.
+- Slot interval.
+- Slot availability.
+- Slot-specific additional charges.
+- Closed days.
+- Special working hours.
+- Holiday schedules.
+- Maximum bookings per slot.
+- Professional availability.
+
+Use the service duration and professional schedule to prevent double booking.
+
+The owner must be able to change these rules later.
+
+# 16. SINGLE SERVICES VS COMBOS
+
+This is a major business requirement.
+
+The customer must clearly understand the difference between:
+
+**Single services**
+- Individual body-part waxing.
+- Individual facials.
+- Individual threading.
+- Individual bleach and De-Tan.
+
+**Combos**
+- Multiple services together at a bundled price.
+- Usually cheaper than booking the same eligible services individually.
+- Clearly show included body parts.
+- Clearly show the combo price.
+- Show genuine savings only if the backend can calculate them correctly.
+
+Do not automatically treat every combination of services as an official combo.
+
+Only business-approved combinations should be published.
+
+Create a flexible combo builder in the admin panel.
+
+Admin can:
+- Create a combo.
+- Select included services.
+- Set combo price.
+- Configure duration.
+- Mark free inclusions.
+- Set start/end dates.
+- Publish/unpublish.
+- Feature a combo.
+
+# 17. SINGLE-USE HYGIENE AND BEAUTYDOOR HYGIENE PROMISE
+
+The owner explicitly confirmed:
+
+"Single use products use karte hain."
+
+Create a prominent website section:
+
+**Your Beauty. Your Comfort. Our Hygiene Promise.**
+
+Use genuine business-approved claims.
+
+Include configurable hygiene commitments such as:
+- Single-use products wherever applicable.
+- Fresh disposable waxing applicators.
+- No reuse of disposable applicators between customers.
+- Clean and sanitized reusable tools.
+- Fresh and clean towels and service materials.
+- Proper cleaning before and after appointments.
+- Professional hygiene practices.
+- Customer comfort and privacy during at-home services.
+
+Do not claim every product or tool is single-use unless the owner confirms that specific commitment.
+
+### Hygiene section in admin
+
+Admin should be able to:
+- Add hygiene commitments.
+- Edit descriptions.
+- Upload genuine images.
+- Reorder commitments.
+- Enable or disable claims.
+- Configure category-specific hygiene information.
+- Publish a complete Hygiene Promise page.
+
+### Service-specific hygiene instructions
+
+Allow separate hygiene instructions for:
+- Waxing.
+- Facials.
+- Cleanup.
+- Bleach.
+- De-Tan.
+- Threading.
+- Manicure.
+- Pedicure.
+- Body massage.
+
+# 18. SERVICE DESCRIPTIONS AND PREPARATION INSTRUCTIONS
+
+Every service must support these fields:
+
+- Short description.
+- Detailed description.
+- Brand.
+- Product type.
+- Benefits.
+- Duration.
+- Ingredients.
+- Number of steps.
+- Step-by-step procedure.
+- Before-service instructions.
+- Aftercare instructions.
+- Hair-growth requirements, where applicable.
+- Room conditions, including AC requirement where confirmed.
+- Hygiene instructions.
+- Equipment requirements.
+- Precautions.
+- Image gallery.
+
+The owner will provide additional instructions later.
+
+Do not invent exact hair-growth requirements, product ingredients, step counts or medical claims.
+
+Keep missing information in an unpublished or pending-verification state.
+
+Facial step details must be editable from admin.
+
+Manicure and pedicure step details must be editable from admin.
+
+# 19. RATE CARD POSTER — IMPORTANT
+
+The owner specifically requested a rate-card poster containing all supplied prices.
+
+Implement a premium BeautyDoor Rate Card generator.
+
+Create:
+- Full catalogue rate card.
+- Waxing rate card.
+- RICA and RICA Roll-On rate card.
+- Honey Wax rate card.
+- Korean Wax rate card.
+- Brazilian Peel-Off rate card.
+- Threading rate card.
+- Facial rate card.
+- Bleach and De-Tan rate card.
+- Package rate card.
+
+Design:
+- Original BeautyDoor branding.
+- Premium burgundy / cream / elegant neutral theme.
+- Readable service names.
+- Correct Indian currency formatting.
+- Category headings.
+- Clearly distinguish individual prices and combo prices.
+- Show package durations.
+- Show relevant hygiene message.
+- Include BeautyDoor website/contact details only when configured.
+
+The rate card must be generated dynamically from the same database used by the website.
+
+If an admin updates a price, the rate card must reflect the new price.
+
+Provide:
+- Downloadable PDF.
+- Shareable image version.
+- Print-friendly A4 version.
+- Mobile-friendly rate card image.
+
+Never generate the poster from hardcoded duplicate prices.
+
+Exclude unverified or unpublished prices from public rate cards.
+
+# 20. CUSTOMER WEBSITE DESIGN
+
+Build a premium BeautyDoor experience.
+
+Homepage should feature:
+
+1. Announcement bar.
+2. Premium hero banner.
+3. Book at Home CTA.
+4. Browse Services.
+5. Waxing categories.
+6. Popular Facials.
+7. Bestselling Packages.
+8. Today's Deals.
+9. Single Services vs Combos.
+10. Hygiene Promise.
+11. How It Works.
+12. Genuine Customer Reviews.
+13. FAQs.
+14. Footer.
+
+Create dedicated routes for:
+- Homepage.
+- Services.
+- Waxing.
+- Individual waxing categories.
+- Facials.
+- Cleanup.
+- Bleach.
+- De-Tan.
+- Threading.
+- Packages.
+- Individual service details.
+- Individual package details.
+- Offers.
+- Hygiene Promise.
+- Booking.
+- Cart.
+- Customer account.
+- Booking history.
+- Contact.
+- About.
+- Policies.
+
+### Service cards
+
+Each service card should display:
+- Actual service image.
+- Name.
+- Price.
+- Duration.
+- Number of steps, where applicable.
+- Discount, if genuinely applicable.
+- Short description.
+- View Details.
+- Add to Cart.
+
+### Search and filters
+
+Implement:
+- Search by service name.
+- Category filters.
+- Brand filters.
+- Price sorting.
+- Duration sorting.
+- Single / Combo filters.
+- Search suggestions.
+
+Make the experience mobile-first.
+
+# 21. COMPLETE ADMIN APPLICATION
+
+Create these modules:
+
+### Dashboard
+- Today's bookings.
+- Upcoming bookings.
+- Completed bookings.
+- Cancelled bookings.
+- Revenue.
+- Online payments.
+- Cash collection.
+- Most popular services.
+- Popular packages.
+- Active offers.
+
+All numbers must come from actual database records.
+
+### Catalogue management
+- Manage all categories.
+- Manage waxing types.
+- Manage individual services.
+- Manage prices.
+- Manage duration.
+- Manage variants.
+- Manage steps.
+- Manage ingredients.
+- Manage service descriptions.
+- Manage images.
+- Publish/unpublish services.
+
+### Combo management
+- Create/edit/delete combos.
+- Add/remove services.
+- Set combo price.
+- Set duration.
+- Configure free inclusions.
+- Publish/unpublish combos.
+
+### Package management
+- Manage all ten BeautyDoor packages.
+- Change package price.
+- Change duration.
+- Manage inclusions.
+- Configure package images.
+- Publish/unpublish.
+
+### Rate card management
+- Generate PDF and image.
+- Choose categories.
+- Include or exclude unpublished services.
+- Preview before publishing.
+- Download and share.
+- Regenerate after price updates.
+
+### Hygiene management
+- Manage Hygiene Promise.
+- Manage single-use claims.
+- Manage service-specific instructions.
+- Manage hygiene images.
+
+### Booking management
+- View bookings.
+- Filter bookings.
+- Assign professionals.
+- Manage appointment slots.
+- Confirm and update status.
+- Reschedule.
+- Cancel.
+- View payment status.
+- Record cash collection.
+
+### Business settings
+- Working hours.
+- Slot charges.
+- Service areas.
+- Contact information.
+- Payment methods.
+- Booking policies.
+- Cancellation policies.
+- Promotions.
+- Homepage content.
+- SEO information.
+
+Every important modification should be recorded in an audit log.
+
+# 22. CUSTOM FAQ CHATBOT
+
+Implement a predefined, database-driven FAQ chatbot.
+
+No OpenAI/Gemini API is required for this feature.
+
+Customer chatbot:
+- How to book?
+- What services are available?
+- What are the prices?
+- What is the difference between RICA and RICA Roll-On?
+- What are the available combos?
+- What are the hygiene practices?
+- What are the booking timings?
+- Why is there a ₹100 early/late slot charge?
+- How to cancel or reschedule?
+- What payment methods are available?
+
+Admin help chatbot:
+- How to add a service?
+- How to change a price?
+- How to create a combo?
+- How to update a package?
+- How to generate a rate card?
+- How to change slot charges?
+- How to update hygiene commitments?
+
+FAQ answers should come from admin-managed content and actual business settings.
+
+Unknown questions should return a fallback answer and support contact option.
+
+# 23. CUSTOMER BOOKING AND PAYMENT
+
+Implement a complete booking workflow.
+
+1. Select service or package.
+2. Select variants or options.
+3. Add to cart.
+4. Enter service address.
+5. Validate serviceable PIN code.
+6. Select available appointment slot.
+7. Calculate the exact price.
+8. Apply valid coupon.
+9. Show slot charge where applicable.
+10. Select online payment or cash.
+11. Confirm booking.
+12. Show booking confirmation.
+13. Track booking.
+14. View booking history.
+
+Backend must validate all prices, combos, packages, slot charges, coupon eligibility and availability.
+
+Support Razorpay online payments and cash after service.
+
+Cash must remain pending until actually collected.
+
+Do not confirm online payments without backend verification.
+
+# 24. DATABASE STRUCTURE
+
+Design appropriate relational models for:
+
+- ServiceCategory.
+- Service.
+- ServiceVariant.
+- ServicePrice.
+- ServiceDuration.
+- ServiceStep.
+- ServiceIngredient.
+- ServiceInstruction.
+- ServiceImage.
+- ServiceCombo.
+- ComboItem.
+- BeautyPackage.
+- PackageItem.
+- Promotion.
+- Coupon.
+- AppointmentSlot.
+- SlotCharge.
+- ServiceArea.
+- HygieneCommitment.
+- CustomerFAQ.
+- AdminFAQ.
+- Booking.
+- BookingItem.
+- Payment.
+- Professional.
+- AuditLog.
+
+Use migrations, proper constraints and indexes.
+
+Avoid duplicated hardcoded catalogue data.
+
+Maintain price-change history.
+
+# 25. PENDING DATA AND VERIFICATION
+
+Create an admin-visible pending-verification section.
+
+The following details must be checked before public publishing:
+
+1. Raaga Fairness Facial price: transcribed as ₹150; owner confirmation required.
+2. Individual bleach durations for back, front, legs and arms.
+3. De-Tan duration for full body and front/back services.
+4. Full Face waxing price and duration.
+5. Brazilian Forehead waxing price.
+6. Brazilian Full Face waxing price and duration.
+7. Duration for individual threading services.
+8. Exact ingredients and facial procedures.
+9. Exact hair-growth requirements for waxing.
+10. Which specific products and tools are single-use versus reusable.
+11. Whether all supplied slot times are available every day.
+12. Any missing service images and descriptions.
+
+Do not block implementation of the confirmed catalogue because some information is pending.
+
+Implement confirmed data and leave only the missing fields pending.
+
+# 26. TESTING AND FINAL DELIVERY
+
+Verify all of the following:
+
+- Every supplied standard waxing price.
+- Every RICA Roll-On price.
+- Every Honey Wax price.
+- Every Korean Wax price.
+- Every Brazilian Peel-Off price.
+- Every threading price.
+- Every facial price, duration and step count.
+- Every cleanup price.
+- Every bleach price.
+- Every De-Tan price.
+- All ten BeautyDoor packages.
+- All package inclusions.
+- All confirmed waxing durations.
+- The ₹100 charges for the 8 AM and 6 PM slots.
+- Separate single services and combo listings.
+- Admin price editing.
+- Dynamic customer catalogue.
+- Dynamic rate card generation.
+- PDF and image export.
+- Hygiene Promise management.
+- Mobile responsiveness.
+- Secure admin access.
+- Actual booking and payment validation.
+
+Run automated tests and report real results.
+
+Provide screenshots of:
+1. Customer homepage.
+2. Waxing catalogue.
+3. RICA Roll-On catalogue.
+4. Facial catalogue.
+5. Combo catalogue.
+6. Packages page.
+7. Hygiene Promise page.
+8. Booking checkout.
+9. Rate card preview.
+10. Admin dashboard.
+11. Service/pricing management.
+12. Package management.
+13. Rate card management.
+14. Hygiene management.
+
+For every feature, report:
+- Fully implemented and tested.
+- Implemented but not tested.
+- UI only.
+- Waiting for owner confirmation.
+- Not implemented.
+
+Never claim production readiness without evidence.
+
+FINAL OBJECTIVE:
+
+Build BeautyDoor as a complete premium at-home beauty booking business, with an accurate official catalogue, individual and combo pricing, branded packages, transparent appointment charges, a genuine Hygiene Promise, printable rate cards, a fully functional customer website and a separate business-controllable admin application.

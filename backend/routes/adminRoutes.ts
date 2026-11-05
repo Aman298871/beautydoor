@@ -176,13 +176,14 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
   const serviceId = s.id || `srv-${Date.now()}`;
   const slug = (s.slug || s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) + `-${Math.floor(Math.random() * 1000)}`;
 
+  const now = new Date().toISOString();
   // begin transaction block
     (await db.execute(`
       INSERT INTO services (
         id, category_id, name, slug, description, benefits_json, duration_mins,
         original_price, selling_price, discount_percent, whats_included_json,
-        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [serviceId,
       s.categoryId || 'facial',
       s.name,
@@ -199,7 +200,8 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
       s.isBestseller ? 1 : 0,
       s.isFeaturedDeal ? 1 : 0,
       s.dealBadge || null,
-      new Date().toISOString()]));
+      now,
+      now]));
 
     if (Array.isArray(s.variants)) {
       for (let idx = 0; idx < s.variants.length; idx++) {
@@ -289,79 +291,7 @@ adminRouter.delete('/services/:id', async (req: Request, res: Response): Promise
   res.json({ success: true });
 });
 
-// 3b. Packages CRUD & Price Auditing
-adminRouter.get('/packages', async (_req: Request, res: Response): Promise<void> => {
-  const rawPackages = (await db.query('SELECT * FROM packages ORDER BY display_order ASC', [])) as any[];
-  const packages = rawPackages.map((p) => ({
-    ...p,
-    inclusions: JSON.parse(p.inclusions_json || '[]'),
-    benefits: JSON.parse(p.benefits_json || '[]')
-  }));
-  res.json({ packages });
-});
-
-adminRouter.post('/packages', async (req: Request, res: Response): Promise<void> => {
-  const p = req.body;
-  const adminUser = req.adminUser?.username || 'admin';
-  const pkgId = p.id || `pkg-${Date.now()}`;
-  const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const now = new Date().toISOString();
-
-  (await db.execute(`
-    INSERT INTO packages (
-      id, name, slug, description, duration_mins, duration_label,
-      original_price, selling_price, inclusions_json, benefits_json,
-      image_url, is_published, is_featured, display_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [pkgId, p.name, slug, p.description, Number(p.durationMins) || 60, p.durationLabel || `${p.durationMins || 60} mins`,
-    p.originalPrice ? Number(p.originalPrice) : null, Number(p.sellingPrice),
-    JSON.stringify(p.inclusions || []), JSON.stringify(p.benefits || []),
-    p.imageUrl || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
-    p.isPublished !== false ? 1 : 0, p.isFeatured !== false ? 1 : 0,
-    Number(p.displayOrder) || 0, now, now]));
-
-  (await db.execute(`
-    INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
-    VALUES (?, 'package', ?, ?, NULL, ?, ?, ?)
-  `, [`log-${Date.now()}`, pkgId, p.name, Number(p.sellingPrice), adminUser, now]));
-
-  res.status(201).json({ success: true, packageId: pkgId });
-});
-
-adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const p = req.body;
-  const adminUser = req.adminUser?.username || 'admin';
-  const now = new Date().toISOString();
-
-  const current = (await db.queryRow('SELECT selling_price, name FROM packages WHERE id = ?', [id])) as any;
-  if (current && Number(p.sellingPrice) !== current.selling_price) {
-    (await db.execute(`
-      INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
-      VALUES (?, 'package', ?, ?, ?, ?, ?, ?)
-    `, [`log-${Date.now()}`, id, current.name, current.selling_price, Number(p.sellingPrice), adminUser, now]));
-  }
-
-  (await db.execute(`
-    UPDATE packages SET
-      name = ?, description = ?, duration_mins = ?, duration_label = ?,
-      original_price = ?, selling_price = ?, inclusions_json = ?, benefits_json = ?,
-      image_url = ?, is_published = ?, is_featured = ?, display_order = ?, updated_at = ?
-    WHERE id = ?
-  `, [p.name, p.description, Number(p.durationMins), p.durationLabel,
-    p.originalPrice ? Number(p.originalPrice) : null, Number(p.sellingPrice),
-    JSON.stringify(p.inclusions || []), JSON.stringify(p.benefits || []),
-    p.imageUrl, p.isPublished ? 1 : 0, p.isFeatured ? 1 : 0,
-    Number(p.displayOrder), now, id]));
-
-  res.json({ success: true });
-});
-
-adminRouter.delete('/packages/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  (await db.execute('DELETE FROM packages WHERE id = ?', [id]));
-  res.json({ success: true });
-});
+// 3b. Packages CRUD & Price Auditing are defined in Section 13 below with full audit logging and schema parity.
 
 // 3c. Hygiene Commitments CRUD
 adminRouter.get('/hygiene', async (_req: Request, res: Response): Promise<void> => {
@@ -705,7 +635,7 @@ adminRouter.get('/customers', async (_req: Request, res: Response): Promise<void
       city,
       pincode
     FROM bookings
-    GROUP BY customer_id
+    GROUP BY customer_id, customer_name, customer_phone, customer_email, city, pincode
     ORDER BY last_booking_at DESC
   `, []));
   res.json({ customers });

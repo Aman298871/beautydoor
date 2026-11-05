@@ -24,10 +24,18 @@ console.log('[DB] Initializing database layer using engine: POSTGRESQL');
 let pgPool: pg.Pool;
 
 if (databaseUrl) {
-  // SSL configuration for Render / Supabase / Neon PostgreSQL
-  const sslConfig = process.env.DATABASE_SSL_NO_VERIFY === 'true' || isProduction
-    ? { rejectUnauthorized: false }
-    : false;
+  // SSL configuration: respect DATABASE_SSL_NO_VERIFY, enable standard SSL for external hosts, allow non-SSL for internal hosts
+  let sslConfig: boolean | { rejectUnauthorized: boolean } = false;
+  if (process.env.DATABASE_SSL_NO_VERIFY === 'true') {
+    sslConfig = { rejectUnauthorized: false };
+  } else if (
+    databaseUrl.includes('sslmode=require') ||
+    databaseUrl.includes('.render.com') ||
+    databaseUrl.includes('supabase.co') ||
+    databaseUrl.includes('neon.tech')
+  ) {
+    sslConfig = true; // Secure certificate verification enabled
+  }
 
   pgPool = new Pool({
     connectionString: databaseUrl,
@@ -248,7 +256,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       item_type VARCHAR(64) NOT NULL,
       item_id VARCHAR(255) NOT NULL,
       item_name VARCHAR(255) NOT NULL,
-      old_price INTEGER NOT NULL,
+      old_price INTEGER,
       new_price INTEGER NOT NULL,
       changed_by VARCHAR(255) NOT NULL,
       timestamp VARCHAR(64) NOT NULL

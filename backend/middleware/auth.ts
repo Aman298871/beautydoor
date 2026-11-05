@@ -2,7 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../db/database.ts';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'beautydoor-super-secret-production-key-2026';
+// In production, JWT_SECRET must be explicitly set via environment variables.
+const isProd = process.env.NODE_ENV === 'production';
+const envSecret = process.env.JWT_SECRET;
+
+if (isProd && !envSecret) {
+  throw new Error('CRITICAL: JWT_SECRET environment variable is missing in production mode. Refusing startup for security.');
+}
+
+export const JWT_SECRET = envSecret || 'beautydoor-dev-local-secret-key-32chars!';
 
 export interface AdminPayload {
   id: string;
@@ -44,20 +52,20 @@ export function requireAdminAuth(req: Request, res: Response, next: NextFunction
   }
 }
 
-export function recordAuditLog(
+export async function recordAuditLog(
   username: string,
   action: string,
   resourceType: string,
   resourceId?: string,
   details?: any,
   ip?: string
-) {
+): Promise<void> {
   try {
     const logId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    db.prepare(`
+    await db.execute(`
       INSERT INTO audit_logs (id, admin_username, action, resource_type, resource_id, details_json, timestamp, ip_address)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       logId,
       username,
       action,
@@ -66,7 +74,7 @@ export function recordAuditLog(
       details ? JSON.stringify(details) : null,
       new Date().toISOString(),
       ip || '127.0.0.1'
-    );
+    ]);
   } catch (e) {
     console.error('Audit logging failed:', e);
   }

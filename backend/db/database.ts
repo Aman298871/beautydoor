@@ -1,51 +1,168 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import pg from 'pg';
+const { Pool } = pg;
 import bcrypt from 'bcryptjs';
+import { newDb } from 'pg-mem';
 import { MASTER_CATEGORIES, MASTER_SERVICES, MASTER_PACKAGES } from './masterCatalogue.ts';
 
-const DB_DIR = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
+// Detect environment & target database engine
+const isProduction = process.env.NODE_ENV === 'production';
+const databaseUrl = process.env.DATABASE_URL;
+
+// Validate database configuration
+if (isProduction && !databaseUrl) {
+  throw new Error(
+    'CRITICAL: DATABASE_URL environment variable is required in production mode. Refusing to start without PostgreSQL.'
+  );
 }
 
-const DB_PATH = path.join(DB_DIR, 'beautydoor.db');
-export const db = new Database(DB_PATH);
+export type DbEngine = 'postgres';
+export const DB_ENGINE: DbEngine = 'postgres';
 
-// Enable WAL mode for high performance & concurrency
-db.pragma('journal_mode = WAL');
+console.log('[DB] Initializing database layer using engine: POSTGRESQL');
 
-// Initialize Normalized Production Schema
-export function initDatabase() {
-  db.exec(`
-    -- Admin Users & Roles
+// --- POSTGRESQL POOL SETUP ---
+let pgPool: pg.Pool;
+
+if (databaseUrl) {
+  // SSL configuration for Render / Supabase / Neon PostgreSQL
+  const sslConfig = process.env.DATABASE_SSL_NO_VERIFY === 'true' || isProduction
+    ? { rejectUnauthorized: false }
+    : false;
+
+  pgPool = new Pool({
+    connectionString: databaseUrl,
+    ssl: sslConfig,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  pgPool.on('error', (err) => {
+    console.error('[DB] Unexpected error on idle PostgreSQL client:', err);
+  });
+} else {
+  console.log('[DB] DATABASE_URL not set. Initializing in-memory PostgreSQL emulator for local testing.');
+  const memDb = newDb();
+  const { Pool: MemPool } = memDb.adapters.createPg();
+  pgPool = new MemPool() as unknown as pg.Pool;
+}
+
+/**
+ * Convert ? query placeholders to , , etc. for PostgreSQL
+ */
+function toPgQuery(sql: string): string {
+  let paramIndex = 1;
+  return sql.replace(/\?/g, () => `$${paramIndex++}`);
+}
+
+/**
+ * Universal Database Wrapper for PostgreSQL
+ */
+export class DatabaseWrapper {
+  get isPostgres(): boolean {
+    return true;
+  }
+
+  get isSqlite(): boolean {
+    return false;
+  }
+
+  get pool(): pg.Pool {
+    return pgPool;
+  }
+
+  /**
+   * Execute parameterized query returning rows
+   */
+  async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+    const pgSql = toPgQuery(sql);
+    const res = await pgPool.query(pgSql, params);
+    return res.rows as T[];
+  }
+
+  /**
+   * Execute query returning single row or undefined
+   */
+  async queryRow<T = any>(sql: string, params: any[] = []): Promise<T | undefined> {
+    const pgSql = toPgQuery(sql);
+    const res = await pgPool.query(pgSql, params);
+    return (res.rows[0] as T) || undefined;
+  }
+
+  /**
+   * Execute INSERT/UPDATE/DELETE query
+   */
+  async execute(sql: string, params: any[] = []): Promise<{ rowCount: number }> {
+    const pgSql = toPgQuery(sql);
+    const res = await pgPool.query(pgSql, params);
+    return { rowCount: res.rowCount || 0 };
+  }
+
+  /**
+   * Transaction execution helper for PostgreSQL
+   */
+  async withTransaction<T>(callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Graceful shutdown for connection pool
+   */
+  async close(): Promise<void> {
+    if (pgPool && typeof pgPool.end === 'function') {
+      await pgPool.end();
+      console.log('[DB] PostgreSQL pool closed.');
+    }
+  }
+}
+
+export const db = new DatabaseWrapper();
+
+// --- SCHEMA DEFINITIONS FOR POSTGRESQL ---
+export async function initDatabase(): Promise<void> {
+  await initPostgresSchema(pgPool);
+  await seedEssentialData();
+  await seedFaqData();
+}
+
+async function initPostgresSchema(pool: pg.Pool) {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'admin',
+      id VARCHAR(255) PRIMARY KEY,
+      username VARCHAR(255) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(64) NOT NULL DEFAULT 'admin',
       is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      last_login TEXT
+      created_at VARCHAR(64) NOT NULL,
+      last_login VARCHAR(64)
     );
 
-    -- Service Categories
     CREATE TABLE IF NOT EXISTS categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      slug TEXT UNIQUE NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) UNIQUE NOT NULL,
       description TEXT,
       display_order INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1
     );
 
-    -- Services Catalog
     CREATE TABLE IF NOT EXISTS services (
-      id TEXT PRIMARY KEY,
-      category_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      slug TEXT UNIQUE NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      category_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) UNIQUE NOT NULL,
       description TEXT NOT NULL,
       detailed_description TEXT,
       benefits_json TEXT NOT NULL DEFAULT '[]',
@@ -61,274 +178,252 @@ export function initDatabase() {
       room_conditions TEXT,
       equipment_requirements TEXT,
       hygiene_precautions TEXT,
-      brand TEXT,
-      service_type TEXT NOT NULL DEFAULT 'single',
+      brand VARCHAR(128),
+      service_type VARCHAR(64) NOT NULL DEFAULT 'single',
       is_combo INTEGER NOT NULL DEFAULT 0,
       combo_items_json TEXT NOT NULL DEFAULT '[]',
       steps_count INTEGER,
-      sub_type TEXT,
+      sub_type VARCHAR(64),
       is_active INTEGER NOT NULL DEFAULT 1,
       is_published INTEGER NOT NULL DEFAULT 1,
       pending_notes TEXT,
       is_popular INTEGER NOT NULL DEFAULT 0,
       is_bestseller INTEGER NOT NULL DEFAULT 0,
       is_featured_deal INTEGER NOT NULL DEFAULT 0,
-      deal_badge TEXT,
+      deal_badge VARCHAR(64),
       image_url TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (category_id) REFERENCES categories(id)
+      created_at VARCHAR(64) NOT NULL,
+      updated_at VARCHAR(64) NOT NULL
     );
 
-    -- Service Variants
     CREATE TABLE IF NOT EXISTS service_variants (
-      id TEXT PRIMARY KEY,
-      service_id TEXT NOT NULL,
-      name TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      service_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
       price_delta INTEGER NOT NULL DEFAULT 0,
       duration_delta INTEGER NOT NULL DEFAULT 0,
-      is_default INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+      is_default INTEGER NOT NULL DEFAULT 0
     );
 
-    -- Service Addons
     CREATE TABLE IF NOT EXISTS service_addons (
-      id TEXT PRIMARY KEY,
-      service_id TEXT NOT NULL,
-      name TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      service_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
       price INTEGER NOT NULL,
-      duration_mins INTEGER NOT NULL DEFAULT 10,
-      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+      duration_mins INTEGER NOT NULL DEFAULT 15
     );
 
-    -- Dedicated Beauty Packages
     CREATE TABLE IF NOT EXISTS packages (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      slug TEXT UNIQUE NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) UNIQUE NOT NULL,
       subtitle TEXT,
       description TEXT NOT NULL,
       duration_mins INTEGER NOT NULL,
-      duration_label TEXT DEFAULT '',
-      duration_display TEXT,
-      original_price INTEGER,
+      duration_display VARCHAR(128) NOT NULL,
+      original_price INTEGER NOT NULL,
       selling_price INTEGER NOT NULL,
       discount_percent INTEGER NOT NULL DEFAULT 0,
       inclusions_json TEXT NOT NULL DEFAULT '[]',
       benefits_json TEXT NOT NULL DEFAULT '[]',
-      badge TEXT,
-      image_url TEXT,
+      badge VARCHAR(64),
       is_published INTEGER NOT NULL DEFAULT 1,
-      is_featured INTEGER NOT NULL DEFAULT 1,
       display_order INTEGER NOT NULL DEFAULT 0,
-      vlcc_facial_variant TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at VARCHAR(64) NOT NULL,
+      updated_at VARCHAR(64) NOT NULL
     );
 
-    -- Dedicated Hygiene Commitments
     CREATE TABLE IF NOT EXISTS hygiene_commitments (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
       description TEXT NOT NULL,
-      icon_name TEXT NOT NULL DEFAULT 'ShieldCheck',
+      icon_name VARCHAR(64) NOT NULL,
       display_order INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL
+      created_at VARCHAR(64) NOT NULL
     );
 
-    -- Price Change Audit History
     CREATE TABLE IF NOT EXISTS price_audit_logs (
-      id TEXT PRIMARY KEY,
-      item_type TEXT NOT NULL,
-      item_id TEXT NOT NULL,
-      item_name TEXT NOT NULL,
-      old_price INTEGER,
+      id VARCHAR(255) PRIMARY KEY,
+      item_type VARCHAR(64) NOT NULL,
+      item_id VARCHAR(255) NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
+      old_price INTEGER NOT NULL,
       new_price INTEGER NOT NULL,
-      changed_by TEXT NOT NULL,
-      timestamp TEXT NOT NULL
+      changed_by VARCHAR(255) NOT NULL,
+      timestamp VARCHAR(64) NOT NULL
     );
 
-    -- Promotional Campaigns & Merchandising Engine
     CREATE TABLE IF NOT EXISTS campaigns (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      slug TEXT UNIQUE NOT NULL,
-      banner_title TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) UNIQUE NOT NULL,
+      banner_title VARCHAR(255) NOT NULL,
       banner_subtitle TEXT,
       banner_image_url TEXT,
-      cta_label TEXT NOT NULL DEFAULT 'Explore Deals',
-      destination_url TEXT NOT NULL DEFAULT '/offers',
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
+      cta_label VARCHAR(64) NOT NULL,
+      destination_url VARCHAR(255) NOT NULL,
+      start_time VARCHAR(64) NOT NULL,
+      end_time VARCHAR(64) NOT NULL,
       is_flash_deal INTEGER NOT NULL DEFAULT 0,
       is_published INTEGER NOT NULL DEFAULT 1,
-      discount_type TEXT NOT NULL DEFAULT 'percentage',
-      discount_val INTEGER NOT NULL DEFAULT 0,
-      badge_text TEXT,
+      discount_type VARCHAR(64) NOT NULL,
+      discount_val INTEGER NOT NULL,
+      badge_text VARCHAR(64),
       target_category_ids_json TEXT NOT NULL DEFAULT '[]',
       target_service_ids_json TEXT NOT NULL DEFAULT '[]',
       display_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
+      created_at VARCHAR(64) NOT NULL
     );
 
-    -- Promotional Coupons
     CREATE TABLE IF NOT EXISTS coupons (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      discount_type TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      code VARCHAR(64) UNIQUE NOT NULL,
+      discount_type VARCHAR(64) NOT NULL,
       discount_value INTEGER NOT NULL,
       min_order_amount INTEGER NOT NULL DEFAULT 0,
       max_discount INTEGER NOT NULL DEFAULT 9999,
-      expires_at TEXT NOT NULL,
+      expires_at VARCHAR(64) NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
       description TEXT NOT NULL
     );
 
-    -- Delhi NCR Territories & Serviceable Pincodes
     CREATE TABLE IF NOT EXISTS territories (
-      id TEXT PRIMARY KEY,
-      city TEXT NOT NULL,
-      area_name TEXT NOT NULL,
-      pincode TEXT UNIQUE NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      city VARCHAR(128) NOT NULL,
+      area_name VARCHAR(255) NOT NULL,
+      pincode VARCHAR(32) UNIQUE NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
       delivery_fee INTEGER NOT NULL DEFAULT 0,
       min_order_amount INTEGER NOT NULL DEFAULT 499
     );
 
-    -- Certified Beauticians / Specialists Roster
     CREATE TABLE IF NOT EXISTS beauticians (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      phone TEXT UNIQUE NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      phone VARCHAR(64) UNIQUE NOT NULL,
       specialties_json TEXT NOT NULL DEFAULT '[]',
       territories_json TEXT NOT NULL DEFAULT '[]',
       experience_years INTEGER NOT NULL DEFAULT 3,
       is_active INTEGER NOT NULL DEFAULT 1,
-      status TEXT NOT NULL DEFAULT 'available',
-      rating REAL NOT NULL DEFAULT 5.0,
+      status VARCHAR(64) NOT NULL DEFAULT 'available',
+      rating NUMERIC NOT NULL DEFAULT 5.0,
       total_jobs INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
+      created_at VARCHAR(64) NOT NULL
     );
 
-    -- Customer Bookings
     CREATE TABLE IF NOT EXISTS bookings (
-      id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      customer_email TEXT,
-      flat TEXT NOT NULL,
-      landmark TEXT,
-      area TEXT NOT NULL,
-      city TEXT NOT NULL,
-      pincode TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      customer_id VARCHAR(255) NOT NULL,
+      customer_name VARCHAR(255) NOT NULL,
+      customer_phone VARCHAR(64) NOT NULL,
+      customer_email VARCHAR(255),
+      flat VARCHAR(255) NOT NULL,
+      landmark VARCHAR(255),
+      area VARCHAR(255) NOT NULL,
+      city VARCHAR(128) NOT NULL,
+      pincode VARCHAR(32) NOT NULL,
       subtotal INTEGER NOT NULL,
       package_discount INTEGER NOT NULL DEFAULT 0,
       campaign_discount INTEGER NOT NULL DEFAULT 0,
       coupon_discount INTEGER NOT NULL DEFAULT 0,
-      coupon_code TEXT,
+      coupon_code VARCHAR(64),
       slot_charge INTEGER NOT NULL DEFAULT 0,
       delivery_fee INTEGER NOT NULL DEFAULT 0,
       total_payable INTEGER NOT NULL,
-      appointment_date TEXT NOT NULL,
-      appointment_slot TEXT NOT NULL,
-      payment_method TEXT NOT NULL DEFAULT 'COD',
-      payment_status TEXT NOT NULL DEFAULT 'pending',
-      razorpay_order_id TEXT,
-      razorpay_payment_id TEXT,
-      booking_status TEXT NOT NULL DEFAULT 'pending',
-      assigned_beautician_id TEXT,
+      appointment_date VARCHAR(64) NOT NULL,
+      appointment_slot VARCHAR(64) NOT NULL,
+      payment_method VARCHAR(64) NOT NULL DEFAULT 'COD',
+      payment_status VARCHAR(64) NOT NULL DEFAULT 'pending',
+      razorpay_order_id VARCHAR(255),
+      razorpay_payment_id VARCHAR(255),
+      booking_status VARCHAR(64) NOT NULL DEFAULT 'pending',
+      assigned_beautician_id VARCHAR(255),
       internal_notes TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (assigned_beautician_id) REFERENCES beauticians(id)
+      created_at VARCHAR(64) NOT NULL
     );
 
-    -- Booking Items
     CREATE TABLE IF NOT EXISTS booking_items (
-      id TEXT PRIMARY KEY,
-      booking_id TEXT NOT NULL,
-      service_id TEXT NOT NULL,
-      service_name TEXT NOT NULL,
-      variant_id TEXT,
-      variant_name TEXT,
+      id VARCHAR(255) PRIMARY KEY,
+      booking_id VARCHAR(255) NOT NULL,
+      service_id VARCHAR(255) NOT NULL,
+      service_name VARCHAR(255) NOT NULL,
+      variant_id VARCHAR(255),
+      variant_name VARCHAR(255),
       addon_ids_json TEXT NOT NULL DEFAULT '[]',
       addon_names_json TEXT NOT NULL DEFAULT '[]',
       unit_price INTEGER NOT NULL,
       final_item_price INTEGER NOT NULL,
-      duration_mins INTEGER NOT NULL,
-      FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+      duration_mins INTEGER NOT NULL
     );
 
-    -- Customer Reviews
     CREATE TABLE IF NOT EXISTS reviews (
-      id TEXT PRIMARY KEY,
-      booking_id TEXT,
-      customer_name TEXT NOT NULL,
-      city TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      customer_name VARCHAR(255) NOT NULL,
+      customer_location VARCHAR(255) NOT NULL,
       rating INTEGER NOT NULL,
       comment TEXT NOT NULL,
-      service_name TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      source TEXT NOT NULL DEFAULT 'verified_booking',
-      is_approved INTEGER NOT NULL DEFAULT 0,
-      is_featured INTEGER NOT NULL DEFAULT 0
+      service_tag VARCHAR(128) NOT NULL,
+      verified_booking INTEGER NOT NULL DEFAULT 1,
+      is_approved INTEGER NOT NULL DEFAULT 1,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      created_at VARCHAR(64) NOT NULL
     );
 
-    -- Security Audit Logs
     CREATE TABLE IF NOT EXISTS audit_logs (
-      id TEXT PRIMARY KEY,
-      admin_username TEXT NOT NULL,
-      action TEXT NOT NULL,
-      resource_type TEXT NOT NULL,
-      resource_id TEXT,
+      id VARCHAR(255) PRIMARY KEY,
+      admin_username VARCHAR(255) NOT NULL,
+      action VARCHAR(64) NOT NULL,
+      resource_type VARCHAR(64) NOT NULL,
+      resource_id VARCHAR(255),
       details_json TEXT,
-      timestamp TEXT NOT NULL,
-      ip_address TEXT
+      timestamp VARCHAR(64) NOT NULL,
+      ip_address VARCHAR(64)
     );
 
-    -- Business Settings
     CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
+      key VARCHAR(255) PRIMARY KEY,
       value TEXT NOT NULL
     );
 
-    -- Predefined & Dynamic FAQ Knowledgebase
     CREATE TABLE IF NOT EXISTS faqs (
-      id TEXT PRIMARY KEY,
-      audience TEXT NOT NULL CHECK(audience IN ('customer', 'admin')),
-      category TEXT NOT NULL,
+      id VARCHAR(255) PRIMARY KEY,
+      audience VARCHAR(64) NOT NULL DEFAULT 'customer',
+      category VARCHAR(128) NOT NULL,
       question TEXT NOT NULL,
       answer TEXT NOT NULL,
       keywords_json TEXT NOT NULL DEFAULT '[]',
       display_order INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1,
       is_dynamic INTEGER NOT NULL DEFAULT 0,
-      dynamic_handler TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      dynamic_handler VARCHAR(128),
+      created_at VARCHAR(64) NOT NULL,
+      updated_at VARCHAR(64) NOT NULL
     );
   `);
-
-  seedEssentialData();
-  seedFaqData();
 }
 
-function seedEssentialData() {
+async function seedEssentialData() {
   const now = new Date().toISOString();
 
-  // 1. Ensure SuperAdmin exists (Password: "Admin@BeautyDoor2026")
-  const existingAdmin = db.prepare('SELECT id FROM admin_users WHERE username = ?').get('admin');
-  if (!existingAdmin) {
+  // 1. Initial Admin User Provisioning via ENV (Security compliance)
+  // Reads ADMIN_USERNAME / ADMIN_PASSWORD from environment, with secure fallback
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? null : 'Admin@BeautyDoor2026');
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@beautydoor.in';
+
+  const existingAdmin = await db.queryRow('SELECT id FROM admin_users WHERE username = ?', [adminUsername]);
+  if (!existingAdmin && adminPassword) {
     const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync('Admin@BeautyDoor2026', salt);
-    db.prepare(`
+    const hash = bcrypt.hashSync(adminPassword, salt);
+    await db.execute(`
       INSERT INTO admin_users (id, username, email, password_hash, role, is_active, created_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?)
-    `).run('admin-super-1', 'admin', 'admin@beautydoor.in', hash, 'superadmin', now);
+      VALUES (?, ?, ?, ?, 'superadmin', 1, ?)
+    `, [`admin-${Date.now()}`, adminUsername, adminEmail, hash, now]);
+    console.log(`[DB] Admin account provisioned for user: ${adminUsername}`);
   }
 
-  // 2. Initial Settings
+  // 2. Initial Settings (idempotent; does not overwrite existing admin updates)
   const defaultSettings: Record<string, string> = {
     brand_name: 'BeautyDoor',
     tagline: 'Beauty at your doorstep',
@@ -343,8 +438,8 @@ function seedEssentialData() {
     cancellation_policy: 'Complimentary cancellation up to 4 hours prior to appointment.',
     announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
-    razorpay_enabled: 'true',
-    razorpay_key_id: 'rzp_test_beautydoor_mock',
+    razorpay_enabled: 'false',
+    razorpay_key_id: '',
     google_places_api_key: '',
     google_place_id: '',
     min_order_amount: '499',
@@ -352,32 +447,41 @@ function seedEssentialData() {
     hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.'
   };
 
-  const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(defaultSettings)) {
-    insertSetting.run(k, v);
-  }
-
-  // 3. Official Service Categories
-  const categoryCount = db.prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number };
-  if (categoryCount.count === 0) {
-    const insertCat = db.prepare('INSERT INTO categories (id, name, slug, description, display_order, is_active) VALUES (?, ?, ?, ?, ?, 1)');
-    for (const c of MASTER_CATEGORIES) {
-      insertCat.run(c.id, c.name, c.slug, c.description, c.display_order);
+    const existing = await db.queryRow('SELECT key FROM settings WHERE key = ?', [k]);
+    if (!existing) {
+      await db.execute('INSERT INTO settings (key, value) VALUES (?, ?)', [k, v]);
     }
   }
 
-  // 4. Genuine Delhi NCR Territories & Serviceable Pincodes
-  const territoryCount = db.prepare('SELECT COUNT(*) as count FROM territories').get() as { count: number };
-  if (territoryCount.count === 0) {
+  // 3. Official Service Categories (idempotent)
+  const catCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM categories');
+  if (Number(catCountRow?.count || 0) === 0) {
+    for (const c of MASTER_CATEGORIES) {
+      await db.execute(
+        'INSERT INTO categories (id, name, slug, description, display_order, is_active) VALUES (?, ?, ?, ?, ?, 1)',
+        [c.id, c.name, c.slug, c.description, c.display_order]
+      );
+    }
+  }
+
+  // 4. Genuine Delhi NCR Territories & Serviceable Pincodes (idempotent)
+  const terCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM territories');
+  if (Number(terCountRow?.count || 0) === 0) {
     const territories = [
-      { id: 'ter-del-1', city: 'Delhi', area: 'South Delhi (GK, Saket, Vasant Kunj, Hauz Khas)', pin: '110017', fee: 0, min: 499 },
-      { id: 'ter-del-2', city: 'Delhi', area: 'South Delhi (Defense Colony, Lajpat Nagar)', pin: '110024', fee: 0, min: 499 },
-      { id: 'ter-del-3', city: 'Delhi', area: 'Central Delhi (Connaught Place, Chanakyapuri)', pin: '110001', fee: 0, min: 499 },
-      { id: 'ter-del-4', city: 'Delhi', area: 'West Delhi (Punjabi Bagh, Rajouri Garden)', pin: '110026', fee: 0, min: 499 },
-      { id: 'ter-del-5', city: 'Delhi', area: 'East Delhi (Mayur Vihar, Preet Vihar)', pin: '110091', fee: 0, min: 499 },
-      { id: 'ter-ggn-1', city: 'Gurugram', area: 'DLF Phase 1-5 & Cyber City', pin: '122002', fee: 0, min: 499 },
-      { id: 'ter-ggn-2', city: 'Gurugram', area: 'Golf Course Road & Sector 54, 56', pin: '122011', fee: 0, min: 499 },
-      { id: 'ter-ggn-3', city: 'Gurugram', area: 'Golf Course Extn & Sector 65, 66', pin: '122018', fee: 0, min: 499 },
+      { id: 'ter-del-1', city: 'Delhi', area: 'Vasant Kunj & Shanti Kunj', pin: '110070', fee: 0, min: 499 },
+      { id: 'ter-del-2', city: 'Delhi', area: 'Hauz Khas, Green Park & Safdarjung', pin: '110016', fee: 0, min: 499 },
+      { id: 'ter-del-3', city: 'Delhi', area: 'Saket, Malviya Nagar & Sainik Farm', pin: '110017', fee: 0, min: 499 },
+      { id: 'ter-del-4', city: 'Delhi', area: 'Greater Kailash 1 & 2 (GK)', pin: '110048', fee: 0, min: 499 },
+      { id: 'ter-del-5', city: 'Delhi', area: 'Lajpat Nagar & Defence Colony', pin: '110024', fee: 0, min: 499 },
+      { id: 'ter-del-6', city: 'Delhi', area: 'Dwarka (Sector 4, 6, 10, 12, 19)', pin: '110075', fee: 0, min: 499 },
+      { id: 'ter-del-7', city: 'Delhi', area: 'Punjabi Bagh & Rajouri Garden', pin: '110026', fee: 0, min: 499 },
+      { id: 'ter-del-8', city: 'Delhi', area: 'Rohini (Sector 7, 8, 9, 13, 14)', pin: '110085', fee: 0, min: 499 },
+      { id: 'ter-del-9', city: 'Delhi', area: 'Pitampura & Saraswati Vihar', pin: '110034', fee: 0, min: 499 },
+      { id: 'ter-del-10', city: 'Delhi', area: 'Mayur Vihar Phase 1 & 2', pin: '110091', fee: 0, min: 499 },
+      { id: 'ter-ggn-1', city: 'Gurugram', area: 'DLF Phase 1, 2, 3, 4, 5', pin: '122002', fee: 0, min: 499 },
+      { id: 'ter-ggn-2', city: 'Gurugram', area: 'Sohna Road & Sector 48, 49, 50', pin: '122018', fee: 0, min: 499 },
+      { id: 'ter-ggn-3', city: 'Gurugram', area: 'Golf Course Extn & Sector 65, 66', pin: '122102', fee: 0, min: 499 },
       { id: 'ter-nda-1', city: 'Noida', area: 'Sector 15, 16, 18 (Film City & Atta)', pin: '201301', fee: 0, min: 499 },
       { id: 'ter-nda-2', city: 'Noida', area: 'Sector 50, 76, 78 (Expressway Corridor)', pin: '201307', fee: 0, min: 499 },
       { id: 'ter-nda-3', city: 'Noida', area: 'Sector 128, 137, 142 (Jaypee Greens)', pin: '201304', fee: 0, min: 499 },
@@ -387,44 +491,45 @@ function seedEssentialData() {
       { id: 'ter-fbd-1', city: 'Faridabad', area: 'Sector 14, 15, 16 & Greenfield', pin: '121002', fee: 0, min: 499 }
     ];
 
-    const insertTer = db.prepare('INSERT INTO territories (id, city, area_name, pincode, is_active, delivery_fee, min_order_amount) VALUES (?, ?, ?, ?, 1, ?, ?)');
     for (const t of territories) {
-      insertTer.run(t.id, t.city, t.area, t.pin, t.fee, t.min);
+      await db.execute(
+        'INSERT INTO territories (id, city, area_name, pincode, is_active, delivery_fee, min_order_amount) VALUES (?, ?, ?, ?, 1, ?, ?)',
+        [t.id, t.city, t.area, t.pin, t.fee, t.min]
+      );
     }
   }
 
-  // 5. Promotional Coupons
-  const couponCount = db.prepare('SELECT COUNT(*) as count FROM coupons').get() as { count: number };
-  if (couponCount.count === 0) {
+  // 5. Promotional Coupons (idempotent)
+  const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
+  if (Number(cpCountRow?.count || 0) === 0) {
     const coupons = [
       { id: 'cp-1', code: 'BEAUTYFIRST', type: 'flat', val: 200, min: 799, max: 200, exp: '2028-12-31', desc: 'Flat ₹200 savings on your inaugural at-home beauty ritual.' },
       { id: 'cp-2', code: 'GLOW15', type: 'percentage', val: 15, min: 1499, max: 500, exp: '2028-12-31', desc: '15% extra savings on premium facials and cleanups.' },
       { id: 'cp-3', code: 'NCRBRIDE', type: 'flat', val: 800, min: 3999, max: 800, exp: '2028-12-31', desc: '₹800 savings on royal bridal packages.' }
     ];
-    const insertCp = db.prepare('INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)');
     for (const c of coupons) {
-      insertCp.run(c.id, c.code, c.type, c.val, c.min, c.max, c.exp, c.desc);
+      await db.execute(
+        'INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+        [c.id, c.code, c.type, c.val, c.min, c.max, c.exp, c.desc]
+      );
     }
   }
 
-  // 6. OFFICIAL SERVICES (RICA, Honey, Korean, Brazilian Peel-Off & Core Treatments)
-  // 6. OFFICIAL SERVICES & PACKAGES (Master Business Catalogue)
-  const serviceCount = db.prepare('SELECT COUNT(*) as count FROM services').get() as { count: number };
-  if (serviceCount.count === 0) {
-    const insertSrv = db.prepare(`
-      INSERT INTO services (
-        id, category_id, name, slug, description, detailed_description,
-        benefits_json, duration_mins, original_price, selling_price, discount_percent,
-        whats_included_json, ingredients_json, steps_json,
-        before_instructions, after_instructions, room_conditions, equipment_requirements, hygiene_precautions,
-        brand, service_type, is_combo, combo_items_json, steps_count, sub_type,
-        is_active, is_published, pending_notes, is_popular, is_bestseller, is_featured_deal, deal_badge,
-        image_url, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
+  // 6. OFFICIAL SERVICES (Master Catalogue - idempotent, preserves admin updates)
+  const srvCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM services');
+  if (Number(srvCountRow?.count || 0) === 0) {
     for (const s of MASTER_SERVICES) {
-      insertSrv.run(
+      await db.execute(`
+        INSERT INTO services (
+          id, category_id, name, slug, description, detailed_description,
+          benefits_json, duration_mins, original_price, selling_price, discount_percent,
+          whats_included_json, ingredients_json, steps_json,
+          before_instructions, after_instructions, room_conditions, equipment_requirements, hygiene_precautions,
+          brand, service_type, is_combo, combo_items_json, steps_count, sub_type,
+          is_active, is_published, pending_notes, is_popular, is_bestseller, is_featured_deal, deal_badge,
+          image_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
         s.id,
         s.category_id,
         s.name,
@@ -460,24 +565,22 @@ function seedEssentialData() {
         '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
         now,
         now
-      );
+      ]);
     }
   }
 
-  // 7. OFFICIAL BEAUTYDOOR SIGNATURE PACKAGES (Exact 10 Packages from Business Owner)
-  const packageCount = db.prepare('SELECT COUNT(*) as count FROM packages').get() as { count: number };
-  if (packageCount.count === 0) {
-    const insertPkg = db.prepare(`
-      INSERT INTO packages (
-        id, name, slug, subtitle, description, duration_mins, duration_display,
-        original_price, selling_price, discount_percent, inclusions_json, benefits_json,
-        badge, is_published, display_order, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
+  // 7. OFFICIAL PACKAGES (idempotent)
+  const pkgCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM packages');
+  if (Number(pkgCountRow?.count || 0) === 0) {
     let pOrder = 1;
     for (const p of MASTER_PACKAGES) {
-      insertPkg.run(
+      await db.execute(`
+        INSERT INTO packages (
+          id, name, slug, subtitle, description, duration_mins, duration_display,
+          original_price, selling_price, discount_percent, inclusions_json, benefits_json,
+          badge, is_published, display_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
         p.id,
         p.name,
         p.slug,
@@ -495,99 +598,51 @@ function seedEssentialData() {
         pOrder++,
         now,
         now
+      ]);
+    }
+  }
+
+  // 8. HYGIENE & SAFETY COMMITMENTS (idempotent)
+  const hygCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM hygiene_commitments');
+  if (Number(hygCountRow?.count || 0) === 0) {
+    const commitments = [
+      { id: 'hyg-1', title: 'Single-Use Disposable Waxing Spatulas', desc: 'Fresh disposable wooden spatulas used for each wax application. We strictly observe zero double-dipping protocol.', icon: 'Sparkles', order: 1 },
+      { id: 'hyg-2', title: 'Fresh Disposable Bedsheets & Headbands', desc: 'A brand-new sealed disposable protective bedsheet and headband laid out in your room for every single visit.', icon: 'ShieldCheck', order: 2 },
+      { id: 'hyg-3', title: 'Clean & Sanitized Metal Tools', desc: 'All tweezers, scissors, and cuticle instruments are thoroughly sterilized and sealed in individual pouches before arrival.', icon: 'CheckCircle2', order: 3 },
+      { id: 'hyg-4', title: 'Fresh Clean Service Towels', desc: 'Clean, freshly laundered towels delivered in sealed pouches for each client appointment.', icon: 'Sparkles', order: 4 },
+      { id: 'hyg-5', title: 'Monodosage Sealed Skincare Packs', desc: 'Facials and cleanups utilize single-use, client-specific sealed tubes and packs unsealed exclusively before your eyes.', icon: 'ShieldCheck', order: 5 },
+      { id: 'hyg-6', title: 'Proper Hand & Product Hygiene', desc: 'Specialists practice hand sanitization, wear fresh disposable masks and gloves, and follow professional handling procedures.', icon: 'CheckCircle2', order: 6 },
+      { id: 'hyg-7', title: 'Post-Service Area Cleaning & Sanitization', desc: 'After treatments conclude, our specialist cleans and sanitizes your area, packing all single-use disposables away.', icon: 'Sparkles', order: 7 },
+      { id: 'hyg-8', title: 'Client Comfort, Sanctuary & Privacy', desc: 'Strictly female-verified estheticians respecting your household sanctity and personal space at all times.', icon: 'ShieldCheck', order: 8 }
+    ];
+
+    for (const h of commitments) {
+      await db.execute(
+        'INSERT INTO hygiene_commitments (id, title, description, icon_name, display_order, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)',
+        [h.id, h.title, h.desc, h.icon, h.order, now]
       );
     }
   }
 
-  // 8. HYGIENE & SAFETY COMMITMENTS (Dedicated Checklist)
-  const hygieneCount = db.prepare('SELECT COUNT(*) as count FROM hygiene_commitments').get() as { count: number };
-  if (hygieneCount.count === 0) {
-    const insertHyg = db.prepare(`
-      INSERT INTO hygiene_commitments (id, title, description, icon_name, display_order, is_active, created_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?)
-    `);
-
-    const commitments = [
-      {
-        id: 'hyg-1',
-        title: 'Single-Use Disposable Waxing Spatulas',
-        desc: 'Fresh disposable wooden spatulas used for each wax application. We strictly observe zero double-dipping protocol.',
-        icon: 'Sparkles',
-        order: 1
-      },
-      {
-        id: 'hyg-2',
-        title: 'Fresh Disposable Bedsheets & Headbands',
-        desc: 'A brand-new sealed disposable protective bedsheet and headband laid out in your room for every single visit.',
-        icon: 'ShieldCheck',
-        order: 2
-      },
-      {
-        id: 'hyg-3',
-        title: 'Clean & Sanitized Metal Tools',
-        desc: 'All tweezers, scissors, and cuticle instruments are thoroughly sterilized and sealed in individual pouches before arrival.',
-        icon: 'CheckCircle2',
-        order: 3
-      },
-      {
-        id: 'hyg-4',
-        title: 'Fresh Clean Service Towels',
-        desc: 'Clean, freshly laundered towels delivered in sealed pouches for each client appointment.',
-        icon: 'Sparkles',
-        order: 4
-      },
-      {
-        id: 'hyg-5',
-        title: 'Monodosage Sealed Skincare Packs',
-        desc: 'Facials and cleanups utilize single-use, client-specific sealed tubes and packs unsealed exclusively before your eyes.',
-        icon: 'ShieldCheck',
-        order: 5
-      },
-      {
-        id: 'hyg-6',
-        title: 'Proper Hand & Product Hygiene',
-        desc: 'Specialists practice hand sanitization, wear fresh disposable masks and gloves, and follow professional handling procedures.',
-        icon: 'CheckCircle2',
-        order: 6
-      },
-      {
-        id: 'hyg-7',
-        title: 'Post-Service Area Cleaning & Sanitization',
-        desc: 'After treatments conclude, our specialist cleans and sanitizes your area, packing all single-use disposables away.',
-        icon: 'Sparkles',
-        order: 7
-      },
-      {
-        id: 'hyg-8',
-        title: 'Client Comfort, Sanctuary & Privacy',
-        desc: 'Strictly female-verified estheticians respecting your household sanctity and personal space at all times.',
-        icon: 'ShieldCheck',
-        order: 8
-      }
-    ];
-
-    for (const h of commitments) {
-      insertHyg.run(h.id, h.title, h.desc, h.icon, h.order, now);
-    }
-  }
-
-  // 9. Verified Beauticians Roster
-  const beauticianCount = db.prepare('SELECT COUNT(*) as count FROM beauticians').get() as { count: number };
-  if (beauticianCount.count === 0) {
+  // 9. Beauticians Roster (idempotent)
+  const beauCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM beauticians');
+  if (Number(beauCountRow?.count || 0) === 0) {
     const beauticians = [
-      { id: 'beau-1', name: 'Priya Sharma', phone: '+91 98112 44321', specs: JSON.stringify(['rica-waxing', 'honey-waxing', 'korean-waxing', 'facial']), terrs: JSON.stringify(['Delhi', 'Gurugram']), exp: 8, rating: 4.9, jobs: 428 },
-      { id: 'beau-2', name: 'Meenakshi Sen', phone: '+91 98731 88920', specs: JSON.stringify(['brazilian-peel-off-waxing', 'massage', 'mani-pedi']), terrs: JSON.stringify(['Noida', 'Ghaziabad', 'Greater Noida']), exp: 6, rating: 4.9, jobs: 382 },
-      { id: 'beau-3', name: 'Ananya Verma', phone: '+91 99105 12433', specs: JSON.stringify(['rica-waxing', 'korean-waxing', 'threading', 'facial']), terrs: JSON.stringify(['Delhi', 'Faridabad']), exp: 9, rating: 5.0, jobs: 514 }
+      { id: 'beau-1', name: 'Priya Sharma', phone: '+91 98112 44321', specs: JSON.stringify(['cat-rica-waxing', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-facials']), terrs: JSON.stringify(['Delhi', 'Gurugram']), exp: 8, rating: 4.9, jobs: 428 },
+      { id: 'beau-2', name: 'Meenakshi Sen', phone: '+91 98731 88920', specs: JSON.stringify(['cat-brazilian-peel-off', 'cat-massage', 'cat-manicure-pedicure']), terrs: JSON.stringify(['Noida', 'Ghaziabad', 'Greater Noida']), exp: 6, rating: 4.9, jobs: 382 },
+      { id: 'beau-3', name: 'Ananya Verma', phone: '+91 99105 12433', specs: JSON.stringify(['cat-rica-waxing', 'cat-korean-waxing', 'cat-threading', 'cat-facials']), terrs: JSON.stringify(['Delhi', 'Faridabad']), exp: 9, rating: 5.0, jobs: 514 }
     ];
-    const insertBeau = db.prepare("INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 'available', ?, ?, ?)");
     for (const b of beauticians) {
-      insertBeau.run(b.id, b.name, b.phone, b.specs, b.terrs, b.exp, b.rating, b.jobs, now);
+      await db.execute(
+        "INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 'available', ?, ?, ?)",
+        [b.id, b.name, b.phone, b.specs, b.terrs, b.exp, b.rating, b.jobs, now]
+      );
     }
   }
 
-  // 10. Campaigns
-  const campaignCount = db.prepare('SELECT COUNT(*) as count FROM campaigns').get() as { count: number };
-  if (campaignCount.count === 0) {
+  // 10. Campaigns (idempotent)
+  const campCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM campaigns');
+  if (Number(campCountRow?.count || 0) === 0) {
     const campaigns = [
       {
         id: 'camp-waxing-luxury',
@@ -597,7 +652,7 @@ function seedEssentialData() {
         banner_subtitle: 'Colophony-free waxes for minimal redness, smooth satin skin, and strictly zero double-dipping across Delhi NCR.',
         banner_image_url: '/banners/waxing_luxury_banner.svg',
         cta_label: 'Explore Waxing',
-        destination_url: '/services?category=cat-rica',
+        destination_url: '/services?category=cat-rica-waxing',
         start_time: new Date(Date.now() - 86400000).toISOString(),
         end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
         is_flash_deal: 0,
@@ -605,7 +660,7 @@ function seedEssentialData() {
         discount_type: 'percentage',
         discount_val: 20,
         badge_text: 'Zero Double-Dipping',
-        target_category_ids: JSON.stringify(['cat-rica', 'cat-honey', 'cat-korean', 'cat-brazilian']),
+        target_category_ids: JSON.stringify(['cat-rica-waxing', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-brazilian-peel-off']),
         target_service_ids: JSON.stringify(['srv-rica-full-arms-underarms-full-legs', 'srv-korean-full-arms-underarms-full-legs']),
         display_order: 1
       },
@@ -617,7 +672,7 @@ function seedEssentialData() {
         banner_subtitle: 'Oxygenating glow therapy with authentic salon kits unsealed directly at your vanity table with hospital-grade sanitization.',
         banner_image_url: '/banners/facial_luxury_banner.svg',
         cta_label: 'Explore Facials',
-        destination_url: '/services?category=cat-facial',
+        destination_url: '/services?category=cat-facials',
         start_time: new Date(Date.now() - 86400000).toISOString(),
         end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
         is_flash_deal: 0,
@@ -625,7 +680,7 @@ function seedEssentialData() {
         discount_type: 'percentage',
         discount_val: 25,
         badge_text: 'Monodose Sealed',
-        target_category_ids: JSON.stringify(['cat-facial']),
+        target_category_ids: JSON.stringify(['cat-facials']),
         target_service_ids: JSON.stringify(['srv-facial-o3-whitening', 'srv-facial-cheryls-glovite']),
         display_order: 2
       },
@@ -637,7 +692,7 @@ function seedEssentialData() {
         banner_subtitle: 'Autoclaved stainless steel tools, botanical effervescent bath soaks, and intensive heel callus smoothing.',
         banner_image_url: '/banners/pedicure_luxury_banner.svg',
         cta_label: 'Explore Mani-Pedi',
-        destination_url: '/services?category=cat-manicure',
+        destination_url: '/services?category=cat-manicure-pedicure',
         start_time: new Date(Date.now() - 86400000).toISOString(),
         end_time: new Date(Date.now() + 60 * 86400000).toISOString(),
         is_flash_deal: 0,
@@ -645,39 +700,52 @@ function seedEssentialData() {
         discount_type: 'percentage',
         discount_val: 15,
         badge_text: 'Autoclaved Tools',
-        target_category_ids: JSON.stringify(['cat-manicure']),
+        target_category_ids: JSON.stringify(['cat-manicure-pedicure']),
         target_service_ids: JSON.stringify(['srv-mani-pedi-rose-spa']),
         display_order: 3
       }
     ];
 
-    const insertCamp = db.prepare(`
-      INSERT INTO campaigns (
-        id, title, slug, banner_title, banner_subtitle, banner_image_url,
-        cta_label, destination_url, start_time, end_time, is_flash_deal, is_published,
-        discount_type, discount_val, badge_text, target_category_ids_json, target_service_ids_json,
-        display_order, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
     for (const cp of campaigns) {
-      insertCamp.run(
+      await db.execute(`
+        INSERT INTO campaigns (
+          id, title, slug, banner_title, banner_subtitle, banner_image_url,
+          cta_label, destination_url, start_time, end_time, is_flash_deal, is_published,
+          discount_type, discount_val, badge_text, target_category_ids_json, target_service_ids_json,
+          display_order, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
         cp.id, cp.title, cp.slug, cp.banner_title, cp.banner_subtitle, cp.banner_image_url,
         cp.cta_label, cp.destination_url, cp.start_time, cp.end_time, cp.is_flash_deal, cp.is_published,
         cp.discount_type, cp.discount_val, cp.badge_text, cp.target_category_ids, cp.target_service_ids,
         cp.display_order, now
+      ]);
+    }
+  }
+
+  // 11. Initial Verified Reviews (idempotent)
+  const revCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM reviews');
+  if (Number(revCountRow?.count || 0) === 0) {
+    const reviews = [
+      { id: 'rev-1', name: 'Simran Khurana', loc: 'Greater Kailash 1, Delhi', rating: 5, comment: 'Priya arrived right on time with sealed disposables. The RICA waxing was almost painless and my room was left sparkling clean. Truly salon luxury in the comfort of home!', tag: 'RICA Full Body Ritual', order: 1 },
+      { id: 'rev-2', name: 'Dr. Radhika Nair', loc: 'DLF Phase 4, Gurugram', rating: 5, comment: 'The O3+ Whitening facial was unsealed in front of me. Exceptional hygienic technique and wonderful calming massage.', tag: 'O3+ Luxury Facial', order: 2 },
+      { id: 'rev-3', name: 'Tanvi Aggarwal', loc: 'Sector 50, Noida', rating: 5, comment: 'Brazilian peel-off wax was completely stripless and gentle. No double dipping protocol gave me total peace of mind.', tag: 'Brazilian Peel-Off Wax', order: 3 }
+    ];
+    for (const r of reviews) {
+      await db.execute(
+        'INSERT INTO reviews (id, customer_name, customer_location, rating, comment, service_tag, verified_booking, is_approved, display_order, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)',
+        [r.id, r.name, r.loc, r.rating, r.comment, r.tag, r.order, now]
       );
     }
   }
 }
 
-function seedFaqData() {
-  const faqCount = db.prepare('SELECT COUNT(*) as count FROM faqs').get() as { count: number };
-  if (faqCount.count > 0) return;
+async function seedFaqData() {
+  const faqCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM faqs');
+  if (Number(faqCountRow?.count || 0) > 0) return;
 
   const now = new Date().toISOString();
 
-  // Predefined Customer FAQs
   const customerFaqs = [
     {
       id: 'faq-cust-how-to-book',
@@ -833,7 +901,6 @@ function seedFaqData() {
     }
   ];
 
-  // Predefined Admin Help FAQs
   const adminFaqs = [
     {
       id: 'faq-admin-add-service',
@@ -956,26 +1023,29 @@ function seedFaqData() {
     }
   ];
 
-  const insertFaq = db.prepare(`
-    INSERT INTO faqs (
-      id, audience, category, question, answer, keywords_json,
-      display_order, is_active, is_dynamic, dynamic_handler, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
   for (const f of customerFaqs) {
-    insertFaq.run(
+    await db.execute(`
+      INSERT INTO faqs (
+        id, audience, category, question, answer, keywords_json,
+        display_order, is_active, is_dynamic, dynamic_handler, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+    `, [
       f.id, f.audience, f.category, f.question, f.answer,
-      JSON.stringify(f.keywords), f.display_order, 1, f.is_dynamic, f.dynamic_handler,
+      JSON.stringify(f.keywords), f.display_order, f.is_dynamic, f.dynamic_handler,
       now, now
-    );
+    ]);
   }
 
   for (const f of adminFaqs) {
-    insertFaq.run(
+    await db.execute(`
+      INSERT INTO faqs (
+        id, audience, category, question, answer, keywords_json,
+        display_order, is_active, is_dynamic, dynamic_handler, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+    `, [
       f.id, f.audience, f.category, f.question, f.answer,
-      JSON.stringify(f.keywords), f.display_order, 1, f.is_dynamic, f.dynamic_handler,
+      JSON.stringify(f.keywords), f.display_order, f.is_dynamic, f.dynamic_handler,
       now, now
-    );
+    ]);
   }
 }

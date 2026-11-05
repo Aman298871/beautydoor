@@ -48,8 +48,8 @@ export default function AdminApp() {
   });
 
   // Login form state
-  const [usernameInput, setUsernameInput] = useState('admin');
-  const [passwordInput, setPasswordInput] = useState('Admin@BeautyDoor2026');
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -710,6 +710,7 @@ export default function AdminApp() {
               <input
                 type="text"
                 required
+                placeholder="e.g. admin"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 className="w-full px-3 py-2.5 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] text-sm"
@@ -721,11 +722,12 @@ export default function AdminApp() {
               <input
                 type="password"
                 required
+                placeholder="••••••••"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 className="w-full px-3 py-2.5 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] text-sm"
               />
-              <p className="text-[11px] text-[#8C7A7C] mt-1">Default credentials: admin / Admin@BeautyDoor2026</p>
+              <p className="text-[11px] text-[#8C7A7C] mt-1">Authorized personnel only</p>
             </div>
 
             <button

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { initDatabase } from './backend/db/database.ts';
+import { initDatabase, db } from './backend/db/database.ts';
 import { authRouter } from './backend/routes/authRoutes.ts';
 import { storefrontRouter } from './backend/routes/storefrontRoutes.ts';
 import { adminRouter } from './backend/routes/adminRoutes.ts';
@@ -13,14 +13,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
-  // 1. Initialize Normalized Production Database
-  initDatabase();
+  // 1. Initialize Normalized Database Schema & Seed Data
+  await initDatabase();
 
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = process.env.NODE_ENV === 'production' && process.env.PORT
+    ? parseInt(process.env.PORT, 10)
+    : 3000;
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Health check endpoint for Render / monitoring
+  app.get('/health', async (_req: Request, res: Response) => {
+    let dbStatus = 'ready';
+    try {
+      await db.query('SELECT 1 as health_check', []);
+    } catch (e: any) {
+      dbStatus = 'unreachable: ' + (e.message || String(e));
+    }
+
+    const isHealthy = dbStatus === 'ready';
+    res.status(isHealthy ? 200 : 503).json({
+      status: isHealthy ? 'ok' : 'degraded',
+      database: dbStatus,
+      engine: db.isPostgres ? 'postgres' : 'sqlite',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  });
 
   // Request logger for security monitoring
   app.use((req, _res, next) => {
@@ -90,11 +112,28 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✨ BeautyDoor Dual-App Platform listening on port ${PORT}`);
     console.log(`   Customer Storefront: http://localhost:${PORT}/ (Domain: beautydoor.in)`);
     console.log(`   Admin Control Panel: http://localhost:${PORT}/admin (Domain: admin.beautydoor.in)`);
   });
+
+  const gracefulShutdown = (signal: string) => {
+    console.log(`[Server] ${signal} signal received. Closing HTTP server and database pool...`);
+    server.close(async () => {
+      console.log('[Server] HTTP server closed.');
+      try {
+        await db.close();
+        console.log('[Server] Database pool successfully shut down.');
+      } catch (err) {
+        console.error('[Server] Error while closing database connection:', err);
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 startServer().catch(err => {

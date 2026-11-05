@@ -1,97 +1,116 @@
-# BEAUTYDOOR PRODUCTION DEPLOYMENT GUIDE
+# BeautyDoor — Production Render & PostgreSQL Deployment Guide
 
-## 1. Environment Configuration
-
-Create a `.env` file in the project root:
-
-```env
-# Server Configuration
-PORT=3000
-NODE_ENV=production
-
-# Security Secrets
-JWT_SECRET=your_super_secure_jwt_secret_key_here_at_least_32_characters
-
-# Online Payment Gateway (Razorpay)
-RAZORPAY_KEY_ID=rzp_live_your_actual_key_id
-RAZORPAY_KEY_SECRET=your_actual_razorpay_secret_key
-
-# Third-Party Notifications (SMS & WhatsApp Provider)
-SMS_PROVIDER_API_KEY=your_sms_gateway_api_key
-WHATSAPP_BUSINESS_TOKEN=your_whatsapp_cloud_api_token
-```
+This document outlines the exact procedure to deploy BeautyDoor to **Render** using a managed **PostgreSQL** database.
 
 ---
 
-## 2. Dual Domain Routing via Nginx Reverse Proxy
+## 1. Architecture Overview
 
-To deploy `beautydoor.in` and `admin.beautydoor.in` using a single backend service:
-
-```nginx
-# 1. Customer Storefront
-server {
-    server_name beautydoor.in www.beautydoor.in;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    listen 443 ssl http2;
-    ssl_certificate /etc/letsencrypt/live/beautydoor.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/beautydoor.in/privkey.pem;
-}
-
-# 2. Administrative Control Portal
-server {
-    server_name admin.beautydoor.in;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    listen 443 ssl http2;
-    ssl_certificate /etc/letsencrypt/live/admin.beautydoor.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/admin.beautydoor.in/privkey.pem;
-}
-```
+* **Frontend**: React 19 SPA built with Vite 8 + Tailwind CSS.
+  * Storefront entry: `dist/index.html` (served at `/` or `beautydoor.in`).
+  * Admin Operations entry: `dist/admin.html` (served at `/admin` or `admin.beautydoor.in`).
+* **Backend**: Express + TypeScript (`server.ts`) running on Node.js.
+* **Database**: PostgreSQL (via `pg` connection pool with SSL enabled).
+* **Package Manager**: `npm` with clean `package-lock.json` (Vite 8 + `esbuild ^0.28.0`).
 
 ---
 
-## 3. Production Build & Process Supervision
+## 2. Render Web Service Configuration
 
-1. **Install dependencies**:
-   ```bash
-   npm install --omit=dev
-   ```
+In the Render Dashboard, create a **New Web Service**:
 
-2. **Compile production assets**:
-   ```bash
-   npm run build
-   ```
-
-3. **Start process with PM2**:
-   ```bash
-   pm2 start tsx --name "beautydoor" -- server.ts
-   pm2 save
-   pm2 startup
-   ```
+| Parameter | Configuration |
+|---|---|
+| **Service Type** | **Web Service** |
+| **Repository** | `https://github.com/Aman298871/beautydoor` |
+| **Branch** | `main` |
+| **Environment** | `Node` |
+| **Root Directory** | `.` (Leave blank or set to repository root) |
+| **Build Command** | `npm install && npm run build` |
+| **Start Command** | `npm run start` |
+| **Plan** | `Free` or `Starter` |
+| **Health Check Path** | `/health` |
+| **Auto-Deploy** | `Yes` (Triggered on git push to `main`) |
 
 ---
 
-## 4. Database Persistence & Backups
+## 3. PostgreSQL Database Connection
 
-The SQLite production database is stored at `/data/beautydoor.db` with Write-Ahead Logging (`WAL` mode) enabled for high write concurrency.
+### If you already have a Render PostgreSQL Database:
+1. Open your PostgreSQL database in the Render Dashboard.
+2. Under **Connections**, copy the **Internal Database URL** (recommended if both services are in the same Render region) or **External Database URL**.
+3. It has the format:
+   ```
+   postgresql://<user>:<password>@<host>:5432/<dbname>?sslmode=require
+   ```
+4. Paste this value as the `DATABASE_URL` environment variable in your Web Service settings.
 
-To automate daily backups to secure cloud storage:
-```bash
-# Add to crontab: 0 2 * * *
-sqlite3 /data/beautydoor.db ".backup '/backups/beautydoor_$(date +\%Y\%m\%d).db'"
-```
+### Connection Pooling & SSL:
+* BeautyDoor automatically enables connection pooling with up to 20 concurrent clients.
+* SSL verification is automatically configured (`rejectUnauthorized: false`) for compatibility with Render, Neon, and Supabase managed PostgreSQL instances.
+
+---
+
+## 4. Environment Variables
+
+Configure these variables under **Environment** in your Render Web Service:
+
+| Variable Name | Required | Default / Example Value | Description |
+|---|:---:|---|---|
+| `NODE_ENV` | Yes | `production` | Enables production mode and disables dev OTP |
+| `PORT` | Yes | `10000` | Port assigned by Render (automatically bound to `0.0.0.0`) |
+| `DATABASE_URL` | Yes | `postgresql://...` | Connection string to your Render PostgreSQL database |
+| `DATABASE_SSL_NO_VERIFY` | Optional | `true` | Allows self-signed certificates on managed PostgreSQL |
+| `JWT_SECRET` | Yes | `generate_strong_64_character_random_secret` | Secret for signing admin sessions. **Startup fails if missing in production.** |
+| `ADMIN_USERNAME` | Optional | `admin` | Initial superadmin username provisioned on fresh DB |
+| `ADMIN_PASSWORD` | Optional | `YourStrongAdminPassword2026!` | Initial superadmin password. If unset in production, manual DB insert is required. |
+| `ADMIN_EMAIL` | Optional | `admin@beautydoor.in` | Administrator notification email |
+| `ENABLE_DEV_OTP` | Optional | `false` | Set to `false` in production. Cryptographically secure random 4-digit OTP is used. |
+| `CDN_BASE_URL` | Optional | `https://cdn.beautydoor.in` | CDN / Object storage base URL for media assets |
+| `RAZORPAY_KEY_ID` | Optional | `rzp_live_...` | Live Razorpay Key ID for online payments |
+| `RAZORPAY_KEY_SECRET` | Optional | `your_secret...` | Live Razorpay Key Secret |
+| `SMS_PROVIDER_API_KEY` | Optional | `...` | Cell gateway API key for customer OTP SMS dispatch |
+
+---
+
+## 5. Database Schema & Migration Procedure
+
+* **Zero-Touch Automated Migration**:
+  * On every server startup, `initDatabase()` connects to PostgreSQL via `DATABASE_URL`.
+  * It executes `initPostgresSchema()` using idempotent `CREATE TABLE IF NOT EXISTS` statements for all 18 normalized tables.
+* **Idempotent Data Seeding**:
+  * `seedEssentialData()` provisions the initial admin account, default business settings, master categories, verified Delhi NCR territories, and default packages.
+  * It verifies existence before inserting (`SELECT COUNT(*) ...`). **Existing admin customizations and live booking records are never overwritten on deployment restarts.**
+
+---
+
+## 6. Upload Storage & Asset Management
+
+* **Ephemeral Filesystem Safeguard**: Render web services run in containers with an ephemeral filesystem; any file written to local disk is lost when the container redeploys or restarts.
+* **Storage Architecture (`backend/services/storageService.ts`)**:
+  * BeautyDoor does NOT write user uploads to the local container filesystem.
+  * Services, treatments, campaigns, and package images use external HTTPS URLs or CDN URLs resolved via `storageService.resolveUrl()`.
+  * For production custom image uploads, connect an S3-compatible bucket (Cloudflare R2, AWS S3, or Google Cloud Storage) and configure `CDN_BASE_URL`.
+
+---
+
+## 7. Verification Checklist
+
+After deploying on Render:
+
+1. **Check `/health` endpoint**:
+   ```bash
+   curl -I https://your-service.onrender.com/health
+   # Expected: HTTP/1.1 200 OK
+   # Body: {"status":"ok","database":"ready","engine":"postgres",...}
+   ```
+2. **Access Customer Storefront**:
+   * Open `https://your-service.onrender.com/` in your browser.
+   * Verify catalogue treatments, categories, packages, and pincode checker load properly.
+3. **Access Admin Control Panel**:
+   * Open `https://your-service.onrender.com/admin`.
+   * Log in with your configured `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+   * Verify the dispatch board, analytics KPIs, and pricing audit logs.
+4. **Test Rule-Based Chatbot**:
+   * Click the floating concierge icon and ask *"How can I book?"* or *"What are your prices?"*.
+   * Verify dynamic database-driven answers are returned instantly.

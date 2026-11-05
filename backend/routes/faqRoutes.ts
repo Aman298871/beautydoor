@@ -30,9 +30,9 @@ function checkRateLimit(req: Request, res: Response, next: () => void): void {
 }
 
 // Helper: fetch setting value
-function getSetting(key: string, defaultVal: string = ''): string {
+async function getSetting(key: string, defaultVal: string = ""): Promise<string> {
   try {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    const row = (await db.queryRow('SELECT value FROM settings WHERE key = ?', [key])) as { value: string } | undefined;
     return row ? row.value : defaultVal;
   } catch {
     return defaultVal;
@@ -40,14 +40,14 @@ function getSetting(key: string, defaultVal: string = ''): string {
 }
 
 // Dynamic Answer Generator
-export function generateDynamicAnswer(handler: string | null, staticAnswer: string): string {
+export async function generateDynamicAnswer(handler: string | null, staticAnswer: string): Promise<string> {
   if (!handler) return staticAnswer;
 
   try {
     switch (handler) {
       case 'get_services_catalog': {
-        const categories = db.prepare('SELECT id, name, description FROM categories WHERE is_active = 1 ORDER BY display_order ASC').all() as any[];
-        const totalServices = (db.prepare('SELECT COUNT(*) as count FROM services WHERE is_active = 1').get() as any).count;
+        const categories = (await db.query('SELECT id, name, description FROM categories WHERE is_active = 1 ORDER BY display_order ASC', [])) as any[];
+        const totalServices = ((await db.queryRow('SELECT COUNT(*) as count FROM services WHERE is_active = 1', [])) as any).count;
         
         let reply = `BeautyDoor offers ${totalServices}+ salon-grade treatments in Delhi NCR, performed at your home by verified female specialists:\n\n`;
         for (const cat of categories) {
@@ -58,37 +58,37 @@ export function generateDynamicAnswer(handler: string | null, staticAnswer: stri
       }
 
       case 'get_service_pricing': {
-        const lowestWaxing = db.prepare(`
+        const lowestWaxing = (await db.queryRow(`
           SELECT MIN(selling_price) as min_p FROM services s
           JOIN categories c ON s.category_id = c.id
           WHERE c.slug = 'waxing' AND s.is_active = 1
-        `).get() as any;
+        `, [])) as any;
 
-        const lowestFacial = db.prepare(`
+        const lowestFacial = (await db.queryRow(`
           SELECT MIN(selling_price) as min_p FROM services s
           JOIN categories c ON s.category_id = c.id
           WHERE c.slug = 'facial' AND s.is_active = 1
-        `).get() as any;
+        `, [])) as any;
 
-        const lowestManiPedi = db.prepare(`
+        const lowestManiPedi = (await db.queryRow(`
           SELECT MIN(selling_price) as min_p FROM services s
           JOIN categories c ON s.category_id = c.id
           WHERE c.slug = 'mani-pedi' AND s.is_active = 1
-        `).get() as any;
+        `, [])) as any;
 
-        const lowestDeTan = db.prepare(`
+        const lowestDeTan = (await db.queryRow(`
           SELECT MIN(selling_price) as min_p FROM services s
           JOIN categories c ON s.category_id = c.id
           WHERE c.slug = 'de-tan' AND s.is_active = 1
-        `).get() as any;
+        `, [])) as any;
 
-        const lowestMassage = db.prepare(`
+        const lowestMassage = (await db.queryRow(`
           SELECT MIN(selling_price) as min_p FROM services s
           JOIN categories c ON s.category_id = c.id
           WHERE c.slug = 'massage' AND s.is_active = 1
-        `).get() as any;
+        `, [])) as any;
 
-        const minOrder = getSetting('min_order_amount', '499');
+        const minOrder = await getSetting('min_order_amount', '499');
 
         let reply = `💰 Transparent BeautyDoor Pricing (No hidden travel or kit fees):\n\n`;
         reply += `• Waxing Rituals: from ₹${lowestWaxing?.min_p || 199}\n`;
@@ -101,7 +101,7 @@ export function generateDynamicAnswer(handler: string | null, staticAnswer: stri
       }
 
       case 'get_service_areas': {
-        const territories = db.prepare('SELECT city, area_name, min_order_amount FROM territories WHERE is_active = 1 ORDER BY city ASC').all() as any[];
+        const territories = (await db.query('SELECT city, area_name, min_order_amount FROM territories WHERE is_active = 1 ORDER BY city ASC', [])) as any[];
         let reply = `📍 BeautyDoor Serviceable Locations in Delhi NCR:\n\n`;
         
         const cityMap: Record<string, string[]> = {};
@@ -119,7 +119,7 @@ export function generateDynamicAnswer(handler: string | null, staticAnswer: stri
       }
 
       case 'get_payment_methods': {
-        const razorpayEnabled = getSetting('razorpay_enabled', 'true') === 'true';
+        const razorpayEnabled = await getSetting('razorpay_enabled', 'true') === 'true';
         let reply = `💳 Flexible & Secure Payment Methods:\n\n`;
         reply += `1. Cash After Service (Cash on Delivery):\nPay in cash only after your treatment is complete and you are 100% satisfied.\n\n`;
         if (razorpayEnabled) {
@@ -130,25 +130,25 @@ export function generateDynamicAnswer(handler: string | null, staticAnswer: stri
       }
 
       case 'get_cancellation_policy': {
-        const hours = getSetting('cancellation_window_hours', '4');
-        const policy = getSetting('cancellation_policy', 'Complimentary cancellation up to 4 hours prior to appointment.');
+        const hours = await getSetting('cancellation_window_hours', '4');
+        const policy = await getSetting('cancellation_policy', 'Complimentary cancellation up to 4 hours prior to appointment.');
         return `🔄 Cancellation & Rescheduling Policy:\n\n• ${policy}\n• You can cancel or reschedule for free up to ${hours} hours before your scheduled arrival time.\n• Go to "My Bookings" in your account or message our Concierge Helpline on WhatsApp.\n• If you paid online, 100% refund is initiated instantly upon cancellation to your original payment mode.`;
       }
 
       case 'get_active_offers': {
         const now = new Date().toISOString();
-        const campaigns = db.prepare(`
+        const campaigns = (await db.query(`
           SELECT title, banner_title, discount_type, discount_val, badge_text 
           FROM campaigns 
-          WHERE is_published = 1 AND datetime(?) BETWEEN datetime(start_time) AND datetime(end_time)
+          WHERE is_published = 1 AND (? >= start_time AND ? <= end_time)
           ORDER BY display_order ASC
-        `).all(now) as any[];
+        `, [now])) as any[];
 
-        const coupons = db.prepare(`
+        const coupons = (await db.query(`
           SELECT code, description, discount_type, discount_value, min_order_amount 
           FROM coupons 
-          WHERE is_active = 1 AND (expires_at IS NULL OR datetime(expires_at) >= datetime(?))
-        `).all(now) as any[];
+          WHERE is_active = 1 AND (expires_at IS NULL OR expires_at >= ?)
+        `, [now])) as any[];
 
         let reply = `🎁 Current BeautyDoor Offers & Savings Today:\n\n`;
 
@@ -179,11 +179,11 @@ export function generateDynamicAnswer(handler: string | null, staticAnswer: stri
       }
 
       case 'get_support_contact': {
-        const phone = getSetting('contact_phone', '+91 99991 23456');
-        const whatsapp = getSetting('support_whatsapp', '+91 99991 23456');
-        const email = getSetting('contact_email', 'concierge@beautydoor.in');
-        const start = getSetting('working_hours_start', '08:00 AM');
-        const end = getSetting('working_hours_end', '08:00 PM');
+        const phone = await getSetting('contact_phone', '+91 99991 23456');
+        const whatsapp = await getSetting('support_whatsapp', '+91 99991 23456');
+        const email = await getSetting('contact_email', 'concierge@beautydoor.in');
+        const start = await getSetting('working_hours_start', '08:00 AM');
+        const end = await getSetting('working_hours_end', '08:00 PM');
 
         return `📞 BeautyDoor Customer Concierge & Support:\n\n• WhatsApp Chat: ${whatsapp} (Quickest assistance)\n• Helpline Phone: ${phone}\n• Email: ${email}\n• Working Hours: ${start} – ${end} (7 days a week)\n\nFeel free to tap the WhatsApp or Call button below to reach our concierge directly.`;
       }
@@ -316,17 +316,17 @@ function matchCustomerIntent(query: string, faqs: any[]): any | null {
 // ---------------------------------------------------------------------------
 
 // GET /api/faq/customer - Fetch active customer predefined questions & welcome metadata
-faqRouter.get('/customer', (req: Request, res: Response): void => {
+faqRouter.get('/customer', async (req: Request, res: Response): Promise<void> => {
   try {
-    const questions = db.prepare(`
+    const questions = (await db.query(`
       SELECT id, category, question, display_order, is_dynamic
       FROM faqs
       WHERE audience = 'customer' AND is_active = 1
       ORDER BY display_order ASC
-    `).all();
+    `, []));
 
-    const supportPhone = getSetting('contact_phone', '+91 99991 23456');
-    const supportWhatsapp = getSetting('support_whatsapp', '+91 99991 23456');
+    const supportPhone = await getSetting('contact_phone', '+91 99991 23456');
+    const supportWhatsapp = await getSetting('support_whatsapp', '+91 99991 23456');
 
     res.json({
       welcomeMessage: "Hi! Welcome to BeautyDoor ❤️ How can I help you today?",
@@ -343,15 +343,15 @@ faqRouter.get('/customer', (req: Request, res: Response): void => {
 });
 
 // POST /api/faq/customer/query - Handle question click or typed natural query
-faqRouter.post('/customer/query', checkRateLimit, (req: Request, res: Response): void => {
+faqRouter.post('/customer/query', checkRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const { questionId, query } = req.body;
 
-    const allCustomerFaqs = db.prepare(`
+    const allCustomerFaqs = (await db.query(`
       SELECT * FROM faqs
       WHERE audience = 'customer' AND is_active = 1
       ORDER BY display_order ASC
-    `).all() as any[];
+    `, [])) as any[];
 
     // 1. Direct Predefined Question Selection
     if (questionId) {
@@ -386,7 +386,7 @@ faqRouter.post('/customer/query', checkRateLimit, (req: Request, res: Response):
     const matchedFaq = matchCustomerIntent(query.trim(), allCustomerFaqs);
 
     if (matchedFaq) {
-      const answer = generateDynamicAnswer(matchedFaq.dynamic_handler, matchedFaq.answer);
+      const answer = await generateDynamicAnswer(matchedFaq.dynamic_handler, matchedFaq.answer);
       res.json({
         matched: true,
         faq: {
@@ -413,8 +413,8 @@ faqRouter.post('/customer/query', checkRateLimit, (req: Request, res: Response):
       fallbackMessage,
       suggestedOptions,
       contactSupport: {
-        phone: getSetting('contact_phone', '+91 99991 23456'),
-        whatsapp: getSetting('support_whatsapp', '+91 99991 23456')
+        phone: await getSetting('contact_phone', '+91 99991 23456'),
+        whatsapp: await getSetting('support_whatsapp', '+91 99991 23456')
       }
     });
   } catch (err: any) {
@@ -427,14 +427,14 @@ faqRouter.post('/customer/query', checkRateLimit, (req: Request, res: Response):
 // ---------------------------------------------------------------------------
 
 // GET /api/faq/admin - Fetch active admin help questions (Requires Admin Auth)
-faqRouter.get('/admin', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.get('/admin', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const questions = db.prepare(`
+    const questions = (await db.query(`
       SELECT id, category, question, display_order
       FROM faqs
       WHERE audience = 'admin' AND is_active = 1
       ORDER BY display_order ASC
-    `).all();
+    `, []));
 
     res.json({
       welcomeMessage: "Welcome to BeautyDoor Admin Help. What would you like assistance with?",
@@ -446,15 +446,15 @@ faqRouter.get('/admin', requireAdminAuth, (req: Request, res: Response): void =>
 });
 
 // POST /api/faq/admin/query - Query admin help questions (Requires Admin Auth)
-faqRouter.post('/admin/query', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.post('/admin/query', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { questionId, query } = req.body;
 
-    const allAdminFaqs = db.prepare(`
+    const allAdminFaqs = (await db.query(`
       SELECT * FROM faqs
       WHERE audience = 'admin' AND is_active = 1
       ORDER BY display_order ASC
-    `).all() as any[];
+    `, [])) as any[];
 
     if (questionId) {
       const selected = allAdminFaqs.find(f => f.id === questionId);
@@ -528,7 +528,7 @@ faqRouter.post('/admin/query', requireAdminAuth, (req: Request, res: Response): 
 // ---------------------------------------------------------------------------
 
 // GET /api/admin/faqs - List all FAQs (both customer & admin, filterable)
-faqRouter.get('/manage', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.get('/manage', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const audience = req.query.audience as string | undefined;
     let query = 'SELECT * FROM faqs';
@@ -540,7 +540,7 @@ faqRouter.get('/manage', requireAdminAuth, (req: Request, res: Response): void =
     }
 
     query += ' ORDER BY audience ASC, display_order ASC';
-    const faqs = db.prepare(query).all(...params);
+    const faqs = (await db.query(query, [...params]));
 
     res.json({ faqs });
   } catch (err: any) {
@@ -549,7 +549,7 @@ faqRouter.get('/manage', requireAdminAuth, (req: Request, res: Response): void =
 });
 
 // POST /api/admin/faqs - Create a new FAQ record
-faqRouter.post('/manage', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.post('/manage', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { audience, category, question, answer, keywords, display_order, is_active, is_dynamic, dynamic_handler } = req.body;
 
@@ -570,16 +570,14 @@ faqRouter.post('/manage', requireAdminAuth, (req: Request, res: Response): void 
     const now = new Date().toISOString();
     const keywordsJson = Array.isArray(keywords) ? JSON.stringify(keywords) : (typeof keywords === 'string' ? JSON.stringify(keywords.split(',').map((k: string) => k.trim()).filter(Boolean)) : '[]');
 
-    db.prepare(`
+    (await db.execute(`
       INSERT INTO faqs (
         id, audience, category, question, answer, keywords_json,
         display_order, is_active, is_dynamic, dynamic_handler, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, audience, category || 'General', question.trim(), answer.trim(), keywordsJson,
+    `, [id, audience, category || 'General', question.trim(), answer.trim(), keywordsJson,
       Number(display_order) || 0, is_active !== false && is_active !== 0 ? 1 : 0,
-      is_dynamic ? 1 : 0, dynamic_handler || null, now, now
-    );
+      is_dynamic ? 1 : 0, dynamic_handler || null, now, now]));
 
     res.status(201).json({ success: true, id, message: 'FAQ created successfully' });
   } catch (err: any) {
@@ -588,12 +586,12 @@ faqRouter.post('/manage', requireAdminAuth, (req: Request, res: Response): void 
 });
 
 // PUT /api/admin/faqs/:id - Update an existing FAQ record
-faqRouter.put('/manage/:id', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.put('/manage/:id', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { category, question, answer, keywords, display_order, is_active, is_dynamic, dynamic_handler } = req.body;
 
-    const existing = db.prepare('SELECT id FROM faqs WHERE id = ?').get(id);
+    const existing = (await db.queryRow('SELECT id FROM faqs WHERE id = ?', [id]));
     if (!existing) {
       res.status(404).json({ error: 'FAQ record not found' });
       return;
@@ -607,7 +605,7 @@ faqRouter.put('/manage/:id', requireAdminAuth, (req: Request, res: Response): vo
         : (typeof keywords === 'string' ? JSON.stringify(keywords.split(',').map((k: string) => k.trim()).filter(Boolean)) : '[]');
     }
 
-    db.prepare(`
+    (await db.execute(`
       UPDATE faqs SET
         category = COALESCE(?, category),
         question = COALESCE(?, question),
@@ -619,14 +617,12 @@ faqRouter.put('/manage/:id', requireAdminAuth, (req: Request, res: Response): vo
         dynamic_handler = COALESCE(?, dynamic_handler),
         updated_at = ?
       WHERE id = ?
-    `).run(
-      category, question, answer, keywordsJson,
+    `, [category, question, answer, keywordsJson,
       display_order !== undefined ? Number(display_order) : null,
       is_active !== undefined ? (is_active ? 1 : 0) : null,
       is_dynamic !== undefined ? (is_dynamic ? 1 : 0) : null,
       dynamic_handler !== undefined ? dynamic_handler : null,
-      now, id
-    );
+      now, id]));
 
     res.json({ success: true, message: 'FAQ updated successfully' });
   } catch (err: any) {
@@ -635,10 +631,10 @@ faqRouter.put('/manage/:id', requireAdminAuth, (req: Request, res: Response): vo
 });
 
 // DELETE /api/admin/faqs/:id - Delete an FAQ record
-faqRouter.delete('/manage/:id', requireAdminAuth, (req: Request, res: Response): void => {
+faqRouter.delete('/manage/:id', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM faqs WHERE id = ?').run(id);
+    (await db.execute('DELETE FROM faqs WHERE id = ?', [id]));
     res.json({ success: true, message: 'FAQ deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to delete FAQ: ' + err.message });

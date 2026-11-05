@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: beautydoor
+    env: node
+    plan: free # or starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        # If your Render Postgres database was created in the Render Dashboard,
+        # set DATABASE_URL in your Web Service's 'Environment' settings tab.
+        # Alternatively, if using Render Blueprints with a managed DB:
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@beautydoor.in
+      - key: ENABLE_DEV_OTP
+        value: "false"

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BUSINESS_CONFIG } from '../config/businessConfig.ts';
 import {
   X,
   Trash2,
@@ -863,6 +864,39 @@ export const BookingDrawer: React.FC<Props> = ({
                     >
                       Our concierge is assigning your certified beautician. You will receive an SMS and WhatsApp confirmation prior to arrival.
                     </motion.p>
+
+                    {/* Verified Concierge Help Box */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45, duration: 0.3 }}
+                      className="p-3 bg-white rounded-lg border border-[#E8DDD3] max-w-sm mx-auto text-xs text-[#5C4D4F] space-y-1"
+                    >
+                      <p className="font-semibold text-[#1F1A1C]">
+                        Need help or rescheduling?
+                      </p>
+                      <p className="text-[11px] text-[#7A6B6D]">
+                        Contact <strong>{BUSINESS_CONFIG.contactPerson}</strong> at{' '}
+                        <a
+                          href={BUSINESS_CONFIG.phoneTel}
+                          className="font-bold text-[#4A0417] hover:underline tabular-nums"
+                          title="Call Concierge"
+                        >
+                          {BUSINESS_CONFIG.phone}
+                        </a>{' '}
+                        or{' '}
+                        <a
+                          href={BUSINESS_CONFIG.emailMailto}
+                          className="font-bold text-[#4A0417] hover:underline"
+                          title="Email Concierge"
+                        >
+                          {BUSINESS_CONFIG.email}
+                        </a>
+                      </p>
+                      <p className="text-[10px] text-[#8C7A7C]">
+                        Operating Hours: {BUSINESS_CONFIG.operatingHoursDisplay} (Daily)
+                      </p>
+                    </motion.div>
 
                     <motion.button
                       initial={{ opacity: 0, y: 8 }}

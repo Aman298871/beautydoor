@@ -4,6 +4,7 @@ import {
   RotateCcw, HelpCircle, ExternalLink, Calendar, CheckCircle2,
   Clock, ShieldCheck, MapPin
 } from 'lucide-react';
+import { BUSINESS_CONFIG } from '../../../src/config/businessConfig.ts';
 
 interface QuestionOption {
   id: string;
@@ -32,10 +33,11 @@ export const CustomerChatbot: React.FC<CustomerChatbotProps> = ({ onOpenBookingM
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [supportInfo, setSupportInfo] = useState<{ phone: string; whatsapp: string; cleanWhatsapp: string }>({
-    phone: '+91 99991 23456',
-    whatsapp: '+91 99991 23456',
-    cleanWhatsapp: '919999123456'
+  const [supportInfo, setSupportInfo] = useState<{ phone: string; whatsapp: string; cleanWhatsapp: string; contactName: string }>({
+    phone: BUSINESS_CONFIG.phone,
+    whatsapp: BUSINESS_CONFIG.whatsapp,
+    cleanWhatsapp: '919310372015',
+    contactName: BUSINESS_CONFIG.contactPerson
   });
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('All');
 
@@ -62,9 +64,10 @@ export const CustomerChatbot: React.FC<CustomerChatbotProps> = ({ onOpenBookingM
         setQuestions(data.questions || []);
         if (data.support) {
           setSupportInfo({
-            phone: data.support.phone || '+91 99991 23456',
-            whatsapp: data.support.whatsapp || '+91 99991 23456',
-            cleanWhatsapp: (data.support.whatsapp || '919999123456').replace(/[^\d]/g, '')
+            contactName: data.support.contactName || BUSINESS_CONFIG.contactPerson,
+            phone: data.support.phone || BUSINESS_CONFIG.phone,
+            whatsapp: data.support.whatsapp || BUSINESS_CONFIG.whatsapp,
+            cleanWhatsapp: (data.support.whatsapp || BUSINESS_CONFIG.phone).replace(/[^\d]/g, '')
           });
         }
         // Set initial welcome message

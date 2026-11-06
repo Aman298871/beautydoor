@@ -11,9 +11,15 @@ export interface FileStorageProvider {
 }
 
 /**
- * Storage Service Abstraction
- * - In cloud production: can use S3/Cloudflare R2/Google Cloud Storage/Render Persistent Storage.
- * - Supports CDN URL prefixes, Data URIs, or persistent local directory mounts.
+ * Storage Service Abstraction for BeautyDoor
+ * 
+ * ARCHITECTURE STATUS:
+ * - Current Application State: BeautyDoor utilizes curated, externally hosted HTTPS CDN/Unsplash URLs
+ *   and bundled public SVGs for all services, packages, and banners. No user file uploads are exposed
+ *   in the customer storefront or admin dashboard.
+ * - Ephemeral Filesystem Policy: Render's ephemeral filesystem is NEVER used for persistent binary uploads.
+ * - Future Upload Path: If customer before/after photos or admin file uploads are added, use an S3-compatible
+ *   object storage provider (such as Cloudflare R2 or AWS S3) via @aws-sdk/client-s3 rather than local disk.
  */
 class StorageService {
   private cdnBaseUrl: string;

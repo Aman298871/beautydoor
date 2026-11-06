@@ -1,5 +1,6 @@
 import React from 'react';
 import { Phone, Mail, MapPin, ShieldCheck, Heart } from 'lucide-react';
+import { BUSINESS_CONFIG } from '../config/businessConfig.ts';
 
 interface Props {
   onOpenPincodeModal: () => void;
@@ -99,17 +100,32 @@ export const Footer: React.FC<Props> = ({
               Client Care
             </h4>
             <div className="space-y-2 text-[#BDB0B2]">
-              <p className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#C5A880]" />
-                <span className="tabular-nums">+91 99991 23456</span>
+              <p className="text-[11px] text-[#C5A880] font-medium">
+                Concierge: {BUSINESS_CONFIG.contactPerson}
               </p>
               <p className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-[#C5A880]" />
-                <span>concierge@beautydoor.in</span>
+                <Phone className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                <a
+                  href={BUSINESS_CONFIG.phoneTel}
+                  className="tabular-nums hover:text-white hover:underline transition-colors"
+                  title="Call BeautyDoor Concierge"
+                >
+                  {BUSINESS_CONFIG.phone}
+                </a>
+              </p>
+              <p className="flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                <a
+                  href={BUSINESS_CONFIG.emailMailto}
+                  className="hover:text-white hover:underline transition-colors"
+                  title="Email BeautyDoor Client Care"
+                >
+                  {BUSINESS_CONFIG.email}
+                </a>
               </p>
               <p className="text-[11px] text-[#8C7A7C] pt-2">
                 Daily Appointments: <br />
-                <span className="text-white font-medium">08:00 AM – 08:00 PM</span>
+                <span className="text-white font-medium">{BUSINESS_CONFIG.operatingHoursDisplay}</span>
               </p>
             </div>
           </div>

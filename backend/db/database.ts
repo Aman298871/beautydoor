@@ -431,13 +431,14 @@ async function seedEssentialData() {
     console.log(`[DB] Admin account provisioned for user: ${adminUsername}`);
   }
 
-  // 2. Initial Settings (idempotent; does not overwrite existing admin updates)
+  // 2. Initial Settings (idempotent; does not overwrite custom admin updates)
   const defaultSettings: Record<string, string> = {
     brand_name: 'BeautyDoor',
     tagline: 'Beauty at your doorstep',
-    contact_phone: '+91 99991 23456',
-    contact_email: 'concierge@beautydoor.in',
-    support_whatsapp: '+91 99991 23456',
+    contact_name: 'Preeti Singh',
+    contact_phone: '+91 93103 72015',
+    contact_email: 'hello@beautydoor.in',
+    support_whatsapp: '+91 93103 72015',
     working_hours_start: '08:00 AM',
     working_hours_end: '06:00 PM',
     slot_charge_8am: '100',
@@ -461,6 +462,13 @@ async function seedEssentialData() {
       await db.execute('INSERT INTO settings (key, value) VALUES (?, ?)', [k, v]);
     }
   }
+
+  // Idempotent migration of legacy placeholder contacts to verified business info
+  await db.execute("UPDATE settings SET value = 'Preeti Singh' WHERE key = 'contact_name' AND (value = '' OR value IS NULL)");
+  await db.execute("UPDATE settings SET value = '+91 93103 72015' WHERE key = 'contact_phone' AND (value = '+91 99991 23456' OR value LIKE '%99991%')");
+  await db.execute("UPDATE settings SET value = '+91 93103 72015' WHERE key = 'support_whatsapp' AND (value = '+91 99991 23456' OR value LIKE '%99991%')");
+  await db.execute("UPDATE settings SET value = 'hello@beautydoor.in' WHERE key = 'contact_email' AND (value = 'concierge@beautydoor.in' OR value LIKE '%concierge%')");
+  await db.execute("UPDATE settings SET value = '06:00 PM' WHERE key = 'working_hours_end' AND value = '08:00 PM'");
 
   // 3. Official Service Categories (idempotent)
   const catCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM categories');

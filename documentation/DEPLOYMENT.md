@@ -47,7 +47,9 @@ In the Render Dashboard, create a **New Web Service**:
 
 ### Connection Pooling & SSL:
 * BeautyDoor automatically enables connection pooling with up to 20 concurrent clients.
-* SSL verification is automatically configured (`rejectUnauthorized: false`) for compatibility with Render, Neon, and Supabase managed PostgreSQL instances.
+* Strict SSL/TLS certificate verification is enabled by default for external cloud hosts (`.render.com`, `supabase.co`, `neon.tech`, or when `sslmode=require` is present).
+* When connecting via Render's Internal Database URL (`dpg-xxx-a:5432` within the same region), non-SSL private networking is supported without TLS handshake errors.
+* Set `DATABASE_SSL_NO_VERIFY=true` only if self-signed or unverified certificates must bypass CA verification.
 
 ---
 

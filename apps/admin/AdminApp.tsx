@@ -2156,14 +2156,26 @@ export default function AdminApp() {
                   <span>Support & Operational Guidelines</span>
                 </h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <label className="font-semibold block mb-1">Business Contact Person</label>
+                    <input
+                      type="text"
+                      value={settings.contact_name || 'Preeti Singh'}
+                      onChange={(e) => setSettings({ ...settings, contact_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="Preeti Singh"
+                    />
+                  </div>
+
                   <div>
                     <label className="font-semibold block mb-1">Helpline Phone</label>
                     <input
                       type="text"
-                      value={settings.contact_phone || '+91 99991 23456'}
+                      value={settings.contact_phone || '+91 93103 72015'}
                       onChange={(e) => setSettings({ ...settings, contact_phone: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="+91 93103 72015"
                     />
                   </div>
 
@@ -2171,9 +2183,10 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">WhatsApp Support</label>
                     <input
                       type="text"
-                      value={settings.support_whatsapp || '+91 99991 23456'}
+                      value={settings.support_whatsapp || '+91 93103 72015'}
                       onChange={(e) => setSettings({ ...settings, support_whatsapp: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="+91 93103 72015"
                     />
                   </div>
 
@@ -2181,9 +2194,10 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">Support Email</label>
                     <input
                       type="email"
-                      value={settings.contact_email || 'concierge@beautydoor.in'}
+                      value={settings.contact_email || 'hello@beautydoor.in'}
                       onChange={(e) => setSettings({ ...settings, contact_email: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="hello@beautydoor.in"
                     />
                   </div>
                 </div>

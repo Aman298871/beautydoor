@@ -54,6 +54,20 @@ storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<v
   }
 });
 
+// 1a. Public Business Settings
+storefrontRouter.get('/settings', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const rawSettings = (await db.query('SELECT * FROM settings', [])) as { key: string; value: string }[];
+    const settings: Record<string, string> = {};
+    rawSettings.forEach((r) => {
+      settings[r.key] = r.value;
+    });
+    res.json({ settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to load business settings' });
+  }
+});
+
 // 1b. Packages List & Detail
 storefrontRouter.get('/packages', async (_req: Request, res: Response): Promise<void> => {
   try {
@@ -440,10 +454,14 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
       if (ter) deliveryFee = ter.delivery_fee;
     }
 
-    // Appointment Slot Surcharge: ₹100 for 08:00 AM or 06:00 PM
+    // Appointment Slot Surcharge: Configurable via settings with ₹100 approved fallback
     let slotCharge = 0;
-    if (appointmentSlot === '08:00 AM' || appointmentSlot === '06:00 PM') {
-      slotCharge = 100;
+    if (appointmentSlot === '08:00 AM') {
+      const s = (await db.queryRow("SELECT value FROM settings WHERE key = 'slot_charge_8am'", [])) as any;
+      slotCharge = s?.value !== undefined ? Number(s.value) : 100;
+    } else if (appointmentSlot === '06:00 PM') {
+      const s = (await db.queryRow("SELECT value FROM settings WHERE key = 'slot_charge_6pm'", [])) as any;
+      slotCharge = s?.value !== undefined ? Number(s.value) : 100;
     }
 
     const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);
@@ -466,6 +484,8 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
 
 storefrontRouter.post('/calculate-pricing', calculatePricingHandler);
 storefrontRouter.post('/calculate-price', calculatePricingHandler);
+storefrontRouter.post('/bookings/calculate', calculatePricingHandler);
+storefrontRouter.post('/bookings/calculate-pricing', calculatePricingHandler);
 
 // 9b. Dynamic Rate Card Endpoint (For A4 Print / PDF / Storefront View)
 storefrontRouter.get('/rate-card', async (_req: Request, res: Response): Promise<void> => {
@@ -641,10 +661,14 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     const deliveryFee = territory.delivery_fee;
 
-    // Slot Charge: ₹100 for 8 AM and 6 PM
+    // Slot Charge: Configurable via settings with ₹100 approved fallback
     let slotCharge = 0;
-    if (appointmentSlot === '08:00 AM' || appointmentSlot === '06:00 PM') {
-      slotCharge = 100;
+    if (appointmentSlot === '08:00 AM') {
+      const s = (await db.queryRow("SELECT value FROM settings WHERE key = 'slot_charge_8am'", [])) as any;
+      slotCharge = s?.value !== undefined ? Number(s.value) : 100;
+    } else if (appointmentSlot === '06:00 PM') {
+      const s = (await db.queryRow("SELECT value FROM settings WHERE key = 'slot_charge_6pm'", [])) as any;
+      slotCharge = s?.value !== undefined ? Number(s.value) : 100;
     }
 
     const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);

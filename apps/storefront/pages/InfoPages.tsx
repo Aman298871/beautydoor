@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, Phone, Mail, MapPin, Clock, Heart } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { BUSINESS_CONFIG } from '../../../src/config/businessConfig.ts';
 
 export const AboutPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -45,7 +46,7 @@ export const ContactPage: React.FC = () => {
             BeautyDoor Client Concierge
           </h1>
           <p className="text-sm text-[#5C4D4F] mt-1 font-light">
-            Our dispatch specialists are available 7 days a week from 08:00 AM to 08:00 PM.
+            Our dispatch specialists are available 7 days a week from {BUSINESS_CONFIG.operatingHoursDisplay}.
           </p>
         </div>
 
@@ -53,21 +54,37 @@ export const ContactPage: React.FC = () => {
           <div className="bg-white p-6 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-2">
             <Phone className="w-5 h-5 text-[#4A0417]" />
             <h3 className="font-bold text-sm text-[#1F1A1C]">Concierge Hotline</h3>
-            <p className="text-xs text-[#6B5A5C] tabular-nums">+91 99991 23456</p>
-            <p className="text-[11px] text-[#8C7A7C]">Instant telephone booking support</p>
+            <p>
+              <a
+                href={BUSINESS_CONFIG.phoneTel}
+                className="text-xs text-[#4A0417] font-semibold tabular-nums hover:underline"
+                title="Call Concierge"
+              >
+                {BUSINESS_CONFIG.phone}
+              </a>
+            </p>
+            <p className="text-[11px] text-[#8C7A7C]">Contact: {BUSINESS_CONFIG.contactPerson}</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-2">
             <Mail className="w-5 h-5 text-[#4A0417]" />
             <h3 className="font-bold text-sm text-[#1F1A1C]">Email Support</h3>
-            <p className="text-xs text-[#6B5A5C]">concierge@beautydoor.in</p>
+            <p>
+              <a
+                href={BUSINESS_CONFIG.emailMailto}
+                className="text-xs text-[#4A0417] font-semibold hover:underline"
+                title="Email Client Care"
+              >
+                {BUSINESS_CONFIG.email}
+              </a>
+            </p>
             <p className="text-[11px] text-[#8C7A7C]">Responses within 2 business hours</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-2">
             <MapPin className="w-5 h-5 text-[#4A0417]" />
             <h3 className="font-bold text-sm text-[#1F1A1C]">Delhi NCR Cluster</h3>
-            <p className="text-xs text-[#6B5A5C]">DLF Phase 2, Gurugram & GK II, Delhi</p>
+            <p className="text-xs text-[#6B5A5C]">{BUSINESS_CONFIG.hubLocations}</p>
             <p className="text-[11px] text-[#8C7A7C]">Central Hub & Logistics Center</p>
           </div>
         </div>

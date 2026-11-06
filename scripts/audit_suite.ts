@@ -96,7 +96,44 @@ async function runAudit() {
     results['admin_kpis'] = { pass: false, details: e.message };
   }
 
-  // 5. Customer OTP Flow (Send, Rejection of Bad OTP, Verification)
+  // 5. Business Contact Information & Operating Hours Verification
+  try {
+    const settingsRes = await request('/api/storefront/settings');
+    const s = settingsRes.data?.settings || {};
+    const pass = 
+      s.contact_name === 'Preeti Singh' &&
+      s.contact_phone === '+91 93103 72015' &&
+      s.contact_email === 'hello@beautydoor.in' &&
+      s.support_whatsapp === '+91 93103 72015' &&
+      s.working_hours_start === '08:00 AM' &&
+      s.working_hours_end === '06:00 PM';
+    results['business_contact_and_hours'] = {
+      pass,
+      details: `Name: ${s.contact_name}, Phone: ${s.contact_phone}, Email: ${s.contact_email}, Hours: ${s.working_hours_start} - ${s.working_hours_end}`
+    };
+  } catch (e: any) {
+    results['business_contact_and_hours'] = { pass: false, details: e.message };
+  }
+
+  // 6. Admin Settings Persistence (Update & Verify)
+  try {
+    const testBanner = `✨ Test Audit Banner - ${Date.now()}`;
+    const patchRes = await request('/api/admin/settings', {
+      method: 'PATCH',
+      headers: authHeader,
+      body: { announcement_text: testBanner }
+    });
+    const verifySettings = await request('/api/storefront/settings');
+    const pass = patchRes.status === 200 && verifySettings.data?.settings?.announcement_text === testBanner;
+    results['admin_settings_persistence'] = {
+      pass,
+      details: `PATCH /api/admin/settings status: ${patchRes.status}, Storefront reflected updated banner: ${pass}`
+    };
+  } catch (e: any) {
+    results['admin_settings_persistence'] = { pass: false, details: e.message };
+  }
+
+  // 7. Customer OTP Flow (Send, Rejection of Bad OTP, Verification)
   let customerPhone = '9876543210';
   let devOtp = '';
   try {
@@ -125,7 +162,7 @@ async function runAudit() {
     results['customer_otp_flow'] = { pass: false, details: e.message };
   }
 
-  // 6. Service CRUD & Price Audit Log
+  // 8. Service CRUD & Price Audit Log
   let createdServiceId = '';
   try {
     const newService = {
@@ -177,7 +214,7 @@ async function runAudit() {
     results['service_crud_and_price_audit'] = { pass: false, details: e.message };
   }
 
-  // 7. Package CRUD
+  // 9. Package CRUD
   let createdPkgId = '';
   try {
     const newPkg = {
@@ -220,10 +257,47 @@ async function runAudit() {
     results['package_crud'] = { pass: false, details: e.message };
   }
 
-  // 8. Storefront Booking Creation & Admin Status Lifecycle
+  // 10. Appointment Surcharge Preservation & Calculation
+  try {
+    const calc8am = await request('/api/storefront/bookings/calculate', {
+      method: 'POST',
+      body: {
+        pincode: '122002',
+        appointmentSlot: '08:00 AM',
+        items: [{ serviceId: 'srv-rica-full-wax', quantity: 1 }]
+      }
+    });
+
+    const calc12pm = await request('/api/storefront/bookings/calculate', {
+      method: 'POST',
+      body: {
+        pincode: '122002',
+        appointmentSlot: '12:00 PM',
+        items: [{ serviceId: 'srv-rica-full-wax', quantity: 1 }]
+      }
+    });
+
+    const calc6pm = await request('/api/storefront/bookings/calculate', {
+      method: 'POST',
+      body: {
+        pincode: '122002',
+        appointmentSlot: '06:00 PM',
+        items: [{ serviceId: 'srv-rica-full-wax', quantity: 1 }]
+      }
+    });
+
+    const pass = calc8am.data?.slotCharge === 100 && calc12pm.data?.slotCharge === 0 && calc6pm.data?.slotCharge === 100;
+    results['appointment_slot_surcharges'] = {
+      pass,
+      details: `8:00 AM Slot Surcharge: ₹${calc8am.data?.slotCharge} (expected 100), 12:00 PM Slot: ₹${calc12pm.data?.slotCharge} (expected 0), 6:00 PM Slot: ₹${calc6pm.data?.slotCharge} (expected 100)`
+    };
+  } catch (e: any) {
+    results['appointment_slot_surcharges'] = { pass: false, details: e.message };
+  }
+
+  // 11. Storefront Booking Creation & Admin Status Lifecycle
   let bookingId = '';
   try {
-    // Get an active service from catalog
     const catalog = await request('/api/storefront/catalog');
     const firstService = catalog.data?.services?.[0];
 
@@ -277,7 +351,37 @@ async function runAudit() {
     results['booking_lifecycle'] = { pass: false, details: e.message };
   }
 
-  // 9. Payment Gateway Inspection (Razorpay)
+  // 12. Master Catalogue Data Preservation Check
+  try {
+    const catalog = await request('/api/storefront/catalog');
+    const categoriesCount = catalog.data?.categories?.length || 0;
+    const servicesCount = catalog.data?.services?.length || 0;
+    const packagesCount = catalog.data?.packages?.length || 0;
+    const hygieneCount = catalog.data?.hygieneCommitments?.length || 0;
+
+    const territoriesRes = await request('/api/storefront/territories');
+    const territoriesCount = territoriesRes.data?.territories?.length || 0;
+
+    const faqsRes = await request('/api/admin/faqs', { headers: authHeader });
+    const faqsCount = faqsRes.data?.faqs?.length || 0;
+
+    const pass = 
+      categoriesCount >= 14 &&
+      servicesCount >= 100 &&
+      packagesCount >= 10 &&
+      territoriesCount >= 20 &&
+      hygieneCount >= 8 &&
+      faqsCount >= 20;
+
+    results['catalogue_data_preservation'] = {
+      pass,
+      details: `Categories: ${categoriesCount}/14, Services: ${servicesCount}/103, Packages: ${packagesCount}/10, Territories: ${territoriesCount}/20, Hygiene: ${hygieneCount}/8, FAQs: ${faqsCount}/22`
+    };
+  } catch (e: any) {
+    results['catalogue_data_preservation'] = { pass: false, details: e.message };
+  }
+
+  // 13. Payment Gateway Inspection (Razorpay Test Mode)
   try {
     const orderRes = await request('/api/storefront/payments/create-razorpay-order', {
       method: 'POST',
@@ -301,10 +405,9 @@ async function runAudit() {
     results['payment_gateway'] = { pass: false, details: e.message };
   }
 
-  // 10. Security: SQL Injection Resistance
+  // 14. Security: SQL Injection Resistance
   try {
     const sqliAttempt = await request("/api/storefront/categories/'%20OR%201=1%20--");
-    // Parameterized queries will look for slug literally named "' OR 1=1 --", returning 404, not returning categories!
     const isProtected = sqliAttempt.status === 404;
     results['sql_injection_resistance'] = {
       pass: isProtected,
@@ -314,7 +417,7 @@ async function runAudit() {
     results['sql_injection_resistance'] = { pass: false, details: e.message };
   }
 
-  // 11. HTML SPA Routes
+  // 15. HTML SPA Routes
   try {
     const rootHtml = await request('/');
     const adminHtml = await request('/admin');
@@ -329,9 +432,12 @@ async function runAudit() {
   }
 
   console.log('\n--- AUDIT EXECUTION RESULTS ---');
+  let allPass = true;
   for (const [test, res] of Object.entries(results)) {
     console.log(`[${res.pass ? 'PASS' : 'FAIL'}] ${test}: ${res.details}`);
+    if (!res.pass) allPass = false;
   }
+  console.log(`\nOVERALL AUDIT STATUS: ${allPass ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'}`);
 }
 
 runAudit().catch(console.error);

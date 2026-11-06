@@ -179,13 +179,14 @@ export async function generateDynamicAnswer(handler: string | null, staticAnswer
       }
 
       case 'get_support_contact': {
-        const phone = await getSetting('contact_phone', '+91 99991 23456');
-        const whatsapp = await getSetting('support_whatsapp', '+91 99991 23456');
-        const email = await getSetting('contact_email', 'concierge@beautydoor.in');
+        const contactName = await getSetting('contact_name', 'Preeti Singh');
+        const phone = await getSetting('contact_phone', '+91 93103 72015');
+        const whatsapp = await getSetting('support_whatsapp', '+91 93103 72015');
+        const email = await getSetting('contact_email', 'hello@beautydoor.in');
         const start = await getSetting('working_hours_start', '08:00 AM');
-        const end = await getSetting('working_hours_end', '08:00 PM');
+        const end = await getSetting('working_hours_end', '06:00 PM');
 
-        return `📞 BeautyDoor Customer Concierge & Support:\n\n• WhatsApp Chat: ${whatsapp} (Quickest assistance)\n• Helpline Phone: ${phone}\n• Email: ${email}\n• Working Hours: ${start} – ${end} (7 days a week)\n\nFeel free to tap the WhatsApp or Call button below to reach our concierge directly.`;
+        return `📞 BeautyDoor Customer Concierge & Support:\n\n• Business Contact: ${contactName}\n• WhatsApp Chat: ${whatsapp} (Quickest assistance)\n• Helpline Phone: ${phone}\n• Email: ${email}\n• Working Hours: ${start} – ${end} (7 days a week)\n\nFeel free to tap the WhatsApp or Call button below to reach our concierge directly.`;
       }
 
       default:
@@ -325,13 +326,15 @@ faqRouter.get('/customer', async (req: Request, res: Response): Promise<void> =>
       ORDER BY display_order ASC
     `, []));
 
-    const supportPhone = await getSetting('contact_phone', '+91 99991 23456');
-    const supportWhatsapp = await getSetting('support_whatsapp', '+91 99991 23456');
+    const supportPhone = await getSetting('contact_phone', '+91 93103 72015');
+    const supportWhatsapp = await getSetting('support_whatsapp', '+91 93103 72015');
+    const contactName = await getSetting('contact_name', 'Preeti Singh');
 
     res.json({
       welcomeMessage: "Hi! Welcome to BeautyDoor ❤️ How can I help you today?",
       questions,
       support: {
+        contactName,
         phone: supportPhone,
         whatsapp: supportWhatsapp,
         cleanWhatsapp: supportWhatsapp.replace(/[^\d+]/g, '')
@@ -413,8 +416,9 @@ faqRouter.post('/customer/query', checkRateLimit, async (req: Request, res: Resp
       fallbackMessage,
       suggestedOptions,
       contactSupport: {
-        phone: await getSetting('contact_phone', '+91 99991 23456'),
-        whatsapp: await getSetting('support_whatsapp', '+91 99991 23456')
+        contactName: await getSetting('contact_name', 'Preeti Singh'),
+        phone: await getSetting('contact_phone', '+91 93103 72015'),
+        whatsapp: await getSetting('support_whatsapp', '+91 93103 72015')
       }
     });
   } catch (err: any) {
@@ -527,8 +531,8 @@ faqRouter.post('/admin/query', requireAdminAuth, async (req: Request, res: Respo
 // 3. ADMIN FAQ MANAGEMENT (CRUD Endpoints - Requires Admin Auth)
 // ---------------------------------------------------------------------------
 
-// GET /api/admin/faqs - List all FAQs (both customer & admin, filterable)
-faqRouter.get('/manage', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
+// GET /api/admin/faqs or /api/faq/manage - List all FAQs (both customer & admin, filterable)
+faqRouter.get(['/manage', '/'], requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const audience = req.query.audience as string | undefined;
     let query = 'SELECT * FROM faqs';

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Printer, Download, Sparkles, Clock, ShieldCheck, CheckCircle2, ChevronRight, Share2, ArrowLeft } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { BUSINESS_CONFIG } from '../../../src/config/businessConfig.ts';
 
 export const RateCardPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -166,9 +167,19 @@ export const RateCardPage: React.FC = () => {
             </div>
 
             <div className="text-left sm:text-right text-xs text-[#5C4D4F] space-y-0.5 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto">
-              <p className="font-semibold text-[#1F1A1C]">Operating Hours: {data.operatingHours}</p>
-              <p className="text-[11px] text-[#8C7A7C]">WhatsApp Concierge: +91 98112 00000</p>
-              <p className="text-[11px] text-[#8C7A7C]">Book Online: <strong>beautydoor.in</strong></p>
+              <p className="font-semibold text-[#1F1A1C]">Operating Hours: {data.operatingHours || BUSINESS_CONFIG.operatingHoursDisplay}</p>
+              <p className="text-[11px] text-[#8C7A7C]">
+                Concierge ({BUSINESS_CONFIG.contactPerson}):{' '}
+                <a href={BUSINESS_CONFIG.phoneTel} className="font-semibold text-[#4A0417] hover:underline tabular-nums" title="Call Concierge">
+                  {BUSINESS_CONFIG.phone}
+                </a>
+              </p>
+              <p className="text-[11px] text-[#8C7A7C]">
+                Email:{' '}
+                <a href={BUSINESS_CONFIG.emailMailto} className="font-semibold text-[#4A0417] hover:underline" title="Email Client Care">
+                  {BUSINESS_CONFIG.email}
+                </a>
+              </p>
             </div>
           </div>
 

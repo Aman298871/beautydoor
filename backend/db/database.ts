@@ -1,7 +1,6 @@
 import pg from 'pg';
 const { Pool } = pg;
 import bcrypt from 'bcryptjs';
-import { newDb } from 'pg-mem';
 import { MASTER_CATEGORIES, MASTER_SERVICES, MASTER_PACKAGES } from './masterCatalogue.ts';
 
 // Detect environment & target database engine
@@ -50,6 +49,7 @@ if (databaseUrl) {
   });
 } else {
   console.log('[DB] DATABASE_URL not set. Initializing in-memory PostgreSQL emulator for local testing.');
+  const { newDb } = await import('pg-mem');
   const memDb = newDb();
   const { Pool: MemPool } = memDb.adapters.createPg();
   pgPool = new MemPool() as unknown as pg.Pool;

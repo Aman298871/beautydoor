@@ -29,15 +29,24 @@ export const StorefrontNavbar: React.FC<Props> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on click outside
+  // Close dropdown on click outside or Escape key
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsServicesOpen(false);
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsServicesOpen(false);
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const handleCategoryClick = (catId: string) => {
@@ -46,18 +55,21 @@ export const StorefrontNavbar: React.FC<Props> = ({
     navigate(`/services?category=${catId}`);
   };
 
+  const [mobileServicesExpanded, setMobileServicesExpanded] = useState(false);
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E8DDD3] transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-6">
           
-          {/* Zone 1: Brand Logo & Quick Pincode Selector */}
+          {/* Zone 1: Brand Logo & Area Indicator */}
           <div className="flex items-center gap-3 shrink-0">
             {/* Mobile Hamburger Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-2 text-[#4A0417] hover:bg-[#F4EFEA] rounded-lg transition-colors"
               aria-label="Toggle navigation menu"
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -81,82 +93,113 @@ export const StorefrontNavbar: React.FC<Props> = ({
               title="Delhi NCR Doorstep Delivery"
             >
               <MapPin className="w-3.5 h-3.5 text-[#4A0417]" />
-              <span className="font-medium truncate max-w-[130px]">
-                {currentTerritoryName || 'Delhi NCR Service'}
+              <span className="font-medium truncate max-w-[150px]">
+                {currentTerritoryName || 'Delhi NCR Service Area'}
               </span>
             </div>
           </div>
 
-          {/* Zone 2: Navigation with Services Dropdown Menu */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-[#4A3E3D]">
+          {/* Zone 2: Navigation with Accessible Luxury Mega Menu */}
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-[#4A3E3D]" aria-label="Main Navigation">
             
             {/* Services Dropdown */}
-            <div className="relative" ref={dropdownRef}>
+            <div 
+              className="relative" 
+              ref={dropdownRef}
+              onMouseEnter={() => setIsServicesOpen(true)}
+              onMouseLeave={() => setIsServicesOpen(false)}
+            >
               <button
+                type="button"
                 onClick={() => setIsServicesOpen(!isServicesOpen)}
-                onMouseEnter={() => setIsServicesOpen(true)}
-                className={`flex items-center gap-1 hover:text-[#4A0417] transition-colors whitespace-nowrap shrink-0 hover:underline underline-offset-8 ${
+                aria-expanded={isServicesOpen}
+                aria-haspopup="true"
+                className={`flex items-center gap-1.5 py-2 hover:text-[#4A0417] transition-colors whitespace-nowrap shrink-0 hover:underline underline-offset-8 cursor-pointer ${
                   path.startsWith('/services') || path.startsWith('/service') ? 'text-[#4A0417] font-semibold underline' : ''
                 }`}
               >
                 <span>Services</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isServicesOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isServicesOpen ? 'rotate-180 text-[#4A0417]' : 'text-[#8C7A7C]'}`} />
               </button>
 
-              {/* Mega Dropdown Menu */}
+              {/* Accessible Mega Dropdown with Hover Bridge */}
               {isServicesOpen && (
                 <div
-                  onMouseLeave={() => setIsServicesOpen(false)}
-                  className="absolute left-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-3 grid grid-cols-1 gap-1 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  role="menu"
+                  aria-label="Salon & Spa Categories"
+                  className="absolute left-0 top-full pt-2 w-[680px] z-50 animate-in fade-in slide-in-from-top-2 duration-150 before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']"
                 >
-                  <div className="px-3 py-2 border-b border-[#FAF7F2] mb-1 flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4A0417]">
-                      Browse Treatments
-                    </span>
-                    <button
-                      onClick={() => { setIsServicesOpen(false); navigate('/services'); }}
-                      className="text-[11px] text-[#C5A880] hover:text-[#4A0417] font-semibold"
-                    >
-                      View All →
-                    </button>
-                  </div>
-
-                  {categories.length > 0 ? (
-                    categories.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => handleCategoryClick(c.id)}
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#FAF7F2] transition-colors flex items-center justify-between group"
-                      >
-                        <div>
-                          <p className="text-xs font-semibold text-[#1F1A1C] group-hover:text-[#4A0417]">
-                            {c.name}
-                          </p>
-                          {c.description && (
-                            <p className="text-[10px] text-[#7A6B6D] line-clamp-1">
-                              {c.description}
-                            </p>
-                          )}
-                        </div>
-                        <span className="text-xs text-[#C5A880] group-hover:translate-x-0.5 transition-transform">
-                          →
+                  <div className="bg-white rounded-2xl shadow-2xl border border-[#E8DDD3] p-5">
+                    {/* Mega Menu Header */}
+                    <div className="pb-3 border-b border-[#F4EFEA] mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#4A0417]">
+                          Delhi NCR Salon Menu
                         </span>
+                      </div>
+                      <button
+                        onClick={() => { setIsServicesOpen(false); navigate('/services'); }}
+                        className="text-xs text-[#4A0417] hover:text-[#36020F] font-semibold flex items-center gap-1 group cursor-pointer"
+                      >
+                        <span>View All Treatments</span>
+                        <span className="group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-xs text-[#7A6B6D]">
-                      Loading salon categories...
                     </div>
-                  )}
 
-                  <div className="mt-1 pt-2 border-t border-[#FAF7F2]">
-                    <button
-                      onClick={() => { setIsServicesOpen(false); navigate('/packages'); }}
-                      className="w-full text-left px-3 py-2 rounded-lg bg-[#FAF7F2] hover:bg-[#EAE2D8] transition-colors flex items-center gap-2 text-xs font-semibold text-[#4A0417]"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-                      <span>Custom Package Builder (Save up to 20%)</span>
-                    </button>
+                    {/* 2-Column Category Grid */}
+                    {categories.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                        {categories.map((c) => (
+                          <button
+                            key={c.id}
+                            role="menuitem"
+                            onClick={() => handleCategoryClick(c.id)}
+                            className="w-full text-left p-2.5 rounded-xl hover:bg-[#FAF7F2] transition-colors flex items-start justify-between group border border-transparent hover:border-[#E8DDD3] cursor-pointer"
+                          >
+                            <div className="pr-2">
+                              <p className="text-xs font-semibold text-[#1F1A1C] group-hover:text-[#4A0417] transition-colors">
+                                {c.name}
+                              </p>
+                              {c.description ? (
+                                <p className="text-[11px] text-[#7A6B6D] line-clamp-1 mt-0.5 font-light">
+                                  {c.description}
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-[#8C7A7C] mt-0.5 font-light">
+                                  Premium at-home ritual
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-xs text-[#C5A880] group-hover:text-[#4A0417] group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5">
+                              →
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center text-xs text-[#7A6B6D]">
+                        Loading treatments...
+                      </div>
+                    )}
+
+                    {/* Mega Menu Footer Actions */}
+                    <div className="mt-3 pt-3 border-t border-[#F4EFEA] flex items-center justify-between gap-3 text-xs">
+                      <button
+                        onClick={() => { setIsServicesOpen(false); navigate('/packages'); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#EAE2D8] text-[#4A0417] font-semibold transition-colors cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                        <span>Curated Packages (Save up to 20%)</span>
+                      </button>
+
+                      <button
+                        onClick={() => { setIsServicesOpen(false); navigate('/rate-card'); }}
+                        className="text-[#7A6B6D] hover:text-[#4A0417] font-medium transition-colors cursor-pointer"
+                      >
+                        Download Rate Card PDF
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -265,37 +308,64 @@ export const StorefrontNavbar: React.FC<Props> = ({
                 </button>
               </div>
 
-              {/* Service Area Selector for Mobile */}
-              <div>
-                <button
-                  onClick={() => { setIsMobileMenuOpen(false); onOpenPincodeModal(); }}
-                  className="w-full flex items-center justify-between p-3 rounded-xl bg-white border border-[#E8DDD3] text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#4A0417]" />
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-[#8C7A7C]">Location</p>
-                      <p className="text-xs font-semibold text-[#1F1A1C]">
-                        {currentTerritoryName || 'Delhi NCR (Select Pincode)'}
-                      </p>
-                    </div>
+              {/* Service Area Badge for Mobile */}
+              <div className="p-3 rounded-xl bg-white border border-[#E8DDD3] text-left flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="w-4 h-4 text-[#4A0417] shrink-0" />
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-[#8C7A7C]">Service Area</p>
+                    <p className="text-xs font-semibold text-[#1F1A1C]">
+                      {currentTerritoryName || 'Delhi NCR (Doorstep Service)'}
+                    </p>
                   </div>
-                  <span className="text-xs text-[#4A0417] font-semibold">Change</span>
-                </button>
+                </div>
+                <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Active
+                </span>
               </div>
 
-              {/* Navigation Links */}
-              <div className="space-y-2">
-                <button
-                  onClick={() => { setIsMobileMenuOpen(false); navigate('/services'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#1F1A1C]"
-                >
-                  All Services Catalog
-                </button>
+              {/* Navigation Links with Expandable Services Accordion */}
+              <div className="space-y-1.5">
+                {/* Services Accordion */}
+                <div className="border border-[#E8DDD3] rounded-xl bg-white overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileServicesExpanded(!mobileServicesExpanded)}
+                    className="w-full flex items-center justify-between py-2.5 px-3.5 text-sm font-semibold text-[#1F1A1C] hover:bg-[#FAF7F2] transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                      <span>Services & Rituals</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-[#8C7A7C] transition-transform duration-200 ${mobileServicesExpanded ? 'rotate-180 text-[#4A0417]' : ''}`} />
+                  </button>
+
+                  {mobileServicesExpanded && (
+                    <div className="border-t border-[#F4EFEA] bg-[#FAF7F2] p-2 space-y-1 max-h-60 overflow-y-auto">
+                      <button
+                        onClick={() => { setIsMobileMenuOpen(false); navigate('/services'); }}
+                        className="w-full text-left py-2 px-3 rounded-lg text-xs font-bold text-[#4A0417] hover:bg-white transition-colors flex items-center justify-between"
+                      >
+                        <span>View All Treatments</span>
+                        <span>→</span>
+                      </button>
+                      {categories.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => handleCategoryClick(c.id)}
+                          className="w-full text-left py-1.5 px-3 rounded-lg text-xs text-[#3D3335] hover:bg-white hover:text-[#4A0417] transition-colors flex items-center justify-between"
+                        >
+                          <span className="truncate">{c.name}</span>
+                          <span className="text-[#C5A880]">→</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={() => { setIsMobileMenuOpen(false); navigate('/offers'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#4A0417] flex items-center gap-2"
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#4A0417] flex items-center gap-2 transition-colors"
                 >
                   <Sparkles className="w-4 h-4 text-[#C5A880]" />
                   <span>Today's Best Deals</span>
@@ -303,53 +373,40 @@ export const StorefrontNavbar: React.FC<Props> = ({
 
                 <button
                   onClick={() => { setIsMobileMenuOpen(false); navigate('/packages'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#1F1A1C]"
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#1F1A1C] transition-colors"
                 >
                   Custom Package Builder
                 </button>
 
                 <button
+                  onClick={() => { setIsMobileMenuOpen(false); navigate('/rate-card'); }}
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#1F1A1C] transition-colors"
+                >
+                  Download Rate Card
+                </button>
+
+                <button
                   onClick={() => { setIsMobileMenuOpen(false); navigate('/how-it-works'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#1F1A1C]"
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#1F1A1C] transition-colors"
                 >
                   How It Works
                 </button>
 
                 <button
                   onClick={() => { setIsMobileMenuOpen(false); navigate('/faq'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#1F1A1C]"
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#1F1A1C] transition-colors"
                 >
-                  Hygiene & FAQs
+                  Hygiene Protocol & FAQ
                 </button>
 
                 <button
                   onClick={() => { setIsMobileMenuOpen(false); navigate('/account'); }}
-                  className="w-full text-left py-2 px-3 rounded-lg hover:bg-white text-sm font-semibold text-[#1F1A1C] flex items-center gap-2"
+                  className="w-full text-left py-2.5 px-3.5 rounded-xl bg-white border border-[#E8DDD3] hover:bg-[#FAF7F2] text-sm font-semibold text-[#1F1A1C] flex items-center gap-2 transition-colors"
                 >
                   <User className="w-4 h-4 text-[#4A0417]" />
                   <span>My Account & Appointments</span>
                 </button>
               </div>
-
-              {/* Categories Quick Links */}
-              {categories.length > 0 && (
-                <div className="pt-4 border-t border-[#E8DDD3]">
-                  <p className="text-xs uppercase font-bold text-[#8C7A7C] mb-2 px-3">
-                    Categories
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {categories.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => handleCategoryClick(c.id)}
-                        className="text-left text-xs p-2 rounded-md hover:bg-white text-[#4A3E3D] truncate"
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Bottom Book Button */}

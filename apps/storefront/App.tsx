@@ -177,10 +177,11 @@ function StorefrontContent() {
 
   const cartItemIds = cartItems.map(i => i.service.id);
 
-  // Route Dispatcher
+  // Route Dispatcher (Strip query parameters for route matching)
+  const cleanPath = path.split('?')[0];
   let pageContent: React.ReactNode = null;
 
-  if (path === '/') {
+  if (cleanPath === '/') {
     pageContent = (
       <HomePage
         campaigns={campaigns}
@@ -201,7 +202,7 @@ function StorefrontContent() {
         onOpenWriteReview={() => setIsWriteReviewOpen(true)}
       />
     );
-  } else if (path === '/services' || path.startsWith('/services/')) {
+  } else if (cleanPath === '/services' || cleanPath.startsWith('/services/')) {
     pageContent = (
       <ServicesPage
         services={services}
@@ -210,7 +211,7 @@ function StorefrontContent() {
         cartItemIds={cartItemIds}
       />
     );
-  } else if (path.startsWith('/service/')) {
+  } else if (cleanPath.startsWith('/service/')) {
     pageContent = (
       <ServiceDetailPage
         slug={params.slug}
@@ -218,16 +219,16 @@ function StorefrontContent() {
         onOpenCart={() => setIsCartOpen(true)}
       />
     );
-  } else if (path === '/offers') {
+  } else if (cleanPath === '/offers') {
     pageContent = <OffersPage campaigns={campaigns} />;
-  } else if (path === '/packages') {
+  } else if (cleanPath === '/packages') {
     pageContent = (
       <PackagesPage
         onAddPackageToCart={handleAddOfficialPackage}
         cartItemIds={cartItemIds}
       />
     );
-  } else if (path === '/rate-card') {
+  } else if (cleanPath === '/rate-card') {
     pageContent = <RateCardPage />;
   } else if (path === '/custom-package-builder') {
     pageContent = (

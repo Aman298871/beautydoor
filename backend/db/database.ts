@@ -662,8 +662,12 @@ async function seedEssentialData() {
   // 3. Facial Cleanups
   await db.execute("UPDATE services SET image_url = '/images/service_cleanup.jpg' WHERE category_id = 'cat-cleanup' OR LOWER(name) LIKE '%cleanup%'");
 
-  // 4. Facials (Diamond, Gold, Pearl, Wine, Argan, O3+, VLCC)
+  // 4. Facials (Diamond, O3+, Lotus, Cheryl's, Vedicline)
   await db.execute("UPDATE services SET image_url = '/images/service_facial_treatment.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) NOT LIKE '%korean%' AND LOWER(name) NOT LIKE '%glass%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_gold.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%gold%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_wine.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%wine%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_pearl.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%pearl%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_fruit.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%fruit%'");
 
   // 5. Bleach & De-Tan
   await db.execute("UPDATE services SET image_url = '/images/service_detan_bleach.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan')");

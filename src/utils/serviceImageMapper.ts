@@ -35,7 +35,21 @@ export function getServiceImageUrl(service: {
     return '/images/service_cleanup.jpg';
   }
 
-  // 4. Facials (Diamond, Gold, Pearl, Wine, Argan, O3+, VLCC)
+  // 3. Facials: Specialized Formulations
+  if (name.includes('gold')) {
+    return '/images/service_facial_gold.jpg';
+  }
+  if (name.includes('wine')) {
+    return '/images/service_facial_wine.jpg';
+  }
+  if (name.includes('pearl')) {
+    return '/images/service_facial_pearl.jpg';
+  }
+  if (name.includes('fruit')) {
+    return '/images/service_facial_fruit.jpg';
+  }
+
+  // 4. Facials (Diamond, O3+, Lotus, Cheryl's, Vedicline)
   if (cat === 'cat-facials' || name.includes('facial')) {
     return '/images/service_facial_treatment.jpg';
   }

@@ -15,32 +15,40 @@ const RouterContext = createContext<RouterContextType>({
 export const useRouter = () => useContext(RouterContext);
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [path, setPath] = useState<string>(() => {
-    return window.location.pathname || '/';
-  });
+  const getFullLocation = () => {
+    if (typeof window === 'undefined') return '/';
+    return (window.location.pathname || '/') + (window.location.search || '');
+  };
+
+  const [path, setPath] = useState<string>(getFullLocation);
 
   useEffect(() => {
     const handlePopState = () => {
-      setPath(window.location.pathname || '/');
+      setPath(getFullLocation());
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const navigate = (to: string) => {
-    if (to !== path) {
+    const current = getFullLocation();
+    if (to !== current) {
       window.history.pushState({}, '', to);
       setPath(to);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // If clicking same path with different query or re-triggering
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   // Simple route param parser for /services/:category and /service/:slug
+  const pathname = path.split('?')[0];
   const params: Record<string, string> = {};
-  if (path.startsWith('/services/')) {
-    params.category = path.replace('/services/', '').split('/')[0];
-  } else if (path.startsWith('/service/')) {
-    params.slug = path.replace('/service/', '').split('/')[0];
+  if (pathname.startsWith('/services/')) {
+    params.category = pathname.replace('/services/', '').split('/')[0];
+  } else if (pathname.startsWith('/service/')) {
+    params.slug = pathname.replace('/service/', '').split('/')[0];
   }
 
   return (

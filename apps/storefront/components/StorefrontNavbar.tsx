@@ -75,17 +75,16 @@ export const StorefrontNavbar: React.FC<Props> = ({
               />
             </button>
 
-            {/* Quick Pincode Selector */}
-            <button
-              onClick={onOpenPincodeModal}
-              className="hidden lg:flex items-center gap-1.5 text-xs text-[#5C4D4F] hover:text-[#4A0417] px-2.5 py-1 rounded-md bg-[#F4EFEA] hover:bg-[#EAE2D8] border border-[#E8DDD3] transition-colors"
-              title="Check Delhi NCR Service Area"
+            {/* Quick Area Indicator */}
+            <div
+              className="hidden lg:flex items-center gap-1.5 text-xs text-[#5C4D4F] px-2.5 py-1 rounded-md bg-[#F4EFEA] border border-[#E8DDD3]"
+              title="Delhi NCR Doorstep Delivery"
             >
               <MapPin className="w-3.5 h-3.5 text-[#4A0417]" />
               <span className="font-medium truncate max-w-[130px]">
-                {currentTerritoryName || 'Delhi NCR (Select)'}
+                {currentTerritoryName || 'Delhi NCR Service'}
               </span>
-            </button>
+            </div>
           </div>
 
           {/* Zone 2: Navigation with Services Dropdown Menu */}

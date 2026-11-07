@@ -268,27 +268,49 @@ storefrontRouter.get('/territories', async (_req: Request, res: Response): Promi
 
 const checkServiceabilityHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { pincode } = req.body;
-    if (!pincode || typeof pincode !== 'string') {
-      res.status(400).json({ error: '6-digit pincode is required.' });
-      return;
+    const { pincode, address, locality, city } = req.body;
+    
+    // Check private restricted locations
+    const restrictedRow = (await db.queryRow("SELECT value FROM settings WHERE key = 'restricted_locations'")) as { value: string } | undefined;
+    let restrictedAreas: string[] = [];
+    try {
+      if (restrictedRow?.value) {
+        restrictedAreas = JSON.parse(restrictedRow.value);
+      }
+    } catch {
+      restrictedAreas = [];
     }
-    const cleanPin = pincode.trim();
-    const territory = (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any;
 
-    if (territory) {
-      res.json({
-        isServiceable: true,
-        territory,
-        message: `Verified: Doorstep beauty services available in ${territory.area_name}, ${territory.city}.`
-      });
-    } else {
+    const fullAddr = `${address || ''} ${locality || ''} ${city || ''} ${pincode || ''}`.toLowerCase();
+    const isRestricted = restrictedAreas.some(area => area && fullAddr.includes(area.toLowerCase().trim()));
+
+    if (isRestricted) {
       res.json({
         isServiceable: false,
         territory: null,
-        message: `Pincode ${cleanPin} is currently outside our direct Delhi NCR hub radius. Expanding soon!`
+        message: 'Sorry, BeautyDoor is currently unavailable at this location.'
       });
+      return;
     }
+
+    if (pincode && typeof pincode === 'string') {
+      const cleanPin = pincode.trim();
+      const territory = (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any;
+      if (territory) {
+        res.json({
+          isServiceable: true,
+          territory,
+          message: `Verified: Doorstep beauty services available in ${territory.area_name}, ${territory.city}.`
+        });
+        return;
+      }
+    }
+
+    res.json({
+      isServiceable: true,
+      territory: null,
+      message: 'Verified: At-home beauty services available across Delhi NCR.'
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to check serviceability' });
   }
@@ -296,6 +318,7 @@ const checkServiceabilityHandler = async (req: Request, res: Response): Promise<
 
 storefrontRouter.post('/check-serviceability', checkServiceabilityHandler);
 storefrontRouter.post('/check-pincode', checkServiceabilityHandler);
+storefrontRouter.post('/check-location', checkServiceabilityHandler);
 
 // 8. Available Appointment Slots (8:00 AM to 6:00 PM with ₹100 Early/Evening Surcharge)
 storefrontRouter.get('/slots', async (req: Request, res: Response): Promise<void> => {
@@ -525,7 +548,7 @@ storefrontRouter.get('/rate-card', async (_req: Request, res: Response): Promise
         'Single-use disposable wooden spatulas (Zero double-dipping)',
         'Fresh disposable bedsheet & headband sealed for each client',
         'Hospital-grade sanitized and autoclaved metal tools',
-        'Monodose sealed skincare packs unsealed before you',
+        'Single-use sealed skincare packs opened right in front of you',
         'Strictly verified female professionals'
       ],
       generatedAt: new Date().toISOString()
@@ -551,18 +574,32 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       notes
     } = req.body;
 
-    if (!customerName || !customerPhone || !address?.pincode || !address?.flat || !items?.length || !appointmentDate || !appointmentSlot) {
-      res.status(400).json({ error: 'All appointment details, address, and contact information are required.' });
+    if (!customerName || !customerPhone || !address?.flat || !items?.length || !appointmentDate || !appointmentSlot) {
+      res.status(400).json({ error: 'All appointment details, service address, and contact information are required.' });
       return;
     }
 
-    // Validate Pincode
-    const cleanPin = address.pincode.trim();
-    const territory = (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any;
-    if (!territory) {
-      res.status(400).json({ error: `Pincode ${cleanPin} is currently outside our active Delhi NCR coverage.` });
+    // Check Private Restricted Locations (server-side only, no public exposure)
+    const restrictedRow = (await db.queryRow("SELECT value FROM settings WHERE key = 'restricted_locations'")) as { value: string } | undefined;
+    let restrictedAreas: string[] = [];
+    try {
+      if (restrictedRow?.value) {
+        restrictedAreas = JSON.parse(restrictedRow.value);
+      }
+    } catch {
+      restrictedAreas = [];
+    }
+
+    const fullAddr = `${address.flat || ''} ${address.landmark || ''} ${address.area || ''} ${address.locality || ''} ${address.city || ''} ${address.pincode || ''}`.toLowerCase();
+    const isRestricted = restrictedAreas.some(area => area && fullAddr.includes(area.toLowerCase().trim()));
+    if (isRestricted) {
+      res.status(400).json({ error: 'Sorry, BeautyDoor is currently unavailable at this location.' });
       return;
     }
+
+    // Determine territory & pincode without blocking customers
+    const cleanPin = address.pincode ? address.pincode.trim() : (address.city?.toLowerCase().includes('gurugram') ? '122002' : (address.city?.toLowerCase().includes('noida') ? '201301' : '110001'));
+    const territory = cleanPin ? (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any : null;
 
     // Calculate pricing strictly from DB
     let subtotal = 0;
@@ -698,8 +735,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       customerEmail || null,
       address.flat,
       address.landmark || null,
-      address.area || territory.area_name,
-      territory.city,
+      address.area || address.locality || territory?.area_name || 'Delhi NCR',
+      address.city || territory?.city || 'Delhi NCR',
       cleanPin,
       subtotal,
       packageDiscount,

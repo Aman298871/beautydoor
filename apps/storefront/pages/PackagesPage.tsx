@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Clock, Check, Gift, ShieldCheck, ChevronRight, X, Wind, Info, Tag } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { formatDuration } from '../../../src/utils/formatters.ts';
 
 interface PackageInclusion {
   name: string;
@@ -143,12 +144,12 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
                     <div className="flex items-center gap-3 text-xs text-[#7A6B6D] mb-2">
                       <span className="flex items-center gap-1 font-medium tabular-nums text-[#4A0417]">
                         <Clock className="w-3.5 h-3.5 text-[#C5A880]" />
-                        {pkg.duration_display || `${pkg.duration_mins} mins`}
+                        {formatDuration(pkg.duration_mins)}
                       </span>
                       <span className="text-[#C5A880]">•</span>
                       <span className="text-emerald-700 font-semibold flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        100% Monodose & Sterile Kits
+                        100% Single-Use Sealed Kits
                       </span>
                     </div>
 
@@ -327,7 +328,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
             <div className="flex items-center gap-3 text-xs text-[#7A6B6D] mt-1 mb-4">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                Duration: {activeModalPackage.duration_display || `${activeModalPackage.duration_mins} mins`}
+                Duration: {formatDuration(activeModalPackage.duration_mins)}
               </span>
               <span>•</span>
               <span className="font-bold text-[#1F1A1C]">

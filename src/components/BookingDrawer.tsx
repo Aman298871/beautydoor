@@ -16,9 +16,11 @@ import {
   Sparkles,
   Phone,
   User,
-  Home
+  Home,
+  Check
 } from 'lucide-react';
 import { CartItem, Booking, Territory, Coupon } from '../types.ts';
+import { formatDuration } from '../utils/formatters.ts';
 
 interface Props {
   isOpen: boolean;
@@ -46,7 +48,7 @@ export const BookingDrawer: React.FC<Props> = ({
   const [pincode, setPincode] = useState('');
   const [flat, setFlat] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState('Delhi');
   const [area, setArea] = useState('');
   const [pincodeError, setPincodeError] = useState<string | null>(null);
   const [matchedTerritory, setMatchedTerritory] = useState<Territory | null>(null);
@@ -125,7 +127,7 @@ export const BookingDrawer: React.FC<Props> = ({
   const deliveryFee = matchedTerritory ? matchedTerritory.deliveryFee : 0;
   const finalTotal = Math.max(0, amountAfterBundle - couponDiscount + deliveryFee + slotCharge);
 
-  // Validate pincode against loaded territories
+  // Optional pincode lookup for auto-filling area
   const handlePincodeChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 6);
     setPincode(clean);
@@ -136,13 +138,8 @@ export const BookingDrawer: React.FC<Props> = ({
       if (ter) {
         setMatchedTerritory(ter);
         setCity(ter.city);
-        setArea(ter.areaName);
-      } else {
-        setMatchedTerritory(null);
-        setPincodeError(`Pincode ${clean} is outside our active Delhi NCR coverage.`);
+        if (!area) setArea(ter.areaName);
       }
-    } else {
-      setMatchedTerritory(null);
     }
   };
 
@@ -370,7 +367,7 @@ export const BookingDrawer: React.FC<Props> = ({
                       <>
                         <div className="flex items-center justify-between text-xs text-[#7A6B6D]">
                           <span>Selected Services ({cartItems.length}):</span>
-                          <span className="tabular-nums font-medium">Est. {totalDuration} mins</span>
+                          <span className="tabular-nums font-medium">Est. {formatDuration(totalDuration)}</span>
                         </div>
 
                         <div className="space-y-3">
@@ -394,7 +391,7 @@ export const BookingDrawer: React.FC<Props> = ({
                                   </p>
                                 )}
                                 <p className="text-xs text-[#8C7A7C] tabular-nums">
-                                  {item.totalDurationMins} mins
+                                  {formatDuration(item.totalDurationMins)}
                                 </p>
                               </div>
 
@@ -440,32 +437,8 @@ export const BookingDrawer: React.FC<Props> = ({
                         Delhi NCR Service Address
                       </h4>
                       <p className="text-xs text-[#6B5A5C]">
-                        Please enter your exact doorstep address for the beautician’s arrival.
+                        Enter your doorstep location across Delhi, Gurugram, or Noida for your beauty specialist’s arrival.
                       </p>
-                    </div>
-
-                    {/* Pincode Lookup */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-[#1F1A1C] flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-[#4A0417]" />
-                        6-Digit Delhi NCR Pincode *
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={pincode}
-                        onChange={(e) => handlePincodeChange(e.target.value)}
-                        placeholder="e.g. 110017, 122002, 201301"
-                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] tabular-nums"
-                      />
-                      {pincodeError && (
-                        <p className="text-xs text-red-600 font-medium">{pincodeError}</p>
-                      )}
-                      {matchedTerritory && (
-                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
-                          ✓ Verified Service Area: {matchedTerritory.areaName}, {matchedTerritory.city}
-                        </div>
-                      )}
                     </div>
 
                     {/* Flat / House / Villa */}
@@ -478,45 +451,60 @@ export const BookingDrawer: React.FC<Props> = ({
                         type="text"
                         value={flat}
                         onChange={(e) => setFlat(e.target.value)}
-                        placeholder="e.g. Apartment 402, Block C, Palm Terraces"
-                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
+                        placeholder="e.g. Flat 402, Tower B, Palm Springs"
+                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-hidden focus:border-[#4A0417]"
                       />
                     </div>
 
-                    {/* Landmark */}
+                    {/* Street / Society / Colony / Landmark */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-[#1F1A1C]">
-                        Landmark (Optional)
+                        Society / Colony / Landmark *
                       </label>
                       <input
                         type="text"
                         value={landmark}
                         onChange={(e) => setLandmark(e.target.value)}
-                        placeholder="e.g. Near Community Center, Opposite Park"
-                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
+                        placeholder="e.g. DLF Phase 5, Near Central Market"
+                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-hidden focus:border-[#4A0417]"
                       />
                     </div>
 
-                    {/* City & Area Readonly display */}
+                    {/* Locality & City */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs text-[#7A6B6D]">City</label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-[#1F1A1C]">
+                          Locality / Neighborhood *
+                        </label>
                         <input
                           type="text"
-                          value={city || 'Delhi NCR'}
-                          readOnly
-                          className="w-full px-3 py-2 text-xs bg-[#F4EFEA] border border-[#E8DDD3] rounded-md text-[#554749]"
+                          value={area}
+                          onChange={(e) => setArea(e.target.value)}
+                          placeholder="e.g. South Delhi, Indirapuram"
+                          className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-hidden focus:border-[#4A0417]"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-[#7A6B6D]">Convenience Fee</label>
-                        <input
-                          type="text"
-                          value={deliveryFee === 0 ? 'FREE (Orders > ₹499)' : `₹${deliveryFee}`}
-                          readOnly
-                          className="w-full px-3 py-2 text-xs bg-[#F4EFEA] border border-[#E8DDD3] rounded-md text-[#554749]"
-                        />
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-[#1F1A1C]">City *</label>
+                        <select
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-[#1F1A1C] focus:outline-hidden focus:border-[#4A0417]"
+                        >
+                          <option value="Delhi">Delhi</option>
+                          <option value="Gurugram">Gurugram</option>
+                          <option value="Noida">Noida</option>
+                          <option value="Greater Noida">Greater Noida</option>
+                          <option value="Ghaziabad">Ghaziabad</option>
+                          <option value="Faridabad">Faridabad</option>
+                        </select>
                       </div>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>Complimentary doorstep arrival across Delhi NCR. No delivery fee.</span>
                     </div>
                   </motion.div>
                 )}
@@ -969,11 +957,11 @@ export const BookingDrawer: React.FC<Props> = ({
 
                   {step === 2 && (
                     <button
-                      disabled={!matchedTerritory || !flat}
+                      disabled={!flat.trim() || (!area.trim() && !landmark.trim())}
                       onClick={() => setStep(3)}
                       className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
                     >
-                      <span>Select Slot</span>
+                      <span>Select Appointment Slot</span>
                       <ArrowRight className="w-4 h-4 text-[#C5A880]" />
                     </button>
                   )}

@@ -36,6 +36,15 @@ export interface ServiceItem {
   whatsIncluded: string[];
   variants: ServiceVariant[];
   addons: ServiceAddon[];
+  slug?: string;
+  detailedDescription?: string;
+  imageUrl?: string;
+  image_url?: string;
+  beforeInstructions?: string;
+  afterInstructions?: string;
+  roomConditions?: string;
+  equipmentRequirements?: string;
+  hygienePrecautions?: string;
   isActive: boolean;
   isPopular?: boolean;
   isBestseller?: boolean;

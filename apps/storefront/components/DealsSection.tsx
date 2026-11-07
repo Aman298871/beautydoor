@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Clock, Plus, Check, ArrowRight, Flame } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { formatDuration } from '../../../src/utils/formatters.ts';
 
 interface ServiceDeal {
   id: string;
@@ -115,7 +116,7 @@ export const DealsSection: React.FC<Props> = ({
                   <div className="flex items-center justify-between text-xs text-[#7A6B6D] mb-2">
                     <span className="tabular-nums font-medium flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                      {deal.duration_mins} mins
+                      {formatDuration(deal.duration_mins)}
                     </span>
                     {deal.deal_badge && (
                       <span className="text-[10px] font-bold text-[#4A0417] bg-white px-2 py-0.5 rounded border border-[#C5A880]/30 tracking-tight">

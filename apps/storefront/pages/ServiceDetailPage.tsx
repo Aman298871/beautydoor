@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Check, Plus, ShieldCheck, Sparkles, ArrowLeft, ShoppingBag } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { formatDuration } from '../../../src/utils/formatters.ts';
+import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
 
 interface Props {
   slug: string;
@@ -113,7 +115,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
                 <span aria-hidden="true">·</span>
                 <span className="flex items-center gap-1 text-[#6B5A5C]">
                   <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                  <span className="tabular-nums font-semibold">{finalDuration} mins</span>
+                  <span className="tabular-nums font-semibold">{formatDuration(finalDuration)}</span>
                 </span>
               </div>
 
@@ -191,7 +193,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
                 )}
               </div>
               <p className="text-xs text-[#6B5A5C] mt-1">
-                Duration: <span className="font-semibold text-[#1F1A1C] tabular-nums">{finalDuration} mins</span> · Pay after treatment
+                Duration: <span className="font-semibold text-[#1F1A1C] tabular-nums">{formatDuration(finalDuration)}</span> · Pay after treatment
               </p>
             </div>
 

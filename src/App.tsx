@@ -406,24 +406,23 @@ export default function App() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
-              { city: 'South & Central Delhi', pincodes: '110017, 110024, 110001', note: 'Free delivery > ₹499' },
-              { city: 'DLF & Golf Course GGN', pincodes: '122002, 122011, 122018', note: 'Free delivery > ₹499' },
-              { city: 'Noida (Sec 18, 50, 128)', pincodes: '201301, 201307, 201304', note: 'Free delivery > ₹499' },
-              { city: 'Greater Noida & West', pincodes: '201310, 201306', note: '₹49 delivery fee' },
-              { city: 'Ghaziabad & Indirapuram', pincodes: '201014, 201010, 201002', note: 'Free delivery > ₹499' },
-              { city: 'Faridabad (Sec 14, 15, 28)', pincodes: '121002, 121001, 121006', note: 'Free delivery > ₹499' }
+              { city: 'South & Central Delhi', areas: 'GK, Vasant Kunj, Saket, Hauz Khas, Chanakyapuri', note: 'Free doorstep arrival > ₹499' },
+              { city: 'DLF & Golf Course GGN', areas: 'DLF Phase 1-5, Golf Course Rd, Cyber City', note: 'Free doorstep arrival > ₹499' },
+              { city: 'Noida Hubs', areas: 'Sector 18, 50, 62, 128, Expressway Towers', note: 'Free doorstep arrival > ₹499' },
+              { city: 'Greater Noida & West', areas: 'Pari Chowk, Gaur City, Techzone', note: 'Doorstep service available' },
+              { city: 'Ghaziabad & Indirapuram', areas: 'Indirapuram, Vaishali, Vasundhara', note: 'Free doorstep arrival > ₹499' },
+              { city: 'Faridabad', areas: 'Sector 14, 15, 21, 28, Neharpar', note: 'Free doorstep arrival > ₹499' }
             ].map((hub, idx) => (
               <div
                 key={idx}
-                onClick={() => setIsPincodeModalOpen(true)}
-                className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] hover:border-[#4A0417] transition-all cursor-pointer group"
+                className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] hover:border-[#4A0417] transition-all group"
               >
                 <div className="w-2 h-2 rounded-full bg-emerald-500 mb-2" />
                 <h4 className="text-xs sm:text-sm font-semibold text-[#1F1A1C] group-hover:text-[#4A0417] transition-colors leading-snug">
                   {hub.city}
                 </h4>
-                <p className="text-[11px] text-[#7A6B6D] mt-1 tabular-nums">
-                  {hub.pincodes}
+                <p className="text-[11px] text-[#7A6B6D] mt-1">
+                  {hub.areas}
                 </p>
                 <p className="text-[10px] text-emerald-800 font-semibold mt-2">
                   {hub.note}
@@ -433,13 +432,9 @@ export default function App() {
           </div>
 
           <div className="mt-8 text-center">
-            <button
-              onClick={() => setIsPincodeModalOpen(true)}
-              className="text-xs font-semibold text-[#4A0417] hover:underline inline-flex items-center gap-1"
-            >
-              <span>View complete list of 30+ serviceable Delhi NCR pincodes</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <p className="text-xs text-[#6B5A5C]">
+              Doorstep services available across all major residential societies and colonies in Delhi NCR. No PIN code required to book.
+            </p>
           </div>
         </div>
       </section>

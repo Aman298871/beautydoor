@@ -9,7 +9,7 @@ export const HowItWorksPage: React.FC = () => {
     {
       num: '01',
       title: 'Select Rituals & Schedule Slot',
-      desc: 'Browse our specialized menu—from Italian Rica waxing to clinical Hydra facials. Enter your Delhi NCR pincode and choose a convenient time slot (09:00 AM – 07:00 PM).'
+      desc: 'Browse our specialized menu—from Italian Rica waxing to radiant Korean glass facials. Enter your Delhi NCR address and choose a convenient time slot (08:00 AM – 06:00 PM).'
     },
     {
       num: '02',

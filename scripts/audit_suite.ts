@@ -365,20 +365,88 @@ async function runAudit() {
     const faqsRes = await request('/api/admin/faqs', { headers: authHeader });
     const faqsCount = faqsRes.data?.faqs?.length || 0;
 
+    // Check for the 7 new approved services
+    const approvedServices = [
+      { id: 'srv-full-body-massage-750', name: 'Full Body Massage', price: 750, duration: 60 },
+      { id: 'srv-head-massage-199', name: 'Head Massage', price: 199, duration: 15 },
+      { id: 'srv-back-massage-350', name: 'Back Massage', price: 350, duration: 25 },
+      { id: 'srv-foot-massage-399', name: 'Foot Massage', price: 399, duration: 30 },
+      { id: 'srv-head-shoulder-massage-499', name: 'Head & Shoulder Massage', price: 499, duration: 30 },
+      { id: 'srv-body-polishing-5-steps-1200', name: 'Body Polishing — 5 Steps', price: 1200, duration: 60 },
+      { id: 'srv-body-scrub-pack-499', name: 'Body Scrub Pack', price: 499, duration: 30 },
+    ];
+
+    const allApprovedPresent = approvedServices.every(as => {
+      const found = catalog.data?.services?.find((s: any) => s.id === as.id || s.name.toLowerCase().trim() === as.name.toLowerCase().trim());
+      return found && found.selling_price === as.price && found.duration_mins === as.duration;
+    });
+
     const pass = 
       categoriesCount >= 14 &&
-      servicesCount >= 100 &&
+      servicesCount >= 107 &&
       packagesCount >= 10 &&
       territoriesCount >= 20 &&
       hygieneCount >= 8 &&
-      faqsCount >= 20;
+      faqsCount >= 20 &&
+      allApprovedPresent;
 
     results['catalogue_data_preservation'] = {
       pass,
-      details: `Categories: ${categoriesCount}/14, Services: ${servicesCount}/103, Packages: ${packagesCount}/10, Territories: ${territoriesCount}/20, Hygiene: ${hygieneCount}/8, FAQs: ${faqsCount}/22`
+      details: `Categories: ${categoriesCount}/14, Services: ${servicesCount} (>=107), 7 Approved Services Present: ${allApprovedPresent}, Packages: ${packagesCount}, Territories: ${territoriesCount}, Hygiene: ${hygieneCount}, FAQs: ${faqsCount}`
     };
   } catch (e: any) {
     results['catalogue_data_preservation'] = { pass: false, details: e.message };
+  }
+
+  // 12b. Restricted Location & Optional PIN Booking Verification
+  try {
+    // Attempt booking with restricted address
+    const restrictedRes = await request('/api/storefront/bookings', {
+      method: 'POST',
+      body: {
+        customerName: 'Ananya Roy',
+        customerPhone: '+91 9811122233',
+        address: {
+          flat: 'Block C 102',
+          landmark: 'Near Old Water Tank',
+          locality: 'TEST_RESTRICTED_ZONE',
+          city: 'Delhi'
+        },
+        items: [{ serviceId: 'srv-full-body-massage-750', quantity: 1 }],
+        appointmentDate: '2026-11-12',
+        appointmentSlot: '11:00 AM',
+        paymentMethod: 'cod'
+      }
+    });
+
+    // Attempt booking without any pincode (optional PIN test)
+    const noPinRes = await request('/api/storefront/bookings', {
+      method: 'POST',
+      body: {
+        customerName: 'Kavita Verma',
+        customerPhone: '+91 9811122244',
+        address: {
+          flat: 'Tower B, Flat 801, Beverly Park',
+          landmark: 'Opposite Galleria',
+          locality: 'DLF Phase 4',
+          city: 'Gurugram'
+        },
+        items: [{ serviceId: 'srv-full-body-massage-750', quantity: 1 }],
+        appointmentDate: '2026-11-12',
+        appointmentSlot: '02:00 PM',
+        paymentMethod: 'cod'
+      }
+    });
+
+    const restrictedBlocked = restrictedRes.status === 400 && restrictedRes.data?.error === 'Sorry, BeautyDoor is currently unavailable at this location.';
+    const noPinAllowed = noPinRes.status === 201 && !!noPinRes.data?.bookingId;
+
+    results['location_restriction_and_optional_pin'] = {
+      pass: restrictedBlocked && noPinAllowed,
+      details: `Restricted Area Rejected (Status ${restrictedRes.status}, Error: "${restrictedRes.data?.error}"), No-PIN Booking Accepted: (Status ${noPinRes.status}, Booking ID: ${noPinRes.data?.bookingId})`
+    };
+  } catch (e: any) {
+    results['location_restriction_and_optional_pin'] = { pass: false, details: e.message };
   }
 
   // 13. Payment Gateway Inspection (Razorpay Test Mode)

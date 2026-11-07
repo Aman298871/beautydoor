@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, Plus, Sparkles, Check } from 'lucide-react';
 import { ServiceItem } from '../types.ts';
+import { formatDuration } from '../utils/formatters.ts';
 
 interface Props {
   service: ServiceItem;
@@ -23,7 +24,7 @@ export const ServiceCard: React.FC<Props> = ({
         <div className="flex items-center justify-between text-xs text-[#7A6B6D] mb-2.5">
           <div className="flex items-center gap-1.5 font-medium">
             <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-            <span className="tabular-nums">{service.durationMins} mins</span>
+            <span className="tabular-nums">{formatDuration(service.durationMins)}</span>
             <span aria-hidden="true">·</span>
             <span>Single-Use Kit</span>
           </div>

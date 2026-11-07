@@ -453,7 +453,8 @@ async function seedEssentialData() {
     google_place_id: '',
     min_order_amount: '499',
     hygiene_heading: 'Your Beauty. Your Comfort. Our Hygiene Promise.',
-    hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.'
+    hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.',
+    restricted_locations: '["TEST_RESTRICTED_ZONE"]'
   };
 
   for (const [k, v] of Object.entries(defaultSettings)) {
@@ -469,6 +470,7 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '+91 93103 72015' WHERE key = 'support_whatsapp' AND (value = '+91 99991 23456' OR value LIKE '%99991%')");
   await db.execute("UPDATE settings SET value = 'hello@beautydoor.in' WHERE key = 'contact_email' AND (value = 'concierge@beautydoor.in' OR value LIKE '%concierge%')");
   await db.execute("UPDATE settings SET value = '06:00 PM' WHERE key = 'working_hours_end' AND value = '08:00 PM'");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
 
   // 3. Official Service Categories (idempotent)
   const catCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM categories');
@@ -585,6 +587,117 @@ async function seedEssentialData() {
     }
   }
 
+  // Ensure all MASTER_SERVICES (including new approved services) exist in the services table
+  for (const s of MASTER_SERVICES) {
+    const existing = await db.queryRow('SELECT id FROM services WHERE id = ?', [s.id]);
+    let img = '/images/service_waxing_arms_legs.jpg';
+    if (s.category_id.includes('facial') || s.category_id.includes('cleanup')) {
+      img = '/images/service_facial_treatment.jpg';
+    } else if (s.category_id.includes('massage')) {
+      img = '/images/service_body_massage.jpg';
+    } else if (s.category_id.includes('manicure') || s.category_id.includes('pedicure')) {
+      img = '/images/service_manicure_pedicure.jpg';
+    } else if (s.category_id.includes('scrub') || s.category_id.includes('polishing')) {
+      img = '/images/service_body_massage.jpg';
+    }
+
+    if (!existing) {
+      await db.execute(`
+        INSERT INTO services (
+          id, category_id, name, slug, description, detailed_description,
+          benefits_json, duration_mins, original_price, selling_price, discount_percent,
+          whats_included_json, ingredients_json, steps_json,
+          before_instructions, after_instructions, room_conditions, equipment_requirements, hygiene_precautions,
+          brand, service_type, is_combo, combo_items_json, steps_count, sub_type,
+          is_active, is_published, pending_notes, is_popular, is_bestseller, is_featured_deal, deal_badge,
+          image_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        s.id,
+        s.category_id,
+        s.name,
+        s.slug,
+        s.description,
+        s.detailed_description || s.description,
+        JSON.stringify(s.is_combo ? (s.combo_items || []) : [s.name]),
+        s.duration_mins,
+        s.original_price || null,
+        s.selling_price,
+        s.discount_percent || 0,
+        JSON.stringify(s.combo_items || [s.name]),
+        JSON.stringify([]),
+        JSON.stringify([]),
+        s.before_instructions || null,
+        s.after_instructions || null,
+        s.room_conditions || null,
+        s.equipment_requirements || null,
+        s.hygiene_precautions || null,
+        s.brand || null,
+        s.service_type || 'single',
+        s.is_combo || 0,
+        JSON.stringify(s.combo_items || []),
+        s.steps_count || null,
+        s.sub_type || null,
+        1,
+        s.is_published,
+        s.pending_notes || null,
+        s.is_popular || 0,
+        s.is_bestseller || 0,
+        s.is_featured_deal || 0,
+        s.deal_badge || null,
+        img,
+        now,
+        now
+      ]);
+    }
+  }
+
+  // Update existing services with professional, anatomically accurate photography
+  // 1. Threading
+  await db.execute("UPDATE services SET image_url = '/images/service_eyebrow_threading.jpg' WHERE category_id = 'cat-threading' OR LOWER(name) LIKE '%threading%'");
+
+  // 2. Korean Glass Skin Facials
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_korean_glass.jpg' WHERE category_id = 'cat-facials' AND (LOWER(name) LIKE '%korean%' OR LOWER(name) LIKE '%glass%')");
+
+  // 3. Facial Cleanups
+  await db.execute("UPDATE services SET image_url = '/images/service_cleanup.jpg' WHERE category_id = 'cat-cleanup' OR LOWER(name) LIKE '%cleanup%'");
+
+  // 4. Facials (Diamond, Gold, Pearl, Wine, Argan, O3+, VLCC)
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_treatment.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) NOT LIKE '%korean%' AND LOWER(name) NOT LIKE '%glass%'");
+
+  // 5. Bleach & De-Tan
+  await db.execute("UPDATE services SET image_url = '/images/service_detan_bleach.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan')");
+
+  // 6. Manicure & Pedicure
+  await db.execute("UPDATE services SET image_url = '/images/service_manicure_pedicure.jpg' WHERE category_id = 'cat-manicure-pedicure'");
+
+  // 7. Massages
+  await db.execute("UPDATE services SET image_url = '/images/service_head_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%head%' OR LOWER(name) LIKE '%scalp%')");
+  await db.execute("UPDATE services SET image_url = '/images/service_foot_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%foot%' OR LOWER(name) LIKE '%feet%')");
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) LIKE '%back massage%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) NOT LIKE '%head%' AND LOWER(name) NOT LIKE '%scalp%' AND LOWER(name) NOT LIKE '%foot%' AND LOWER(name) NOT LIKE '%feet%' AND LOWER(name) NOT LIKE '%back massage%'");
+
+  // 8. Body Scrubs & Body Polishing
+  await db.execute("UPDATE services SET image_url = '/images/service_body_polishing.jpg' WHERE category_id = 'cat-body-scrub' OR LOWER(name) LIKE '%polishing%' OR LOWER(name) LIKE '%scrub%'");
+
+  // 9. Waxing: default arms
+  await db.execute("UPDATE services SET image_url = '/images/service_waxing_arms_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-brazilian-peel-off')");
+
+  // Waxing: Legs only
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%legs%' OR LOWER(name) LIKE '%half legs%') AND LOWER(name) NOT LIKE '%arms%' AND LOWER(name) NOT LIKE '%body%'");
+
+  // Waxing: Underarms only
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_underarms.jpg' WHERE (LOWER(name) = 'underarms' OR LOWER(name) = 'brazilian peel-off underarms')");
+
+  // Waxing: Back only
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full back%' OR LOWER(name) LIKE '%back wax%')");
+
+  // Waxing: Intimate / Sensitive / Bikini / Brazilian / Butt
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_bikini.jpg' WHERE (LOWER(name) LIKE '%bikini%' OR LOWER(name) LIKE '%brazilian%' OR LOWER(name) LIKE '%butt%')");
+
+  // Waxing: Multi-zone packages & Full Body
+  await db.execute("UPDATE services SET image_url = '/images/service_full_body_wax_combo.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full body%' OR LOWER(name) LIKE '%arms + underarms + full legs%' OR LOWER(name) LIKE '%arms + underarms + half legs%' OR LOWER(name) LIKE '%front + back%')");
+
   // 7. OFFICIAL PACKAGES (idempotent)
   const pkgCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM packages');
   if (Number(pkgCountRow?.count || 0) === 0) {
@@ -684,8 +797,8 @@ async function seedEssentialData() {
         id: 'camp-botanical-facials',
         title: 'Botanical Radiance & O3+ Derma Facials',
         slug: 'botanical-facials-delhi-ncr',
-        banner_title: 'O3+ & Cheryl’s Monodose Facials at Home',
-        banner_subtitle: 'Oxygenating glow therapy with authentic salon kits unsealed directly at your vanity table with hospital-grade sanitization.',
+        banner_title: 'O3+ & Cheryl’s Sealed Single-Use Facials at Home',
+        banner_subtitle: 'Oxygenating glow therapy with authentic salon kits unsealed directly at your vanity table with clinical-grade sanitization.',
         banner_image_url: '/banners/facial_luxury_banner.svg',
         cta_label: 'Explore Facials',
         destination_url: '/services?category=cat-facials',
@@ -695,7 +808,7 @@ async function seedEssentialData() {
         is_published: 1,
         discount_type: 'percentage',
         discount_val: 25,
-        badge_text: 'Monodose Sealed',
+        badge_text: 'Single-Use Sealed',
         target_category_ids: JSON.stringify(['cat-facials']),
         target_service_ids: JSON.stringify(['srv-facial-o3-whitening', 'srv-facial-cheryls-glovite']),
         display_order: 2

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Clock, Check, Plus, ShieldCheck, Wind, AlertCircle, Heart } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import { formatDuration } from '../../../src/utils/formatters.ts';
 
 interface ServiceItem {
   id: string;
@@ -148,7 +149,7 @@ export const WaxingCatalogueSection: React.FC<Props> = ({
                   <div className="flex items-center justify-between text-xs text-[#7A6B6D] mb-2">
                     <span className="tabular-nums font-medium flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                      {srv.duration_mins} mins
+                      {formatDuration(srv.duration_mins)}
                     </span>
                     {srv.is_bestseller ? (
                       <span className="text-[10px] uppercase font-bold text-[#4A0417] bg-white px-2 py-0.5 rounded border border-[#E8DDD3]">

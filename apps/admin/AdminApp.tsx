@@ -37,6 +37,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { AdminChatbot } from './components/AdminChatbot.tsx';
+import { formatDuration } from '../../src/utils/formatters.ts';
 
 export default function AdminApp() {
   const [token, setToken] = useState<string | null>(() => {
@@ -1283,7 +1284,7 @@ export default function AdminApp() {
                         </span>
                         <span className="tabular-nums font-medium flex items-center gap-1 text-[#4A0417]">
                           <Clock className="w-3 h-3 text-[#C5A880]" />
-                          {s.duration_mins} mins
+                          {formatDuration(s.duration_mins)}
                         </span>
                       </div>
 
@@ -1408,7 +1409,7 @@ export default function AdminApp() {
                         )}
                       </td>
                       <td className="py-3.5 px-4 tabular-nums font-medium text-[#4A0417]">
-                        {pkg.duration_display || `${pkg.duration_mins} mins`}
+                        {formatDuration(pkg.duration_mins)}
                       </td>
                       <td className="py-3.5 px-4 max-w-sm">
                         <div className="space-y-1">
@@ -2304,6 +2305,48 @@ export default function AdminApp() {
                       Enable Razorpay Online Payments (Cards/UPI)
                     </label>
                   </div>
+                </div>
+              </div>
+
+              {/* Section E: Private Restricted Locations */}
+              <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#C5A880]" />
+                  <span>Private Restricted Service Locations (Internal Blacklist)</span>
+                </h4>
+                <p className="text-xs text-[#5C4D4F] leading-relaxed">
+                  Enter comma-separated keywords or area names that BeautyDoor does not serve. When a customer enters an address matching any of these keywords, the booking engine will safely reject the order with: 
+                  <span className="font-semibold text-[#4A0417] ml-1">"Sorry, BeautyDoor is currently unavailable at this location."</span> (This list is strictly internal and never exposed in customer-facing source code or public APIs).
+                </p>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold block text-[#1F1A1C]">
+                    Restricted Area Keywords (Comma-Separated or JSON array)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={
+                      (() => {
+                        try {
+                          const parsed = JSON.parse(settings.restricted_locations || '[]');
+                          if (Array.isArray(parsed)) return parsed.join(', ');
+                        } catch {
+                          // fallback as string
+                        }
+                        return settings.restricted_locations || '';
+                      })()
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const arr = val.split(',').map((s) => s.trim()).filter(Boolean);
+                      setSettings({ ...settings, restricted_locations: JSON.stringify(arr) });
+                    }}
+                    placeholder="e.g. TEST_RESTRICTED_ZONE, OUT_OF_BOUNDS_AREA"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-xs focus:outline-none focus:border-[#4A0417]"
+                  />
+                  <p className="text-[11px] text-[#8C7A7C]">
+                    Current Raw JSON stored in PostgreSQL: <code className="bg-[#F4EFEA] px-1.5 py-0.5 rounded text-[#4A0417]">{settings.restricted_locations || '[]'}</code>
+                  </p>
                 </div>
               </div>
 

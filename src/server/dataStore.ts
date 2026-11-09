@@ -763,9 +763,9 @@ const initialReviews: CustomerReview[] = [
 const initialSettings: BusinessSettings = {
   brandName: 'BeautyDoor',
   tagline: 'Beauty at your doorstep',
-  contactPhone: '+91 93103 72015',
+  contactPhone: '+91 78277 22522',
   contactEmail: 'hello@beautydoor.in',
-  supportWhatsApp: '+91 93103 72015',
+  supportWhatsApp: '+91 78277 22522',
   workingHoursStart: '08:00 AM',
   workingHoursEnd: '06:00 PM',
   minOrderAmount: 499,

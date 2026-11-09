@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Clock, Check, Gift, ShieldCheck, ChevronRight, X, Wind, Info, Tag } from 'lucide-react';
+import { Sparkles, Clock, Check, Gift, ShieldCheck, ChevronRight, X, Wind, Info, Tag, SlidersHorizontal } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
+import { CustomizePackageModal } from '../components/CustomizePackageModal.tsx';
 
 interface PackageInclusion {
   name: string;
@@ -28,17 +29,26 @@ interface PackageItem {
 interface Props {
   onAddPackageToCart: (packageItem: any, selectedVariant?: string) => void;
   cartItemIds: string[];
+  services?: any[];
+  onAddCustomizedPackage?: (customizedPkg: any) => void;
 }
 
-export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds }) => {
+export const PackagesPage: React.FC<Props> = ({
+  onAddPackageToCart,
+  cartItemIds,
+  services = [],
+  onAddCustomizedPackage
+}) => {
   const { navigate } = useRouter();
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogueServices, setCatalogueServices] = useState<any[]>(services);
   const [selectedFacialVariant, setSelectedFacialVariant] = useState<Record<string, string>>({
     'pkg-total-care': 'Insta Glow',
     'pkg-just-relax': 'Insta Glow'
   });
   const [activeModalPackage, setActiveModalPackage] = useState<PackageItem | null>(null);
+  const [customizingPackage, setCustomizingPackage] = useState<PackageItem | null>(null);
 
   useEffect(() => {
     fetch('/api/storefront/packages')
@@ -52,6 +62,15 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
         console.error('Failed to load packages:', err);
       })
       .finally(() => setLoading(false));
+
+    if (catalogueServices.length === 0) {
+      fetch('/api/storefront/services')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.services) setCatalogueServices(data.services);
+        })
+        .catch((err) => console.error('Failed to load services for customizer:', err));
+    }
   }, []);
 
   const handleBook = (pkg: PackageItem) => {
@@ -81,25 +100,43 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
         {/* Breadcrumb & Header */}
         <div className="mb-8">
           <p className="text-xs text-[#8C7A7C] mb-1">
-            <span onClick={() => navigate('/')} className="hover:text-[#4A0417] cursor-pointer">Home</span> / BeautyDoor Signature Packages
+            <span onClick={() => navigate('/')} className="hover:text-[#4A0417] cursor-pointer">Home</span> / Ready-Made Packages
           </p>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1">
                 <Sparkles className="w-4 h-4 text-[#C5A880]" />
-                <span>All-In-One Curated Head-to-Toe Rituals</span>
+                <span>Specially Selected Beauty Packages</span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C]">
-                Official BeautyDoor Packages
+                Choose a Beauty Package
               </h1>
               <p className="text-sm text-[#5C4D4F] mt-1 font-light max-w-2xl">
-                Curated combinations of RICA, Honey & Korean waxing with luxury facials, cleanups, and complimentary gift services at fixed bundle pricing. No extra add-on surprises.
+                Choose a ready-made package or make your own by adding the services you want.
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs font-medium self-start md:self-auto">
-              <Gift className="w-4 h-4 text-emerald-700" />
-              <span>Complimentary Bikini Wax, Threading & Bleach included in select packs</span>
+            {/* Quick Navigation Options */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3.5 py-1.5 bg-[#4A0417] text-white text-xs font-semibold rounded-lg shadow-xs">
+                Ready-Made Packages
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (packages.length > 0) setCustomizingPackage(packages[0]);
+                }}
+                className="px-3.5 py-1.5 bg-white hover:bg-[#FAF7F2] text-[#4A0417] border border-[#E8DDD3] hover:border-[#C5A880] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Make Your Own Package
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/services')}
+                className="px-3.5 py-1.5 bg-white hover:bg-[#FAF7F2] text-[#4A0417] border border-[#E8DDD3] hover:border-[#C5A880] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                View All Services
+              </button>
             </div>
           </div>
         </div>
@@ -109,12 +146,40 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
           <div className="flex items-center gap-2.5">
             <Wind className="w-4 h-4 text-[#C5A880] shrink-0" />
             <p>
-              <strong className="font-semibold text-[#4A0417]">Important Comfort Note:</strong> For optimal wax grip, pain reduction, and hygienic skin protection, an <strong>air-conditioned / cool room</strong> is strictly required for all waxing rituals.
+              <strong className="font-semibold text-[#4A0417]">Important Comfort Note:</strong> For best results, smooth waxing, and hygiene, please keep an <strong>air-conditioned / cool room</strong> ready.
             </p>
           </div>
           <span className="text-[11px] font-semibold text-[#4A0417] uppercase tracking-wider bg-white px-2.5 py-1 rounded border border-[#E8DDD3] shrink-0">
             Delhi NCR Doorstep Guarantee
           </span>
+        </div>
+
+        {/* Custom Package Builder Hero Banner */}
+        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-[#4A0417] to-[#6B0D23] text-white flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-md">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#E8DDD3]">
+              <Sparkles className="w-4 h-4 text-[#C5A880]" />
+              <span>Make Your Own Package</span>
+            </div>
+            <h3 className="text-2xl font-serif font-bold text-white">
+              Make Your Own Package
+            </h3>
+            <p className="text-xs sm:text-sm text-[#F4EFEA]/90 font-light leading-relaxed">
+              Add the beauty services you want. You can also remove or change any service before booking. Save up to 20% when you bundle services together.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (packages.length > 0) {
+                setCustomizingPackage(packages[0]);
+              }
+            }}
+            className="px-6 py-3 bg-[#FAF7F2] hover:bg-white text-[#4A0417] text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <Sparkles className="w-4 h-4 text-[#C5A880]" />
+            <span>Make Your Own Package →</span>
+          </button>
         </div>
 
         {/* Package Grid */}
@@ -269,7 +334,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
                       <button
                         type="button"
                         onClick={() => setActiveModalPackage(pkg)}
-                        className="px-3.5 py-2.5 bg-white text-[#4A0417] hover:bg-[#FAF7F2] border border-[#E8DDD3] text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                        className="px-3.5 py-2.5 bg-white text-[#4A0417] hover:bg-[#FAF7F2] border border-[#E8DDD3] text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                       >
                         <Info className="w-3.5 h-3.5" />
                         <span>Details</span>
@@ -277,8 +342,18 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
 
                       <button
                         type="button"
+                        onClick={() => setCustomizingPackage(pkg)}
+                        className="px-3.5 py-2.5 bg-amber-50 text-[#4A0417] hover:bg-amber-100 border border-amber-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                        title="Remove, swap, or add services in this package"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A880]" />
+                        <span>Change Package</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleBook(pkg)}
-                        className={`flex-1 sm:flex-none px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                           inCart
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                             : 'bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] shadow-sm active:scale-98'
@@ -287,12 +362,12 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
                         {inCart ? (
                           <>
                             <Check className="w-4 h-4 text-emerald-700" />
-                            <span>In Bag</span>
+                            <span>In Cart</span>
                           </>
                         ) : (
                           <>
                             <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-                            <span>Book Package</span>
+                            <span>Add to Cart</span>
                           </>
                         )}
                       </button>
@@ -318,7 +393,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
 
             <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#4A0417] mb-1">
               <Sparkles className="w-4 h-4 text-[#C5A880]" />
-              <span>Full Treatment Protocol</span>
+              <span>Steps Included</span>
             </div>
 
             <h3 className="text-2xl font-serif font-bold text-[#1F1A1C]">
@@ -328,7 +403,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
             <div className="flex items-center gap-3 text-xs text-[#7A6B6D] mt-1 mb-4">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
-                Duration: {formatDuration(activeModalPackage.duration_mins)}
+                Time Needed: {formatDuration(activeModalPackage.duration_mins)}
               </span>
               <span>•</span>
               <span className="font-bold text-[#1F1A1C]">
@@ -338,7 +413,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
 
             <div className="space-y-4 text-xs sm:text-sm text-[#4A3D3F]">
               <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3]">
-                <p className="font-semibold text-[#1F1A1C] mb-1">About This Signature Ritual</p>
+                <p className="font-semibold text-[#1F1A1C] mb-1">About This Package</p>
                 <p className="text-xs text-[#5C4D4F] leading-relaxed">
                   {activeModalPackage.description}
                 </p>
@@ -382,7 +457,7 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
                   AC Room & Hair Growth Preparation Required
                 </p>
                 <p className="leading-relaxed">
-                  Please ensure an air-conditioned room (approx. 22-24°C) is ready upon specialist arrival. Hair length should be at least 1/4 inch (minimum 3 weeks without shaving) for painless, residue-free waxing.
+                  Please ensure an air-conditioned room (approx. 22-24°C) is ready upon beautician arrival. Hair length should be at least 1/4 inch (minimum 3 weeks without shaving) for painless, smooth waxing.
                 </p>
               </div>
 
@@ -392,29 +467,61 @@ export const PackagesPage: React.FC<Props> = ({ onAddPackageToCart, cartItemIds 
                   Our Single-Use Hygiene Guarantee
                 </p>
                 <p className="text-[11px] leading-relaxed">
-                  Disposables unsealed in front of you. Specialist uses sanitized stainless steel tweezers, single-use wooden spatulas, disposable bedsheets, and leaves your space immaculate.
+                  Disposables unsealed in front of you. Beautician uses sanitized stainless steel tweezers, single-use wooden spatulas, disposable bedsheets, and leaves your space immaculate.
                 </p>
               </div>
             </div>
 
             <div className="mt-6 pt-4 border-t border-[#EAE2D8] flex items-center justify-between gap-3">
-              <span className="text-xl font-bold text-[#1F1A1C]">
+              <span className="text-xl font-bold text-[#1F1A1C] tabular-nums">
                 ₹{activeModalPackage.selling_price.toLocaleString('en-IN')}
               </span>
 
-              <button
-                type="button"
-                onClick={() => {
-                  handleBook(activeModalPackage);
-                  setActiveModalPackage(null);
-                }}
-                className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm"
-              >
-                Add Package to Bag
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = activeModalPackage;
+                    setActiveModalPackage(null);
+                    setCustomizingPackage(p);
+                  }}
+                  className="px-4 py-2.5 bg-amber-50 text-[#4A0417] hover:bg-amber-100 border border-amber-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A880]" />
+                  <span>Change Package</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleBook(activeModalPackage);
+                    setActiveModalPackage(null);
+                  }}
+                  className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm cursor-pointer"
+                >
+                  Add Package to Cart
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Package Customizer Modal */}
+      {customizingPackage && (
+        <CustomizePackageModal
+          isOpen={!!customizingPackage}
+          onClose={() => setCustomizingPackage(null)}
+          basePackage={customizingPackage}
+          availableServices={catalogueServices}
+          onAddCustomizedPackageToCart={(customizedPkg) => {
+            if (onAddCustomizedPackage) {
+              onAddCustomizedPackage(customizedPkg);
+            } else {
+              onAddPackageToCart(customizedPkg);
+            }
+          }}
+        />
       )}
     </div>
   );

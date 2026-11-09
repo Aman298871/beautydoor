@@ -436,9 +436,9 @@ async function seedEssentialData() {
     brand_name: 'BeautyDoor',
     tagline: 'Beauty at your doorstep',
     contact_name: 'Preeti Singh',
-    contact_phone: '+91 93103 72015',
+    contact_phone: '+91 78277 22522',
     contact_email: 'hello@beautydoor.in',
-    support_whatsapp: '+91 93103 72015',
+    support_whatsapp: '+91 78277 22522',
     working_hours_start: '08:00 AM',
     working_hours_end: '06:00 PM',
     slot_charge_8am: '100',
@@ -451,7 +451,7 @@ async function seedEssentialData() {
     razorpay_key_id: '',
     google_places_api_key: '',
     google_place_id: '',
-    min_order_amount: '499',
+    min_order_amount: '1000',
     hygiene_heading: 'Your Beauty. Your Comfort. Our Hygiene Promise.',
     hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.',
     restricted_locations: '["TEST_RESTRICTED_ZONE"]'
@@ -464,10 +464,10 @@ async function seedEssentialData() {
     }
   }
 
-  // Idempotent migration of legacy placeholder contacts to verified business info
+  // Idempotent migration of legacy contact numbers to verified business number (+91 78277 22522)
   await db.execute("UPDATE settings SET value = 'Preeti Singh' WHERE key = 'contact_name' AND (value = '' OR value IS NULL)");
-  await db.execute("UPDATE settings SET value = '+91 93103 72015' WHERE key = 'contact_phone' AND (value = '+91 99991 23456' OR value LIKE '%99991%')");
-  await db.execute("UPDATE settings SET value = '+91 93103 72015' WHERE key = 'support_whatsapp' AND (value = '+91 99991 23456' OR value LIKE '%99991%')");
+  await db.execute("UPDATE settings SET value = '+91 78277 22522' WHERE key = 'contact_phone' AND (value = '+91 93103 72015' OR value LIKE '%93103%' OR value = '+91 99991 23456' OR value LIKE '%99991%')");
+  await db.execute("UPDATE settings SET value = '+91 78277 22522' WHERE key = 'support_whatsapp' AND (value = '+91 93103 72015' OR value LIKE '%93103%' OR value = '+91 99991 23456' OR value LIKE '%99991%')");
   await db.execute("UPDATE settings SET value = 'hello@beautydoor.in' WHERE key = 'contact_email' AND (value = 'concierge@beautydoor.in' OR value LIKE '%concierge%')");
   await db.execute("UPDATE settings SET value = '06:00 PM' WHERE key = 'working_hours_end' AND value = '08:00 PM'");
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
@@ -483,30 +483,36 @@ async function seedEssentialData() {
     }
   }
 
+  // Idempotent category and campaign sync (remove legacy Cheryl's references)
+  await db.execute("UPDATE categories SET description = 'Targeted skin radiance protocols with O3+, Lotus, VLCC, and Korean derma kits.' WHERE id = 'cat-facials'");
+  await db.execute("UPDATE campaigns SET banner_title = 'O3+ Sealed Single-Use Facials at Home', target_service_ids_json = '[\"srv-facial-o3-shine-glow\", \"srv-facial-o3-bridal-glow-vit-c\"]' WHERE id = 'camp-botanical-facials'");
+  await db.execute("UPDATE services SET brand = 'O3+' WHERE id IN ('srv-facial-o3-anti-aging', 'srv-facial-o3-shine-glow', 'srv-facial-o3-bridal-glow-vit-c')");
+  await db.execute("UPDATE services SET steps_count = 7 WHERE id = 'srv-facial-o3-shine-glow'");
+
   // 4. Genuine Delhi NCR Territories & Serviceable Pincodes (idempotent)
   const terCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM territories');
   if (Number(terCountRow?.count || 0) === 0) {
     const territories = [
-      { id: 'ter-del-1', city: 'Delhi', area: 'Vasant Kunj & Shanti Kunj', pin: '110070', fee: 0, min: 499 },
-      { id: 'ter-del-2', city: 'Delhi', area: 'Hauz Khas, Green Park & Safdarjung', pin: '110016', fee: 0, min: 499 },
-      { id: 'ter-del-3', city: 'Delhi', area: 'Saket, Malviya Nagar & Sainik Farm', pin: '110017', fee: 0, min: 499 },
-      { id: 'ter-del-4', city: 'Delhi', area: 'Greater Kailash 1 & 2 (GK)', pin: '110048', fee: 0, min: 499 },
-      { id: 'ter-del-5', city: 'Delhi', area: 'Lajpat Nagar & Defence Colony', pin: '110024', fee: 0, min: 499 },
-      { id: 'ter-del-6', city: 'Delhi', area: 'Dwarka (Sector 4, 6, 10, 12, 19)', pin: '110075', fee: 0, min: 499 },
-      { id: 'ter-del-7', city: 'Delhi', area: 'Punjabi Bagh & Rajouri Garden', pin: '110026', fee: 0, min: 499 },
-      { id: 'ter-del-8', city: 'Delhi', area: 'Rohini (Sector 7, 8, 9, 13, 14)', pin: '110085', fee: 0, min: 499 },
-      { id: 'ter-del-9', city: 'Delhi', area: 'Pitampura & Saraswati Vihar', pin: '110034', fee: 0, min: 499 },
-      { id: 'ter-del-10', city: 'Delhi', area: 'Mayur Vihar Phase 1 & 2', pin: '110091', fee: 0, min: 499 },
-      { id: 'ter-ggn-1', city: 'Gurugram', area: 'DLF Phase 1, 2, 3, 4, 5', pin: '122002', fee: 0, min: 499 },
-      { id: 'ter-ggn-2', city: 'Gurugram', area: 'Sohna Road & Sector 48, 49, 50', pin: '122018', fee: 0, min: 499 },
-      { id: 'ter-ggn-3', city: 'Gurugram', area: 'Golf Course Extn & Sector 65, 66', pin: '122102', fee: 0, min: 499 },
-      { id: 'ter-nda-1', city: 'Noida', area: 'Sector 15, 16, 18 (Film City & Atta)', pin: '201301', fee: 0, min: 499 },
-      { id: 'ter-nda-2', city: 'Noida', area: 'Sector 50, 76, 78 (Expressway Corridor)', pin: '201307', fee: 0, min: 499 },
-      { id: 'ter-nda-3', city: 'Noida', area: 'Sector 128, 137, 142 (Jaypee Greens)', pin: '201304', fee: 0, min: 499 },
-      { id: 'ter-gnda-1', city: 'Greater Noida', area: 'Pari Chowk, Alpha, Beta & Gamma', pin: '201310', fee: 49, min: 599 },
-      { id: 'ter-gzb-1', city: 'Ghaziabad', area: 'Indirapuram & Ahinsa Khand', pin: '201014', fee: 0, min: 499 },
-      { id: 'ter-gzb-2', city: 'Ghaziabad', area: 'Vaishali & Kaushambi', pin: '201010', fee: 0, min: 499 },
-      { id: 'ter-fbd-1', city: 'Faridabad', area: 'Sector 14, 15, 16 & Greenfield', pin: '121002', fee: 0, min: 499 }
+      { id: 'ter-del-1', city: 'Delhi', area: 'Vasant Kunj & Shanti Kunj', pin: '110070', fee: 0, min: 1000 },
+      { id: 'ter-del-2', city: 'Delhi', area: 'Hauz Khas, Green Park & Safdarjung', pin: '110016', fee: 0, min: 1000 },
+      { id: 'ter-del-3', city: 'Delhi', area: 'Saket, Malviya Nagar & Sainik Farm', pin: '110017', fee: 0, min: 1000 },
+      { id: 'ter-del-4', city: 'Delhi', area: 'Greater Kailash 1 & 2 (GK)', pin: '110048', fee: 0, min: 1000 },
+      { id: 'ter-del-5', city: 'Delhi', area: 'Lajpat Nagar & Defence Colony', pin: '110024', fee: 0, min: 1000 },
+      { id: 'ter-del-6', city: 'Delhi', area: 'Dwarka (Sector 4, 6, 10, 12, 19)', pin: '110075', fee: 0, min: 1000 },
+      { id: 'ter-del-7', city: 'Delhi', area: 'Punjabi Bagh & Rajouri Garden', pin: '110026', fee: 0, min: 1000 },
+      { id: 'ter-del-8', city: 'Delhi', area: 'Rohini (Sector 7, 8, 9, 13, 14)', pin: '110085', fee: 0, min: 1000 },
+      { id: 'ter-del-9', city: 'Delhi', area: 'Pitampura & Saraswati Vihar', pin: '110034', fee: 0, min: 1000 },
+      { id: 'ter-del-10', city: 'Delhi', area: 'Mayur Vihar Phase 1 & 2', pin: '110091', fee: 0, min: 1000 },
+      { id: 'ter-ggn-1', city: 'Gurugram', area: 'DLF Phase 1, 2, 3, 4, 5', pin: '122002', fee: 0, min: 1500 },
+      { id: 'ter-ggn-2', city: 'Gurugram', area: 'Sohna Road & Sector 48, 49, 50', pin: '122018', fee: 0, min: 1500 },
+      { id: 'ter-ggn-3', city: 'Gurugram', area: 'Golf Course Extn & Sector 65, 66', pin: '122102', fee: 0, min: 1500 },
+      { id: 'ter-nda-1', city: 'Noida', area: 'Sector 15, 16, 18 (Film City & Atta)', pin: '201301', fee: 0, min: 1500 },
+      { id: 'ter-nda-2', city: 'Noida', area: 'Sector 50, 76, 78 (Expressway Corridor)', pin: '201307', fee: 0, min: 1500 },
+      { id: 'ter-nda-3', city: 'Noida', area: 'Sector 128, 137, 142 (Jaypee Greens)', pin: '201304', fee: 0, min: 1500 },
+      { id: 'ter-gnda-1', city: 'Greater Noida', area: 'Pari Chowk, Alpha, Beta & Gamma', pin: '201310', fee: 49, min: 1500 },
+      { id: 'ter-gzb-1', city: 'Ghaziabad', area: 'Indirapuram & Ahinsa Khand', pin: '201014', fee: 0, min: 1500 },
+      { id: 'ter-gzb-2', city: 'Ghaziabad', area: 'Vaishali & Kaushambi', pin: '201010', fee: 0, min: 1500 },
+      { id: 'ter-fbd-1', city: 'Faridabad', area: 'Sector 14, 15, 16 & Greenfield', pin: '121002', fee: 0, min: 1500 }
     ];
 
     for (const t of territories) {
@@ -516,6 +522,11 @@ async function seedEssentialData() {
       );
     }
   }
+
+  // Idempotent migration to enforce owner-approved city minimum order values
+  // Delhi: ₹1,000; Gurugram / Noida / Greater Noida / Ghaziabad / Faridabad: ₹1,500
+  await db.execute("UPDATE territories SET min_order_amount = 1000 WHERE LOWER(city) LIKE '%delhi%' AND LOWER(city) NOT LIKE '%greater%'");
+  await db.execute("UPDATE territories SET min_order_amount = 1500 WHERE LOWER(city) LIKE '%gurugram%' OR LOWER(city) LIKE '%noida%' OR LOWER(city) LIKE '%ghaziabad%' OR LOWER(city) LIKE '%faridabad%'");
 
   // 5. Promotional Coupons (idempotent)
   const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
@@ -662,23 +673,29 @@ async function seedEssentialData() {
   // 3. Facial Cleanups
   await db.execute("UPDATE services SET image_url = '/images/service_cleanup.jpg' WHERE category_id = 'cat-cleanup' OR LOWER(name) LIKE '%cleanup%'");
 
-  // 4. Facials (Diamond, O3+, Lotus, Cheryl's, Vedicline)
+  // 4. Facials (Diamond, O3+, Lotus, Vedicline)
   await db.execute("UPDATE services SET image_url = '/images/service_facial_treatment.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) NOT LIKE '%korean%' AND LOWER(name) NOT LIKE '%glass%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_diamond.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%diamond%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_facial_o3_shine.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%')");
   await db.execute("UPDATE services SET image_url = '/images/service_facial_gold.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%gold%'");
   await db.execute("UPDATE services SET image_url = '/images/service_facial_wine.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%wine%'");
   await db.execute("UPDATE services SET image_url = '/images/service_facial_pearl.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%pearl%'");
   await db.execute("UPDATE services SET image_url = '/images/service_facial_fruit.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%fruit%'");
 
-  // 5. Bleach & De-Tan
+  // 5. Bleach & De-Tan (General vs Arms vs Legs)
   await db.execute("UPDATE services SET image_url = '/images/service_detan_bleach.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan')");
+  await db.execute("UPDATE services SET image_url = '/images/service_bleach_arms.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%arm%' OR LOWER(name) LIKE '%hand%')");
+  await db.execute("UPDATE services SET image_url = '/images/service_bleach_legs.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%leg%' OR LOWER(name) LIKE '%feet%')");
 
-  // 6. Manicure & Pedicure
+  // 6. Manicure & Pedicure (Dedicated assets for single vs combined)
   await db.execute("UPDATE services SET image_url = '/images/service_manicure_pedicure.jpg' WHERE category_id = 'cat-manicure-pedicure'");
+  await db.execute("UPDATE services SET image_url = '/images/service_pedicure_spa.jpg' WHERE category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%pedicure%' AND LOWER(name) NOT LIKE '%manicure%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_manicure_spa.jpg' WHERE category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%manicure%' AND LOWER(name) NOT LIKE '%pedicure%'");
 
   // 7. Massages
   await db.execute("UPDATE services SET image_url = '/images/service_head_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%head%' OR LOWER(name) LIKE '%scalp%')");
   await db.execute("UPDATE services SET image_url = '/images/service_foot_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%foot%' OR LOWER(name) LIKE '%feet%')");
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) LIKE '%back massage%'");
+  await db.execute("UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) LIKE '%back massage%'");
   await db.execute("UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) NOT LIKE '%head%' AND LOWER(name) NOT LIKE '%scalp%' AND LOWER(name) NOT LIKE '%foot%' AND LOWER(name) NOT LIKE '%feet%' AND LOWER(name) NOT LIKE '%back massage%'");
 
   // 8. Body Scrubs & Body Polishing
@@ -687,20 +704,113 @@ async function seedEssentialData() {
   // 9. Waxing: default arms
   await db.execute("UPDATE services SET image_url = '/images/service_waxing_arms_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-brazilian-peel-off')");
 
+  // Waxing: Cartridge rollon
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_rollon.jpg' WHERE category_id = 'cat-rica-rollon'");
+
+  // Waxing: Front (Stomach, Midriff)
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_front.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%front%' OR LOWER(name) LIKE '%stomach%' OR LOWER(name) LIKE '%midriff%') AND LOWER(name) NOT LIKE '%back%'");
+
   // Waxing: Legs only
   await db.execute("UPDATE services SET image_url = '/images/service_wax_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%legs%' OR LOWER(name) LIKE '%half legs%') AND LOWER(name) NOT LIKE '%arms%' AND LOWER(name) NOT LIKE '%body%'");
 
   // Waxing: Underarms only
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_underarms.jpg' WHERE (LOWER(name) = 'underarms' OR LOWER(name) = 'brazilian peel-off underarms')");
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_underarms.jpg' WHERE LOWER(name) LIKE '%underarm%' AND LOWER(name) NOT LIKE '%full arms%' AND LOWER(name) NOT LIKE '%half arms%'");
 
   // Waxing: Back only
   await db.execute("UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full back%' OR LOWER(name) LIKE '%back wax%')");
 
   // Waxing: Intimate / Sensitive / Bikini / Brazilian / Butt
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_bikini.jpg' WHERE (LOWER(name) LIKE '%bikini%' OR LOWER(name) LIKE '%brazilian%' OR LOWER(name) LIKE '%butt%')");
+  await db.execute("UPDATE services SET image_url = '/images/service_wax_bikini.jpg' WHERE (LOWER(name) LIKE '%bikini%' OR LOWER(name) LIKE '%brazilian%' OR LOWER(name) LIKE '%butt%') OR (category_id = 'cat-brazilian-peel-off' AND LOWER(name) NOT LIKE '%underarm%')");
 
   // Waxing: Multi-zone packages & Full Body
   await db.execute("UPDATE services SET image_url = '/images/service_full_body_wax_combo.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full body%' OR LOWER(name) LIKE '%arms + underarms + full legs%' OR LOWER(name) LIKE '%arms + underarms + half legs%' OR LOWER(name) LIKE '%front + back%')");
+
+
+  // 10. Authentic Treatment Protocols (steps_json)
+  const o3ShineSteps = JSON.stringify([
+    'Deep Pore Cleansing Foam (Purifies surface sebum & pollution debris)',
+    'D-Tan Micro-Derma Exfoliator (Enzymatic gentle buffing to lift dead surface cells)',
+    'Whitening Massage Cream (Nutritive bio-botanical circulation enhancement, 15 mins)',
+    'Meladerm Micro-Emulsion Tonic (Tones pores & restores dermal skin pH)',
+    'Whitening Radiance Serum (High-potency botanical depigmentation infusion)',
+    'Peel-Off Algae Glow Mask (Cooling occlusive mask for instant luminosity, 15 mins)',
+    'SPF 30+ Post-Facial Protection Barrier (Blocks UV-induced free radicals)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7 WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%') AND (steps_json = '[]' OR steps_json IS NULL)", [o3ShineSteps]);
+
+  const o3BridalSteps = JSON.stringify([
+    'Gentle Cleanser Emulsion (Melt away atmospheric impurities and makeup)',
+    'Seaweed Enzymatic Scrub (Targeted cellular renewal and dead skin lifting)',
+    'Seaweed Nourishing Massage Gel (Intense deep dermal hydration, 15 mins)',
+    'Oxygenating Ampoule Serum (Infuses active marine minerals and vital ions)',
+    'Seaweed Rubberizing Peel-Off Mask (Firms skin tissue and seals moisture, 15 mins)',
+    'Cellular Protective Emulsion (Silky protective environmental shield)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6 WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%bridal%' OR LOWER(name) LIKE '%seaweed%') AND (steps_json = '[]' OR steps_json IS NULL)", [o3BridalSteps]);
+
+  const koreanSteps = JSON.stringify([
+    'Double Oil-to-Milk Deep Cleanse (Dissolves impurities without barrier disruption)',
+    'AHA/BHA Mild Enzymatic Rice Polish (Dissolves surface keratosis for glass clarity)',
+    'Centella Asiatica Balancing Skin Hydrator (Multi-depth hydration prep)',
+    'Collagen Booster Lymphatic Facial Massage (Stimulates micro-circulation & cheek contour)',
+    'Hyaluronic Acid & Niacinamide Radiance Ampoule (Deep glass luminosity infusion)',
+    'K-Beauty Hydrogel Cooling Glow Sheet Mask (Seals essence deep into dermal layers, 15 mins)',
+    'Ceramide Barrier Sealant & SPF Shield (Glass skin moisture barrier preservation)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7 WHERE category_id = 'cat-facials' AND (LOWER(name) LIKE '%korean%' OR LOWER(name) LIKE '%glass%') AND (steps_json = '[]' OR steps_json IS NULL)", [koreanSteps]);
+
+  const genericFacialSteps = JSON.stringify([
+    'Double Surface Cleansing & Balancing Toner (Purifies and primes facial skin)',
+    'Micro-Dermabrasion Polishing Scrub (Gently clears dead epidermal cells)',
+    'Radiant Botanical Massage Gel (Stimulates cellular nutrient absorption)',
+    'Deep Nourishing Rejuvenation Cream (Pressure point soothing facial massage, 15 mins)',
+    'Radiance Firming Pack / Peel-Off Mask (Restores elasticity and youthful glow, 15 mins)',
+    'Hydrating Moisture Seal & Broad-Spectrum Sun Shield'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6 WHERE category_id = 'cat-facials' AND (steps_json = '[]' OR steps_json IS NULL)", [genericFacialSteps]);
+
+  const cleanupSteps = JSON.stringify([
+    'Deep Surface Cleansing (Purifies excess sebum, dust, and environmental residue)',
+    'Exfoliating Botanical Scrub & Gentle Steam (Opens pores and softens stubborn comedones)',
+    'Hygienic Extraction (Sterile single-use tool blackhead & whitehead clearance)',
+    'Calming Fruit / Aloe Purifying Pack & Moisture Balancer (Closes pores and seals glow)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4 WHERE category_id = 'cat-cleanup' AND (steps_json = '[]' OR steps_json IS NULL)", [cleanupSteps]);
+
+  const massageSteps = JSON.stringify([
+    'Inhalation Ceremony & Muscle Tension Assessment',
+    'Effleurage Warming with Cold-Pressed Sesame & Olive Oil',
+    'Petrissage Dermal Kneading (Shoulders, Upper Back & Spine)',
+    'Deep Gluteal, Hamstring & Calve Muscle Unwinding',
+    'Acupressure Foot & Scalp Soothing Closure'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%body%' OR LOWER(name) LIKE '%swedish%') AND (steps_json = '[]' OR steps_json IS NULL)", [massageSteps]);
+
+  const scrubSteps = JSON.stringify([
+    'Gentle Dry Body Brushing (Stimulates lymphatic circulation and exfoliates surface)',
+    'Botanical Walnut & Sugar Scrub Full-Body Exfoliation',
+    'Warm Towel Cleansing & Surface Pore Purifying',
+    'Mineral Kaolin Clay Body Wrap & Skin Detoxification',
+    'Hydrating Glow Oil Emulsion & Silky Massage Finish'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE (category_id = 'cat-body-scrub' OR LOWER(name) LIKE '%polishing%' OR LOWER(name) LIKE '%scrub%') AND (steps_json = '[]' OR steps_json IS NULL)", [scrubSteps]);
+
+  const waxSteps = JSON.stringify([
+    'Pre-Wax Skin Sanitization & Calming Aloe Prep',
+    'Precision Temperature-Controlled Wax Application (Thin, uniform spreading)',
+    'Directional Root Extraction with Sterile Cotton Strips (Minimal skin stress)',
+    'Soothing Post-Wax Chamomile Aftercare Gel & Cooling Emulsion'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4 WHERE category_id LIKE '%wax%' AND (steps_json = '[]' OR steps_json IS NULL)", [waxSteps]);
+
+  const maniPediSteps = JSON.stringify([
+    'Warm Mineral Himalayan Salt & Essential Oil Foot / Hand Soak',
+    'Cuticle Softening, Gentle Pushing, Nail Trimming & Precision Shaping',
+    'Pumice Stone Callus Smoothing & Botanical Sugar Scrub Exfoliation',
+    'Acupressure Reflexology Hand/Foot Massage with Rich Cocoa Butter',
+    'Surface Buffing & Hydrating Cuticle Oil Finish'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE category_id = 'cat-manicure-pedicure' AND (steps_json = '[]' OR steps_json IS NULL)", [maniPediSteps]);
 
   // 7. OFFICIAL PACKAGES (idempotent)
   const pkgCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM packages');
@@ -734,6 +844,12 @@ async function seedEssentialData() {
       ]);
     }
   }
+
+  // Ensure package names use simple customer-friendly titles
+  await db.execute("UPDATE packages SET name = 'Facial & Waxing Package' WHERE id = 'pkg-glow-and-smooth'");
+  await db.execute("UPDATE packages SET name = 'Head-to-Toe Beauty Package' WHERE id = 'pkg-korean-glow'");
+  await db.execute("UPDATE packages SET name = 'Massage & Relaxation Package' WHERE id = 'pkg-just-relax'");
+  await db.execute("UPDATE packages SET name = 'Monthly Beauty Package' WHERE id = 'pkg-monthly-glow'");
 
   // 8. HYGIENE & SAFETY COMMITMENTS (idempotent)
   const hygCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM hygiene_commitments');
@@ -801,7 +917,7 @@ async function seedEssentialData() {
         id: 'camp-botanical-facials',
         title: 'Botanical Radiance & O3+ Derma Facials',
         slug: 'botanical-facials-delhi-ncr',
-        banner_title: 'O3+ & Cheryl’s Sealed Single-Use Facials at Home',
+        banner_title: 'O3+ Sealed Single-Use Facials at Home',
         banner_subtitle: 'Oxygenating glow therapy with authentic salon kits unsealed directly at your vanity table with clinical-grade sanitization.',
         banner_image_url: '/banners/facial_luxury_banner.svg',
         cta_label: 'Explore Facials',
@@ -814,7 +930,7 @@ async function seedEssentialData() {
         discount_val: 25,
         badge_text: 'Single-Use Sealed',
         target_category_ids: JSON.stringify(['cat-facials']),
-        target_service_ids: JSON.stringify(['srv-facial-o3-whitening', 'srv-facial-cheryls-glovite']),
+        target_service_ids: JSON.stringify(['srv-facial-o3-shine-glow', 'srv-facial-o3-bridal-glow-vit-c']),
         display_order: 2
       },
       {

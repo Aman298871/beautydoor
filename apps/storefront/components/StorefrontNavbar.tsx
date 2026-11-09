@@ -190,7 +190,7 @@ export const StorefrontNavbar: React.FC<Props> = ({
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#EAE2D8] text-[#4A0417] font-semibold transition-colors cursor-pointer"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-                        <span>Curated Packages (Save up to 20%)</span>
+                        <span>Ready-Made Packages (Save up to 20%)</span>
                       </button>
 
                       <button
@@ -335,7 +335,7 @@ export const StorefrontNavbar: React.FC<Props> = ({
                   >
                     <span className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-[#C5A880]" />
-                      <span>Services & Rituals</span>
+                      <span>All Beauty Services</span>
                     </span>
                     <ChevronDown className={`w-4 h-4 text-[#8C7A7C] transition-transform duration-200 ${mobileServicesExpanded ? 'rotate-180 text-[#4A0417]' : ''}`} />
                   </button>

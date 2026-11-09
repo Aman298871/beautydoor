@@ -179,3 +179,62 @@ A luxury editorial at-home beauty and salon booking platform connecting discerni
 - **Dynamic Handlers**: Configure whether an FAQ executes dynamic queries (`get_services_catalog`, `get_service_pricing`, `get_service_areas`, `get_payment_methods`, `get_cancellation_policy`, `get_active_offers`, `get_support_contact`).
 - **Live Interactive Test Bench**: Instant test pane inside the admin dashboard to evaluate customer and admin queries in real time.
 - **Strict Constraint**: Zero generative AI calls, zero token consumption, deterministic and instant.
+
+***
+
+## 6. Video QA Feedback & Acceptance Results
+
+### A. WhatsApp Booking Video QA & Error Resolution (01:00 Crash)
+- **Incident**: At timestamp `01:00` in `WhatsApp_Video_2026-11-07_at_3.37.48_PM__1__69072b6b.mp4`, the user attempted to confirm an order without a matched territory PIN code, which triggered a fatal error: `Cannot read properties of undefined (reading 'min_order_amount')`.
+- **Root Cause**: Backend `/api/bookings` directly accessed `territory.min_order_amount`, `territory.delivery_fee`, `territory.area_name`, and `territory.city` without safe navigation or city-level fallbacks when `territory` was `null`.
+- **Fix Implemented**:
+  1. Safe navigation implemented throughout `backend/routes/storefrontRoutes.ts` with explicit city fallbacks (`territory?.min_order_amount || cityMinOrder`).
+  2. Owner-approved city minimum order table enforced across both backend and frontend:
+     - **Delhi**: ₹1,000 (Orders of ₹3,000 proceed with zero error)
+     - **Gurugram**: ₹1,500
+     - **Noida / Greater Noida**: ₹1,500
+     - **Ghaziabad**: ₹1,500
+     - **Faridabad**: ₹1,500
+  3. Safe delivery fee fallback (`territory ? territory.delivery_fee : 0`) and address mapping (`territory?.area_name || address.city`).
+  4. Fully verified via automated test script `scripts/verify_video_feedback.ts` (8/8 tests passing).
+
+### B. Mobile Checkout Overlay & Chatbot Collision (00:00 - 00:20)
+- **Issue**: Floating chatbot button was fixed at `bottom-6 right-6 z-50`, obscuring the sticky "Enter Address" and "Place Booking" CTA buttons in `BookingDrawer`.
+- **Fix Implemented**:
+  1. Passed `isDrawerOpen={isCartOpen}` to `CustomerChatbot.tsx`. When the drawer is open, the chatbot completely hides (`return null`).
+  2. Removed decorative pulsing green dot per anti-slop guidelines (§1.E).
+  3. Added safe-area bottom padding `pb-36 sm:pb-40` inside `BookingDrawer` scrollable container so sticky footers never cover form fields or payment options on mobile viewports (320px–430px).
+
+### C. Back Navigation & Step Transition
+- **Issue**: In the customer video, pressing "Back" or navigating between steps caused unexpected drawer behavior or underlying element jumps.
+- **Fix Implemented**:
+  1. Added header "← Back" button on steps 2, 3, and 4.
+  2. Upgraded step indicator into clickable, interactive breadcrumbs (1. Rituals $\to$ 2. Address $\to$ 3. Slot $\to$ 4. Review).
+  3. Explicit `type="button"` and `onClick={() => setStep((prev) => Math.max(1, prev - 1) as any)}` in sticky footer.
+  4. All form fields (`flat`, `landmark`, `area`, `city`, `pincode`, `selectedDate`, `selectedSlot`, `customerName`, `customerPhone`) remain completely preserved in React state across back and forward steps.
+
+### D. Custom Package Acceptance Criteria
+- **Customer Feature**: Customers can customize any official package or build their own bespoke package:
+  1. Open any existing package via "Customize" button on package cards or inside the Details modal.
+  2. View all included treatments with individual duration and price tags.
+  3. Remove any included treatment (down to minimum 1).
+  4. Add eligible treatments across Waxing, Facials, Cleanup, Mani-Pedi, Massage, Bleach & Detan from the catalogue.
+  5. Dynamic real-time recalculation of duration, subtotal, tiered package savings (5% to 20%), and final price.
+  6. One-click "Reset Defaults" restores original package contents.
+  7. Add customized package to ritual bag; backend validates service IDs, prices, calculates discounts, and stores full itemization in `booking_items`.
+
+### E. Stylebee Aesthetic Refinements
+- **Inspiration from Stylebee Desktop Reference**:
+  1. Clean, luxury service card typography with unboxed metadata.
+  2. Star ratings with verified review indicators: `★ 4.8 · 120+ Verified Doorstep Sessions`.
+  3. Benefit highlight bullets on service cards: `100% Single-use sealed disposables` and `Certified background-verified specialist`.
+  4. Refined tabular pricing baselines with clear strikethrough original prices.
+
+***
+
+## 7. Verification & Audit Results
+
+- **Video QA Verification Suite (`scripts/verify_video_feedback.ts`)**: 8/8 Tests Passed (100%).
+- **Full Production Audit Suite (`scripts/audit_suite.ts`)**: 16/16 Tests Passed (100%).
+- **Compilation Check (`compile_applet`)**: Build succeeded.
+- **Lint Check (`lint_applet` / `tsc --noEmit`)**: 0 errors.

@@ -44,7 +44,9 @@ export interface ServiceItem {
   afterInstructions?: string;
   roomConditions?: string;
   equipmentRequirements?: string;
-  hygienePrecautions?: string;
+  brand?: string;
+  stepsCount?: number;
+  treatmentSteps?: string[];
   isActive: boolean;
   isPopular?: boolean;
   isBestseller?: boolean;

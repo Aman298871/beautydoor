@@ -116,7 +116,7 @@ function StorefrontContent() {
     };
 
     setCartItems(prev => [...prev, newItem]);
-    showToast(`Added "${service.name}" to your booking bag.`);
+    showToast(`Added "${service.name}" to your cart.`);
   };
 
   const handleQuickAdd = (service: any) => {
@@ -145,7 +145,32 @@ function StorefrontContent() {
 
     setCartItems(prev => [...prev, newItem]);
     setIsCartOpen(true);
-    showToast(`Added official package "${pkg.name}" to your booking bag.`);
+    showToast(`Added ready-made package "${pkg.name}" to your cart.`);
+  };
+
+  const handleAddCustomizedPackage = (customizedPkg: any) => {
+    const newItem = {
+      cartItemId: `cust-pkg-${customizedPkg.id}-${Date.now()}`,
+      isPackage: true,
+      service: {
+        id: customizedPkg.id,
+        name: customizedPkg.name,
+        sellingPrice: customizedPkg.selling_price || customizedPkg.sellingPrice,
+        durationMins: customizedPkg.duration_mins || customizedPkg.durationMins,
+        variants: [],
+        addons: []
+      },
+      customizedServices: customizedPkg.customizedServices,
+      customPackageName: customizedPkg.name,
+      selectedVariant: undefined,
+      selectedAddons: [],
+      totalItemPrice: customizedPkg.selling_price || customizedPkg.sellingPrice,
+      totalDurationMins: customizedPkg.duration_mins || customizedPkg.durationMins
+    };
+
+    setCartItems(prev => [...prev, newItem as any]);
+    setIsCartOpen(true);
+    showToast(`Added "${customizedPkg.name}" (${customizedPkg.customizedServices?.length || 0} services) to your cart.`);
   };
 
   const handleAddPackageToCart = (packageServices: any[]) => {
@@ -153,7 +178,7 @@ function StorefrontContent() {
       handleQuickAdd(s);
     });
     setIsCartOpen(true);
-    showToast(`Added ${packageServices.length} treatments to your bag with tiered bundle discount!`);
+    showToast(`Added ${packageServices.length} services to your cart.`);
   };
 
   const handleSubmitReview = async (rev: any) => {
@@ -226,6 +251,8 @@ function StorefrontContent() {
       <PackagesPage
         onAddPackageToCart={handleAddOfficialPackage}
         cartItemIds={cartItemIds}
+        services={services}
+        onAddCustomizedPackage={handleAddCustomizedPackage}
       />
     );
   } else if (cleanPath === '/rate-card') {
@@ -339,7 +366,7 @@ function StorefrontContent() {
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#1F1A1C] text-[#FAF7F2] p-4 sm:hidden border-t border-[#382F32] flex items-center justify-between shadow-2xl">
           <div>
             <div className="text-xs text-[#C5A880] font-semibold">
-              {cartItems.length} {cartItems.length === 1 ? 'Ritual' : 'Rituals'} Selected
+              {cartItems.length} {cartItems.length === 1 ? 'Service' : 'Services'} Selected
             </div>
             <div className="text-base font-bold tabular-nums">
               ₹{cartItems.reduce((sum, i) => sum + i.totalItemPrice, 0).toLocaleString('en-IN')}
@@ -350,7 +377,7 @@ function StorefrontContent() {
             className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md flex items-center gap-1.5 shadow-xs"
           >
             <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-            <span>View Ritual Bag</span>
+            <span>View Cart</span>
           </button>
         </div>
       )}
@@ -402,8 +429,8 @@ function StorefrontContent() {
         onSubmitReview={handleSubmitReview}
       />
 
-      {/* Floating Rule-Based Customer FAQ Chatbot */}
-      <CustomerChatbot onOpenBookingModal={() => setIsCartOpen(true)} />
+      {/* Floating Rule-Based Customer FAQ Chatbot (Hidden when booking drawer is active) */}
+      <CustomerChatbot isDrawerOpen={isCartOpen} onOpenBookingModal={() => setIsCartOpen(true)} />
     </div>
   );
 }

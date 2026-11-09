@@ -29,6 +29,9 @@ storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<v
       ...s,
       benefits: JSON.parse(s.benefits_json || '[]'),
       whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+      treatmentSteps: JSON.parse(s.steps_json || '[]'),
+      stepsCount: s.steps_count || 0,
+      brand: s.brand || '',
       variants: variantsByServiceId[s.id] || [],
       addons: addonsByServiceId[s.id] || []
     }));
@@ -156,7 +159,10 @@ storefrontRouter.get('/deals', async (_req: Request, res: Response): Promise<voi
     const populated = deals.map((s) => ({
       ...s,
       benefits: JSON.parse(s.benefits_json || '[]'),
-      whatsIncluded: JSON.parse(s.whats_included_json || '[]')
+      whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+      treatmentSteps: JSON.parse(s.steps_json || '[]'),
+      stepsCount: s.steps_count || 0,
+      brand: s.brand || ''
     }));
 
     res.json({ deals: populated });
@@ -178,7 +184,10 @@ storefrontRouter.get('/bestsellers', async (_req: Request, res: Response): Promi
     const populated = bestsellers.map((s) => ({
       ...s,
       benefits: JSON.parse(s.benefits_json || '[]'),
-      whatsIncluded: JSON.parse(s.whats_included_json || '[]')
+      whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+      treatmentSteps: JSON.parse(s.steps_json || '[]'),
+      stepsCount: s.steps_count || 0,
+      brand: s.brand || ''
     }));
 
     res.json({ bestsellers: populated });
@@ -206,6 +215,9 @@ storefrontRouter.get('/services/:slug', async (req: Request, res: Response): Pro
         ...s,
         benefits: JSON.parse(s.benefits_json || '[]'),
         whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+        treatmentSteps: JSON.parse(s.steps_json || '[]'),
+        stepsCount: s.steps_count || 0,
+        brand: s.brand || '',
         category,
         variants,
         addons
@@ -246,6 +258,9 @@ storefrontRouter.get('/categories/:slug', async (req: Request, res: Response): P
       ...s,
       benefits: JSON.parse(s.benefits_json || '[]'),
       whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+      treatmentSteps: JSON.parse(s.steps_json || '[]'),
+      stepsCount: s.steps_count || 0,
+      brand: s.brand || '',
       variants: variantsByServiceId[s.id] || [],
       addons: addonsByServiceId[s.id] || []
     }));
@@ -383,14 +398,57 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
     const validatedItems: any[] = [];
 
     for (const it of items) {
+      // Check if item is a customized package bundle
+      if (it.isPackage && it.customizedServices && Array.isArray(it.customizedServices) && it.customizedServices.length > 0) {
+        let pkgCustomSubtotal = 0;
+        let pkgCustomDuration = 0;
+        const validCustomServices: any[] = [];
+
+        for (const cs of it.customizedServices) {
+          const csId = typeof cs === 'string' ? cs : (cs.id || cs.serviceId);
+          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [csId])) as any;
+          if (sRow) {
+            pkgCustomSubtotal += sRow.selling_price;
+            pkgCustomDuration += sRow.duration_mins;
+            validCustomServices.push(sRow);
+          }
+        }
+
+        if (validCustomServices.length > 0) {
+          let customTierPct = 0;
+          if (validCustomServices.length >= 5) customTierPct = 20;
+          else if (validCustomServices.length === 4) customTierPct = 15;
+          else if (validCustomServices.length === 3) customTierPct = 10;
+          else if (validCustomServices.length === 2) customTierPct = 5;
+
+          const customDiscount = Math.round((pkgCustomSubtotal * customTierPct) / 100);
+          const customFinalPrice = Math.max(0, pkgCustomSubtotal - customDiscount);
+
+          subtotal += customFinalPrice;
+          validatedItems.push({
+            serviceId: it.packageId || it.serviceId || 'pkg-custom',
+            serviceName: it.customPackageName || `${it.packageName || 'Custom Ritual Package'} (${validCustomServices.length} Treatments)`,
+            variantId: null,
+            variantName: null,
+            addonIds: [],
+            addonNames: validCustomServices.map(s => s.name),
+            unitPrice: pkgCustomSubtotal,
+            finalItemPrice: customFinalPrice,
+            durationMins: pkgCustomDuration,
+            isPackage: true
+          });
+          continue;
+        }
+      }
+
       const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
         validatedItems.push({
           serviceId: pkg.id,
-          serviceName: pkg.name,
-          variantId: null,
-          variantName: null,
+          serviceName: it.variantId ? `${pkg.name} (${it.variantId})` : pkg.name,
+          variantId: it.variantId || null,
+          variantName: it.variantId || null,
           addonIds: [],
           addonNames: [],
           unitPrice: pkg.selling_price,
@@ -606,14 +664,57 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     const validatedItems: any[] = [];
 
     for (const it of items) {
+      // Check if item is a customized package bundle
+      if (it.isPackage && it.customizedServices && Array.isArray(it.customizedServices) && it.customizedServices.length > 0) {
+        let pkgCustomSubtotal = 0;
+        let pkgCustomDuration = 0;
+        const validCustomServices: any[] = [];
+
+        for (const cs of it.customizedServices) {
+          const csId = typeof cs === 'string' ? cs : (cs.id || cs.serviceId);
+          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [csId])) as any;
+          if (sRow) {
+            pkgCustomSubtotal += sRow.selling_price;
+            pkgCustomDuration += sRow.duration_mins;
+            validCustomServices.push(sRow);
+          }
+        }
+
+        if (validCustomServices.length > 0) {
+          let customTierPct = 0;
+          if (validCustomServices.length >= 5) customTierPct = 20;
+          else if (validCustomServices.length === 4) customTierPct = 15;
+          else if (validCustomServices.length === 3) customTierPct = 10;
+          else if (validCustomServices.length === 2) customTierPct = 5;
+
+          const customDiscount = Math.round((pkgCustomSubtotal * customTierPct) / 100);
+          const customFinalPrice = Math.max(0, pkgCustomSubtotal - customDiscount);
+
+          subtotal += customFinalPrice;
+          validatedItems.push({
+            serviceId: it.packageId || it.serviceId || 'pkg-custom',
+            serviceName: it.customPackageName || `${it.packageName || 'Custom Ritual Package'} (${validCustomServices.length} Treatments)`,
+            variantId: null,
+            variantName: null,
+            addonIds: [],
+            addonNames: validCustomServices.map(s => s.name),
+            unitPrice: pkgCustomSubtotal,
+            finalItemPrice: customFinalPrice,
+            durationMins: pkgCustomDuration,
+            isPackage: true
+          });
+          continue;
+        }
+      }
+
       const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
         validatedItems.push({
           serviceId: pkg.id,
-          serviceName: pkg.name,
-          variantId: null,
-          variantName: null,
+          serviceName: it.variantId ? `${pkg.name} (${it.variantId})` : pkg.name,
+          variantId: it.variantId || null,
+          variantName: it.variantId || null,
           addonIds: [],
           addonNames: [],
           unitPrice: pkg.selling_price,
@@ -665,9 +766,28 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       });
     }
 
-    if (subtotal < territory.min_order_amount) {
+    // Determine city-level minimum order threshold
+    // Delhi: ₹1,000; Gurugram / Noida / Faridabad / Ghaziabad: ₹1,500
+    const cityNormalized = (address.city || (territory ? territory.city : 'Delhi')).trim().toLowerCase();
+    let cityMinOrder = 1000;
+    if (cityNormalized.includes('delhi') && !cityNormalized.includes('greater')) {
+      cityMinOrder = 1000;
+    } else if (
+      cityNormalized.includes('gurugram') ||
+      cityNormalized.includes('noida') ||
+      cityNormalized.includes('ghaziabad') ||
+      cityNormalized.includes('faridabad')
+    ) {
+      cityMinOrder = 1500;
+    } else if (territory?.min_order_amount) {
+      cityMinOrder = territory.min_order_amount;
+    }
+
+    const requiredMin = territory?.min_order_amount || cityMinOrder;
+    if (subtotal < requiredMin) {
+      const areaLabel = territory?.area_name || address.city || 'your area';
       res.status(400).json({
-        error: `Minimum order amount for ${territory.area_name} is ₹${territory.min_order_amount}. Current order is ₹${subtotal}.`
+        error: `Minimum order amount for ${areaLabel} is ₹${requiredMin}. Current order is ₹${subtotal}.`
       });
       return;
     }
@@ -696,7 +816,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       }
     }
 
-    const deliveryFee = territory.delivery_fee;
+    const deliveryFee = territory ? (territory.delivery_fee ?? 0) : 0;
 
     // Slot Charge: Configurable via settings with ₹100 approved fallback
     let slotCharge = 0;
@@ -783,8 +903,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       address: {
         flat: address.flat,
         landmark: address.landmark,
-        area: territory.area_name,
-        city: territory.city,
+        area: address.area || address.locality || territory?.area_name || 'Delhi NCR',
+        city: address.city || territory?.city || 'Delhi',
         pincode: cleanPin
       },
       items: validatedItems,

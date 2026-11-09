@@ -280,13 +280,13 @@ export const ServiceDetailPage: React.FC<Props> = ({
                 className="w-full py-3.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-sm font-semibold rounded-md shadow-md transition-colors flex items-center justify-center gap-2 active:scale-98"
               >
                 <Plus className="w-4 h-4 text-[#C5A880]" />
-                <span>Add to Ritual Bag (₹{finalPrice})</span>
+                <span>Add to Cart (₹{finalPrice})</span>
               </button>
 
               {addedSuccess && (
                 <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-center text-xs text-emerald-800 font-semibold flex items-center justify-center gap-1.5 animate-in fade-in">
                   <Check className="w-3.5 h-3.5" />
-                  <span>Added! Proceed to checkout in bag.</span>
+                  <span>Added! Proceed to checkout in your cart.</span>
                 </div>
               )}
 
@@ -294,7 +294,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
                 onClick={onOpenCart}
                 className="w-full py-2.5 bg-white border border-[#E8DDD3] text-[#4A0417] text-xs font-semibold rounded-md hover:bg-[#FAF7F2] transition-colors"
               >
-                View Ritual Bag
+                View Cart
               </button>
             </div>
 

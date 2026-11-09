@@ -164,6 +164,9 @@ adminRouter.get('/services', async (_req: Request, res: Response): Promise<void>
     ...s,
     benefits: JSON.parse(s.benefits_json || '[]'),
     whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+    treatmentSteps: JSON.parse(s.steps_json || '[]'),
+    stepsCount: s.steps_count || 0,
+    brand: s.brand || '',
     variants: variantsByServiceId[s.id] || [],
     addons: addonsByServiceId[s.id] || []
   }));
@@ -175,6 +178,9 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
   const adminUser = req.adminUser?.username || 'admin';
   const serviceId = s.id || `srv-${Date.now()}`;
   const slug = (s.slug || s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) + `-${Math.floor(Math.random() * 1000)}`;
+  const cleanSteps = Array.isArray(s.treatmentSteps) 
+    ? s.treatmentSteps.map((st: any) => typeof st === 'string' ? st.trim() : '').filter(Boolean)
+    : [];
 
   const now = new Date().toISOString();
   // begin transaction block
@@ -182,10 +188,11 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
       INSERT INTO services (
         id, category_id, name, slug, description, benefits_json, duration_mins,
         original_price, selling_price, discount_percent, whats_included_json,
+        steps_json, steps_count, brand,
         is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [serviceId,
-      s.categoryId || 'facial',
+      s.categoryId || 'cat-facials',
       s.name,
       slug,
       s.description || '',
@@ -195,6 +202,9 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
       Number(s.sellingPrice) || 1000,
       Number(s.discountPercent) || 0,
       JSON.stringify(s.whatsIncluded || []),
+      JSON.stringify(cleanSteps),
+      cleanSteps.length,
+      s.brand || null,
       s.isActive ? 1 : 0,
       s.isPopular ? 1 : 0,
       s.isBestseller ? 1 : 0,
@@ -232,6 +242,9 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
   const { id } = req.params;
   const s = req.body;
   const adminUser = req.adminUser?.username || 'admin';
+  const cleanSteps = Array.isArray(s.treatmentSteps)
+    ? s.treatmentSteps.map((st: any) => typeof st === 'string' ? st.trim() : '').filter(Boolean)
+    : null;
 
   // begin transaction block
     const current = (await db.queryRow('SELECT selling_price, name FROM services WHERE id = ?', [id])) as any;
@@ -249,6 +262,9 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
           category_id = ?, is_active = ?, is_published = ?, pending_notes = ?,
           is_popular = ?, is_bestseller = ?,
           is_featured_deal = ?, deal_badge = ?, benefits_json = ?, whats_included_json = ?,
+          steps_json = CASE WHEN ? IS NOT NULL THEN ? ELSE steps_json END,
+          steps_count = CASE WHEN ? IS NOT NULL THEN ? ELSE steps_count END,
+          brand = COALESCE(?, brand),
           before_instructions = ?, after_instructions = ?, room_conditions = ?,
           equipment_requirements = ?, hygiene_precautions = ?, updated_at = ?
       WHERE id = ?
@@ -269,6 +285,11 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
       s.dealBadge || null,
       JSON.stringify(s.benefits || []),
       JSON.stringify(s.whatsIncluded || []),
+      cleanSteps !== null ? 'update' : null,
+      cleanSteps !== null ? JSON.stringify(cleanSteps) : '[]',
+      cleanSteps !== null ? cleanSteps.length : null,
+      cleanSteps !== null ? cleanSteps.length : 0,
+      s.brand || null,
       s.beforeInstructions || null,
       s.afterInstructions || null,
       s.roomConditions || null,
@@ -280,6 +301,24 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
 
   recordAuditLog(adminUser, 'UPDATE_SERVICE', 'CATALOG', id, { price: s.sellingPrice, active: s.isActive }, req.ip);
   res.json({ success: true });
+});
+
+// Dedicated Treatment Steps Management Endpoint
+adminRouter.put('/services/:id/steps', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { treatmentSteps } = req.body;
+  if (!Array.isArray(treatmentSteps)) {
+    res.status(400).json({ error: 'treatmentSteps must be an array of strings' });
+    return;
+  }
+  const cleanSteps = treatmentSteps.map((st: any) => typeof st === 'string' ? st.trim() : '').filter(Boolean);
+  const adminUser = req.adminUser?.username || 'admin';
+  await db.execute(
+    'UPDATE services SET steps_json = ?, steps_count = CASE WHEN ? > 0 THEN ? ELSE steps_count END, updated_at = ? WHERE id = ?',
+    [JSON.stringify(cleanSteps), cleanSteps.length, cleanSteps.length, new Date().toISOString(), id]
+  );
+  recordAuditLog(adminUser, 'UPDATE_SERVICE_STEPS', 'CATALOG', id, { stepsCount: cleanSteps.length }, req.ip);
+  res.json({ success: true, stepsCount: cleanSteps.length, treatmentSteps: cleanSteps });
 });
 
 adminRouter.delete('/services/:id', async (req: Request, res: Response): Promise<void> => {

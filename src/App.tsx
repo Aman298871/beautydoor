@@ -467,7 +467,7 @@ export default function App() {
             className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md flex items-center gap-1.5 shadow-xs"
           >
             <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-            <span>View Ritual Bag</span>
+            <span>View Cart</span>
           </button>
         </div>
       )}

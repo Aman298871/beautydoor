@@ -102,9 +102,9 @@ async function runAudit() {
     const s = settingsRes.data?.settings || {};
     const pass = 
       s.contact_name === 'Preeti Singh' &&
-      s.contact_phone === '+91 93103 72015' &&
+      s.contact_phone === '+91 78277 22522' &&
       s.contact_email === 'hello@beautydoor.in' &&
-      s.support_whatsapp === '+91 93103 72015' &&
+      s.support_whatsapp === '+91 78277 22522' &&
       s.working_hours_start === '08:00 AM' &&
       s.working_hours_end === '06:00 PM';
     results['business_contact_and_hours'] = {
@@ -431,7 +431,9 @@ async function runAudit() {
           locality: 'DLF Phase 4',
           city: 'Gurugram'
         },
-        items: [{ serviceId: 'srv-full-body-massage-750', quantity: 1 }],
+        items: [
+          { serviceId: 'srv-facial-o3-bridal-glow-vit-c', quantity: 1 } // ₹1,999 exceeds ₹1,500 Gurugram min
+        ],
         appointmentDate: '2026-11-12',
         appointmentSlot: '02:00 PM',
         paymentMethod: 'cod'

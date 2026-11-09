@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Clock, Plus, Check, CheckCircle2, ChevronRight, Wind, HeartHandshake, Star, HelpCircle, ChevronDown } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Clock, Plus, Check, CheckCircle2, ChevronRight, Wind, HeartHandshake, Star, HelpCircle, ChevronDown, MapPin, Search, AlertCircle } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
 import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
+import { BUSINESS_CONFIG } from '../../../src/config/businessConfig.ts';
 
 interface Props {
   campaigns: any[];
@@ -31,11 +32,41 @@ export const HomePage: React.FC<Props> = ({
   onQuickAdd,
   onAddPackage,
   cartItemIds = [],
-  onOpenWriteReview
+  onOpenWriteReview,
+  onCheckPincode,
+  onSelectTerritory
 }) => {
   const { navigate } = useRouter();
   const [activeModalService, setActiveModalService] = useState<any | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [pincodeInput, setPincodeInput] = useState('');
+  const [checkingPincode, setCheckingPincode] = useState(false);
+  const [pincodeResult, setPincodeResult] = useState<{ isServiceable?: boolean; message?: string; territory?: any } | null>(null);
+
+  const handlePincodeSubmit = async (e?: React.FormEvent, overrideCode?: string) => {
+    if (e) e.preventDefault();
+    const code = (overrideCode || pincodeInput).trim();
+    if (!code || code.length < 6) {
+      setPincodeResult({ isServiceable: false, message: 'Please enter a valid 6-digit Delhi NCR pincode.' });
+      return;
+    }
+    setCheckingPincode(true);
+    try {
+      if (onCheckPincode) {
+        const res = await onCheckPincode(code);
+        setPincodeResult(res);
+        if (res?.isServiceable && res?.territory && onSelectTerritory) {
+          onSelectTerritory(res.territory);
+        }
+      } else {
+        setPincodeResult({ isServiceable: true, message: `Area (${code}) is fully serviced! Regular booking windows open daily.` });
+      }
+    } catch {
+      setPincodeResult({ isServiceable: false, message: 'Could not check area right now. Delhi, Gurugram, and Noida are serviced.' });
+    } finally {
+      setCheckingPincode(false);
+    }
+  };
 
   // Service photo resolver
   const getPhoto = (srv: any) => {
@@ -44,7 +75,7 @@ export const HomePage: React.FC<Props> = ({
 
   // Curated category grid
   const keyCategories = [
-    { id: 'cat-facials', name: 'Facials & Radiance', desc: 'O3+, Lotus & Cheryl’s single-use glowing rituals', img: '/images/service_facial_treatment.jpg' },
+    { id: 'cat-facials', name: 'Facials & Radiance', desc: 'O3+, Lotus & VLCC single-use glowing rituals', img: '/images/service_facial_treatment.jpg' },
     { id: 'cat-rica-waxing', name: 'Italian RICA Waxing', desc: 'Gentle lipo-soluble wax for smooth, low-irritation hair removal', img: '/images/service_waxing_arms_legs.jpg' },
     { id: 'cat-massage', name: 'Massage Therapies', desc: 'Full body Swedish, head, back, and foot stress relief', img: '/images/service_body_massage.jpg' },
     { id: 'cat-manicure-pedicure', name: 'Manicure & Pedicure', desc: 'Effervescent rose petal foot soaks and sterile tool grooming', img: '/images/service_manicure_pedicure.jpg' },
@@ -174,6 +205,108 @@ export const HomePage: React.FC<Props> = ({
         </div>
       </section>
 
+      {/* 1.5 CHECK IF WE SERVE YOUR AREA */}
+      <section className="bg-white border-b border-[#E8DDD3] py-8 sm:py-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-[#FAF7F2] border border-[#E8DDD3] rounded-2xl p-6 sm:p-8 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1">
+                  <MapPin className="w-3.5 h-3.5 text-[#C5A880]" />
+                  <span>Doorstep Service Coverage</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C]">
+                  Check if We Serve Your Area
+                </h2>
+                <p className="text-xs sm:text-sm text-[#554749] mt-0.5 font-light">
+                  Serving homes across South Delhi, Gurugram, Noida, and surrounding Delhi NCR hubs.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePincodeSubmit} className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <MapPin className="w-4 h-4 text-[#8C7A7C] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={pincodeInput}
+                  onChange={(e) => {
+                    setPincodeInput(e.target.value.replace(/\D/g, ''));
+                    setPincodeResult(null);
+                  }}
+                  placeholder="Enter your 6-digit PIN code (e.g. 110017)"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-[#E8DDD3] focus:border-[#4A0417] focus:ring-1 focus:ring-[#4A0417] rounded-lg text-sm text-[#1F1A1C] placeholder-[#8C7A7C] outline-hidden font-medium"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={checkingPincode}
+                className="px-6 py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-sm font-semibold rounded-lg shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {checkingPincode ? (
+                  <span>Checking...</span>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4 text-[#C5A880]" />
+                    <span>Check Area</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Select Popular Areas */}
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#7A6B6D]">
+              <span className="font-medium text-[#4A0417]">Popular Areas:</span>
+              {[
+                { name: 'South Delhi', pin: '110017' },
+                { name: 'Gurugram DLF', pin: '122002' },
+                { name: 'Noida Sec 62', pin: '201301' },
+                { name: 'West Delhi', pin: '110027' },
+                { name: 'East Delhi', pin: '110092' }
+              ].map((area) => (
+                <button
+                  key={area.pin}
+                  type="button"
+                  onClick={() => {
+                    setPincodeInput(area.pin);
+                    handlePincodeSubmit(undefined, area.pin);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-[#F4EFEA] border border-[#E8DDD3] rounded-md text-[#4A3E3D] hover:text-[#4A0417] transition-colors"
+                >
+                  {area.name} ({area.pin})
+                </button>
+              ))}
+            </div>
+
+            {/* Pincode Result Banner */}
+            {pincodeResult && (
+              <div
+                className={`mt-4 p-4 rounded-xl flex items-start gap-3 text-xs sm:text-sm ${
+                  pincodeResult.isServiceable
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                    : 'bg-amber-50 border border-amber-200 text-amber-900'
+                }`}
+              >
+                {pincodeResult.isServiceable ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <div className="font-semibold">
+                    {pincodeResult.isServiceable ? 'Yes! We serve your location.' : 'Area Check Notice'}
+                  </div>
+                  <div className="mt-0.5 text-xs text-opacity-90">
+                    {pincodeResult.message || (pincodeResult.isServiceable ? 'Verified beauticians are ready to visit your home.' : 'Please check the entered pincode or contact us directly.')}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* 2. POPULAR BEAUTY SERVICES */}
       {bestsellers && bestsellers.length > 0 && (
         <section className="py-14 sm:py-20 bg-white border-b border-[#E8DDD3]">
@@ -185,7 +318,7 @@ export const HomePage: React.FC<Props> = ({
                   <span>Most Requested</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
-                  Popular Beauty Rituals
+                  Popular Beauty Services
                 </h2>
                 <p className="text-sm sm:text-base text-[#554749] mt-1 font-light">
                   Loved by clients across South Delhi, Gurugram, and Noida.
@@ -275,12 +408,12 @@ export const HomePage: React.FC<Props> = ({
                         {inCart ? (
                           <>
                             <Check className="w-4 h-4" />
-                            <span>In Bag</span>
+                            <span>In Cart</span>
                           </>
                         ) : (
                           <>
                             <Plus className="w-4 h-4 text-[#C5A880]" />
-                            <span>Add</span>
+                            <span>Add to Cart</span>
                           </>
                         )}
                       </button>
@@ -298,7 +431,7 @@ export const HomePage: React.FC<Props> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <div className="text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1">
-              Curated Treatment Categories
+              Beauty Categories
             </div>
             <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
               Explore By Category
@@ -333,7 +466,7 @@ export const HomePage: React.FC<Props> = ({
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-[#F0EAE1] flex items-center justify-between text-xs font-semibold text-[#4A0417]">
-                  <span>Explore Rituals</span>
+                  <span>Explore Services</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
@@ -350,13 +483,13 @@ export const HomePage: React.FC<Props> = ({
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-                  <span>Curated Packages</span>
+                  <span>Ready-Made Packages</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
-                  Signature Head-to-Toe Packages
+                  Ready-Made Beauty Packages
                 </h2>
                 <p className="text-base text-[#554749] mt-1 font-light">
-                  Save up to 30% with bundled salon ceremonies unsealed at home.
+                  Choose a ready-made package or make your own by adding the services you want.
                 </p>
               </div>
 
@@ -440,12 +573,12 @@ export const HomePage: React.FC<Props> = ({
                         {inCart ? (
                           <>
                             <Check className="w-3.5 h-3.5" />
-                            <span>In Bag</span>
+                            <span>In Cart</span>
                           </>
                         ) : (
                           <>
                             <Plus className="w-3.5 h-3.5 text-[#C5A880]" />
-                            <span>Add Package</span>
+                            <span>Add to Cart</span>
                           </>
                         )}
                       </button>
@@ -478,9 +611,9 @@ export const HomePage: React.FC<Props> = ({
               <div className="w-12 h-12 rounded-xl bg-[#FAF7F2] border border-[#C5A880]/40 flex items-center justify-center text-[#4A0417]">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-serif font-bold text-[#1F1A1C]">Verified Female Specialists</h3>
+              <h3 className="text-lg font-serif font-bold text-[#1F1A1C]">Verified Female Beauticians</h3>
               <p className="text-sm text-[#554749] leading-relaxed font-light">
-                Background-verified and certified estheticians who respect your home sanctity and personal comfort.
+                Background-verified and certified female beauticians who respect your home sanctity and personal comfort.
               </p>
             </div>
 
@@ -537,9 +670,9 @@ export const HomePage: React.FC<Props> = ({
               <div className="w-12 h-12 rounded-full bg-[#4A0417] text-[#FAF7F2] font-serif font-bold text-xl flex items-center justify-center mx-auto shadow-md">
                 1
               </div>
-              <h3 className="text-xl font-serif font-bold text-[#1F1A1C]">Select Your Rituals</h3>
+              <h3 className="text-xl font-serif font-bold text-[#1F1A1C]">Select Your Services</h3>
               <p className="text-sm text-[#554749] leading-relaxed font-light">
-                Browse our transparent menu of waxing, facials, massages, and packages. Add treatments to your booking bag.
+                Browse our transparent menu of waxing, facials, massages, and packages. Add services to your cart.
               </p>
             </div>
 
@@ -557,9 +690,9 @@ export const HomePage: React.FC<Props> = ({
               <div className="w-12 h-12 rounded-full bg-[#4A0417] text-[#FAF7F2] font-serif font-bold text-xl flex items-center justify-center mx-auto shadow-md">
                 3
               </div>
-              <h3 className="text-xl font-serif font-bold text-[#1F1A1C]">Specialist Arrives & Pampering Begins</h3>
+              <h3 className="text-xl font-serif font-bold text-[#1F1A1C]">Beautician Arrives & Service Begins</h3>
               <p className="text-sm text-[#554749] leading-relaxed font-light">
-                Your certified therapist brings all sealed kits and disposables. Relax completely and pay after completion.
+                Your certified female beautician brings all sealed kits and disposables. Relax completely and pay after completion.
               </p>
             </div>
           </div>
@@ -667,8 +800,8 @@ export const HomePage: React.FC<Props> = ({
           <div className="mt-10 text-center">
             <p className="text-sm text-[#7A6B6D]">
               Have a special requirement or bridal inquiry?{' '}
-              <a href="tel:+919310372015" className="text-[#4A0417] font-semibold underline">
-                Call Preeti Singh at +91 93103 72015
+              <a href={BUSINESS_CONFIG.phoneTel} className="text-[#4A0417] font-semibold underline">
+                Call {BUSINESS_CONFIG.contactPerson} at {BUSINESS_CONFIG.phone}
               </a>
             </p>
           </div>
@@ -693,6 +826,9 @@ export const HomePage: React.FC<Props> = ({
             imageUrl: getPhoto(activeModalService),
             variants: activeModalService.variants || [],
             addons: activeModalService.addons || [],
+            treatmentSteps: activeModalService.treatmentSteps || (activeModalService.steps_json ? JSON.parse(activeModalService.steps_json) : []),
+            stepsCount: activeModalService.stepsCount || activeModalService.steps_count || 0,
+            brand: activeModalService.brand || '',
             isActive: true
           }}
           onClose={() => setActiveModalService(null)}

@@ -127,6 +127,18 @@ export const BookingDrawer: React.FC<Props> = ({
   const deliveryFee = matchedTerritory ? matchedTerritory.deliveryFee : 0;
   const finalTotal = Math.max(0, amountAfterBundle - couponDiscount + deliveryFee + slotCharge);
 
+  // City-level minimum order logic: Delhi ₹1,000; Gurugram/Noida/Faridabad/Ghaziabad ₹1,500
+  const getCityMinOrder = (selectedCity: string): number => {
+    const c = (selectedCity || '').toLowerCase();
+    if (c.includes('delhi') && !c.includes('greater')) return 1000;
+    if (c.includes('gurugram') || c.includes('noida') || c.includes('faridabad') || c.includes('ghaziabad')) return 1500;
+    return 1000;
+  };
+
+  const activeMinOrder = matchedTerritory?.minOrderAmount || getCityMinOrder(city);
+  const isBelowMin = subtotal > 0 && subtotal < activeMinOrder;
+  const minDeficit = Math.max(0, activeMinOrder - subtotal);
+
   // Optional pincode lookup for auto-filling area
   const handlePincodeChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 6);
@@ -210,7 +222,9 @@ export const BookingDrawer: React.FC<Props> = ({
         isPackage: i.isPackage,
         packageId: i.isPackage ? i.service.id : undefined,
         variantId: i.selectedVariant?.id,
-        addonIds: i.selectedAddons.map(a => a.id)
+        addonIds: i.selectedAddons.map(a => a.id),
+        customizedServices: (i as any).customizedServices,
+        customPackageName: (i as any).customPackageName
       })),
       appointmentDate: selectedDate,
       appointmentSlot: selectedSlot,
@@ -231,7 +245,7 @@ export const BookingDrawer: React.FC<Props> = ({
         throw new Error(data.error || 'Failed to place booking');
       }
 
-      // If Razorpay online payment was selected, process order & backend signature verification
+      // If Razorpay online payment was selected, create order securely
       if (paymentMethod === 'razorpay' && (data.booking?.id || data.bookingId)) {
         const bId = data.booking?.id || data.bookingId;
         const amountToPay = data.totalPayable || finalTotal;
@@ -242,21 +256,34 @@ export const BookingDrawer: React.FC<Props> = ({
             body: JSON.stringify({ amount: amountToPay, bookingId: bId })
           });
           const orderData = await orderRes.json();
-
-          if (orderData.orderId) {
-            await fetch('/api/storefront/payment/razorpay/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpayOrderId: orderData.orderId,
-                razorpayPaymentId: `pay_test_${Date.now()}`,
-                razorpaySignature: 'sig_test_verified_success',
-                bookingId: bId
-              })
+          // If live Razorpay checkout is configured on window, launch payment handler;
+          // Otherwise keep payment status as 'pending' to be safely collected via UPI/Cash after service
+          if ((window as any).Razorpay && orderData.keyId && orderData.orderId && !orderData.keyId.includes('placeholder')) {
+            // Live Razorpay options
+            const rzp = new (window as any).Razorpay({
+              key: orderData.keyId,
+              amount: orderData.amount,
+              currency: orderData.currency || 'INR',
+              order_id: orderData.orderId,
+              name: 'BeautyDoor Doorstep Services',
+              description: `Appointment ${bId}`,
+              handler: async (resp: any) => {
+                await fetch('/api/storefront/payment/razorpay/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    razorpayOrderId: resp.razorpay_order_id,
+                    razorpayPaymentId: resp.razorpay_payment_id,
+                    razorpaySignature: resp.razorpay_signature,
+                    bookingId: bId
+                  })
+                });
+              }
             });
+            rzp.open();
           }
         } catch (payErr) {
-          console.warn('Online payment verification fallback:', payErr);
+          console.warn('Online payment initialization notice:', payErr);
         }
       }
 
@@ -267,8 +294,8 @@ export const BookingDrawer: React.FC<Props> = ({
         appointmentDate: selectedDate,
         appointmentSlot: selectedSlot,
         totalPayable: data.totalPayable || finalTotal,
-        paymentMethod: paymentMethod === 'razorpay' ? 'RAZORPAY' : 'COD',
-        paymentStatus: paymentMethod === 'razorpay' ? 'verified' : 'pending',
+        paymentMethod: paymentMethod === 'razorpay' ? 'ONLINE' : 'COD',
+        paymentStatus: 'pending',
         items: cartItems.map(i => ({ serviceName: i.service.name, finalItemPrice: i.totalItemPrice }))
       };
 
@@ -306,42 +333,92 @@ export const BookingDrawer: React.FC<Props> = ({
             className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden z-10"
           >
             {/* Drawer Header */}
-            <div className="bg-[#FAF7F2] p-5 border-b border-[#E8DDD3] flex items-center justify-between shrink-0">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
-                  <span>BeautyDoor Concierge</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Delhi NCR</span>
+            <div className="bg-[#FAF7F2] p-4 sm:p-5 border-b border-[#E8DDD3] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                {step > 1 && step < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setStep((prev) => Math.max(1, prev - 1) as any)}
+                    className="p-1.5 -ml-1 text-[#4A0417] hover:bg-[#EAE2D8] rounded-full transition-colors flex items-center gap-1 font-semibold text-xs cursor-pointer"
+                    aria-label="Back to previous step"
+                    title="Back to previous step"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Back</span>
+                  </button>
+                )}
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
+                    <span>BeautyDoor Concierge</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{city}</span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-serif font-bold text-[#1F1A1C] mt-0.5">
+                    {step === 5
+                      ? 'Booking Confirmed'
+                      : step === 1
+                      ? 'Your Cart'
+                      : step === 2
+                      ? 'Doorstep Address'
+                      : step === 3
+                      ? 'Choose Schedule'
+                      : 'Review & Payment'}
+                  </h3>
                 </div>
-                <h3 className="text-xl font-serif font-bold text-[#1F1A1C] mt-0.5">
-                  {step === 5 ? 'Booking Confirmed' : 'Reserve Your Ritual'}
-                </h3>
               </div>
 
               <button
+                type="button"
                 onClick={onClose}
-                className="p-1.5 text-[#6B5A5C] hover:text-[#1F1A1C] hover:bg-[#EAE2D8] rounded-full transition-colors"
+                className="p-1.5 text-[#6B5A5C] hover:text-[#1F1A1C] hover:bg-[#EAE2D8] rounded-full transition-colors cursor-pointer"
                 aria-label="Close drawer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Step Indicator (Steps 1 to 4) */}
+            {/* Step Indicator (Steps 1 to 4) - Clickable Breadcrumbs */}
             {step < 5 && (
-              <div className="bg-white px-5 py-2.5 border-b border-[#F0E6DE] flex items-center justify-between text-xs font-semibold text-[#8C7A7C] shrink-0">
-                <span className={step === 1 ? 'text-[#4A0417]' : ''}>1. Rituals</span>
+              <div className="bg-white px-4 sm:px-5 py-2.5 border-b border-[#F0E6DE] flex items-center justify-between text-xs font-semibold text-[#8C7A7C] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className={`hover:text-[#4A0417] transition-colors cursor-pointer ${step === 1 ? 'text-[#4A0417] font-bold underline decoration-[#C5A880]' : ''}`}
+                >
+                  1. Rituals
+                </button>
                 <ChevronRight className="w-3.5 h-3.5 text-[#D8CCC0]" />
-                <span className={step === 2 ? 'text-[#4A0417]' : ''}>2. Address</span>
+                <button
+                  type="button"
+                  onClick={() => { if (cartItems.length > 0) setStep(2); }}
+                  disabled={cartItems.length === 0}
+                  className={`hover:text-[#4A0417] transition-colors cursor-pointer ${step === 2 ? 'text-[#4A0417] font-bold underline decoration-[#C5A880]' : ''} disabled:opacity-40`}
+                >
+                  2. Address
+                </button>
                 <ChevronRight className="w-3.5 h-3.5 text-[#D8CCC0]" />
-                <span className={step === 3 ? 'text-[#4A0417]' : ''}>3. Slot</span>
-                <ChevronRight className="w-3.5 h-3.5 text-[#4A0417]" />
-                <span className={step === 4 ? 'text-[#4A0417]' : ''}>4. Review</span>
+                <button
+                  type="button"
+                  onClick={() => { if (cartItems.length > 0 && flat.trim()) setStep(3); }}
+                  disabled={cartItems.length === 0 || !flat.trim()}
+                  className={`hover:text-[#4A0417] transition-colors cursor-pointer ${step === 3 ? 'text-[#4A0417] font-bold underline decoration-[#C5A880]' : ''} disabled:opacity-40`}
+                >
+                  3. Slot
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-[#D8CCC0]" />
+                <button
+                  type="button"
+                  onClick={() => { if (cartItems.length > 0 && flat.trim() && selectedSlot) setStep(4); }}
+                  disabled={cartItems.length === 0 || !flat.trim() || !selectedSlot}
+                  className={`hover:text-[#4A0417] transition-colors cursor-pointer ${step === 4 ? 'text-[#4A0417] font-bold underline decoration-[#C5A880]' : ''} disabled:opacity-40`}
+                >
+                  4. Review
+                </button>
               </div>
             )}
 
-            {/* Drawer Content Area with AnimatePresence step transition */}
-            <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
+            {/* Drawer Content Area with safe-area padding so sticky footer never obscures fields */}
+            <div className="p-5 sm:p-6 pb-36 sm:pb-40 overflow-y-auto flex-1 space-y-6">
               <AnimatePresence mode="wait">
                 {/* STEP 1: CART REVIEW */}
                 {step === 1 && (
@@ -390,6 +467,20 @@ export const BookingDrawer: React.FC<Props> = ({
                                     Add-ons: {item.selectedAddons.map(a => a.name).join(', ')}
                                   </p>
                                 )}
+                                {((item as any).customizedServices?.length > 0) && (
+                                  <div className="mt-1.5 space-y-1">
+                                    <p className="text-[11px] font-semibold text-[#4A0417]">
+                                      Customized Inclusions ({(item as any).customizedServices.length}):
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {(item as any).customizedServices.map((cs: any, idx: number) => (
+                                        <span key={idx} className="text-[10px] bg-white text-[#1F1A1C] border border-[#E8DDD3] px-2 py-0.5 rounded-sm">
+                                          ✓ {typeof cs === 'string' ? cs : cs.name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                                 <p className="text-xs text-[#8C7A7C] tabular-nums">
                                   {formatDuration(item.totalDurationMins)}
                                 </p>
@@ -397,8 +488,9 @@ export const BookingDrawer: React.FC<Props> = ({
 
                               <div className="flex flex-col items-end justify-between self-stretch shrink-0">
                                 <button
+                                  type="button"
                                   onClick={() => onRemoveCartItem(item.cartItemId)}
-                                  className="text-[#9C8C8E] hover:text-red-700 p-1"
+                                  className="text-[#9C8C8E] hover:text-red-700 p-1 cursor-pointer"
                                   title="Remove service"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -415,6 +507,22 @@ export const BookingDrawer: React.FC<Props> = ({
                           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
                             <span className="font-semibold">Tiered Bundle Discount ({bundlePercent}%)</span>
                             <span className="font-bold tabular-nums">-₹{packageDiscount}</span>
+                          </div>
+                        )}
+
+                        {isBelowMin && (
+                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                            <span className="font-bold text-[#4A0417] uppercase tracking-wider text-[10px] bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 shrink-0">
+                              Min Order
+                            </span>
+                            <div>
+                              <p className="font-semibold text-[#1F1A1C]">
+                                At-home visits in {city} require a minimum booking of ₹{activeMinOrder.toLocaleString('en-IN')}.
+                              </p>
+                              <p className="text-[#6B5A5C] text-[11px] mt-0.5">
+                                Add treatments worth <strong>₹{minDeficit.toLocaleString('en-IN')}</strong> more to unlock doorstep arrival.
+                              </p>
+                            </div>
                           </div>
                         )}
                       </>
@@ -489,22 +597,34 @@ export const BookingDrawer: React.FC<Props> = ({
                         <label className="text-xs font-semibold text-[#1F1A1C]">City *</label>
                         <select
                           value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          className="w-full px-3 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-[#1F1A1C] focus:outline-hidden focus:border-[#4A0417]"
+                          onChange={(e) => {
+                            setCity(e.target.value);
+                            setMatchedTerritory(null);
+                          }}
+                          className="w-full px-3 py-2.5 text-xs sm:text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-[#1F1A1C] focus:outline-hidden focus:border-[#4A0417]"
                         >
-                          <option value="Delhi">Delhi</option>
-                          <option value="Gurugram">Gurugram</option>
-                          <option value="Noida">Noida</option>
-                          <option value="Greater Noida">Greater Noida</option>
-                          <option value="Ghaziabad">Ghaziabad</option>
-                          <option value="Faridabad">Faridabad</option>
+                          <option value="Delhi">Delhi (Min ₹1,000)</option>
+                          <option value="Gurugram">Gurugram (Min ₹1,500)</option>
+                          <option value="Noida">Noida (Min ₹1,500)</option>
+                          <option value="Greater Noida">Greater Noida (Min ₹1,500)</option>
+                          <option value="Ghaziabad">Ghaziabad (Min ₹1,500)</option>
+                          <option value="Faridabad">Faridabad (Min ₹1,500)</option>
                         </select>
                       </div>
                     </div>
 
+                    {isBelowMin && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+                        <span className="font-bold text-[#4A0417] shrink-0">City Minimum:</span>
+                        <span>
+                          Service in <strong>{city}</strong> requires a minimum order of <strong>₹{activeMinOrder.toLocaleString('en-IN')}</strong>. Current ritual bag is ₹{subtotal.toLocaleString('en-IN')}. Please add ₹{minDeficit.toLocaleString('en-IN')} more to unlock doorstep scheduling.
+                        </span>
+                      </div>
+                    )}
+
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
                       <Check className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>Complimentary doorstep arrival across Delhi NCR. No delivery fee.</span>
+                      <span>Complimentary doorstep arrival across Delhi NCR. No hidden travel fees.</span>
                     </div>
                   </motion.div>
                 )}
@@ -902,7 +1022,7 @@ export const BookingDrawer: React.FC<Props> = ({
 
             {/* Sticky Drawer Footer with Pricing & Step Navigation (Hidden on Success) */}
             {step < 5 && cartItems.length > 0 && (
-              <div className="bg-[#FAF7F2] p-4 sm:p-5 border-t border-[#E8DDD3] space-y-3 shrink-0">
+              <div className="bg-[#FAF7F2] p-4 sm:p-5 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-[#E8DDD3] space-y-3 shrink-0">
                 {/* Price breakdown summary */}
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-[#6B5A5C]">
@@ -933,12 +1053,13 @@ export const BookingDrawer: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* Stepper Buttons */}
+                {/* Stepper Buttons with explicit type and minimum order enforcement */}
                 <div className="flex items-center gap-2 pt-1">
                   {step > 1 && (
                     <button
-                      onClick={() => setStep((prev) => (prev - 1) as any)}
-                      className="px-4 py-2.5 text-xs font-semibold text-[#554749] hover:bg-white rounded-md border border-[#E8DDD3] transition-colors flex items-center gap-1"
+                      type="button"
+                      onClick={() => setStep((prev) => Math.max(1, prev - 1) as any)}
+                      className="px-4 py-2.5 text-xs font-semibold text-[#554749] hover:bg-white rounded-md border border-[#E8DDD3] transition-colors flex items-center gap-1 cursor-pointer shrink-0"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
                       <span>Back</span>
@@ -947,30 +1068,34 @@ export const BookingDrawer: React.FC<Props> = ({
 
                   {step === 1 && (
                     <button
+                      type="button"
+                      disabled={cartItems.length === 0 || isBelowMin}
                       onClick={() => setStep(2)}
-                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-40 cursor-pointer"
                     >
-                      <span>Enter Address</span>
+                      <span>{isBelowMin ? `Add ₹${minDeficit.toLocaleString('en-IN')} More to Book` : 'Enter Address'}</span>
                       <ArrowRight className="w-4 h-4 text-[#C5A880]" />
                     </button>
                   )}
 
                   {step === 2 && (
                     <button
-                      disabled={!flat.trim() || (!area.trim() && !landmark.trim())}
+                      type="button"
+                      disabled={!flat.trim() || (!area.trim() && !landmark.trim()) || isBelowMin}
                       onClick={() => setStep(3)}
-                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
                     >
-                      <span>Select Appointment Slot</span>
+                      <span>{isBelowMin ? `Min ₹${activeMinOrder.toLocaleString('en-IN')} Required` : 'Select Appointment Slot'}</span>
                       <ArrowRight className="w-4 h-4 text-[#C5A880]" />
                     </button>
                   )}
 
                   {step === 3 && (
                     <button
+                      type="button"
                       disabled={!selectedSlot}
                       onClick={() => setStep(4)}
-                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
                     >
                       <span>Review & Contact</span>
                       <ArrowRight className="w-4 h-4 text-[#C5A880]" />
@@ -979,12 +1104,13 @@ export const BookingDrawer: React.FC<Props> = ({
 
                   {step === 4 && (
                     <button
-                      disabled={isSubmitting || !customerName || !customerPhone}
+                      type="button"
+                      disabled={isSubmitting || !customerName.trim() || !customerPhone.trim() || isBelowMin}
                       onClick={handleConfirmBooking}
-                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-md"
+                      className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-md cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4 text-[#C5A880]" />
-                      <span>{isSubmitting ? 'Confirming...' : 'Place Booking (Pay After Service)'}</span>
+                      <span>{isSubmitting ? 'Confirming...' : isBelowMin ? `Min Order ₹${activeMinOrder}` : 'Place Booking (Pay After Service)'}</span>
                     </button>
                   )}
                 </div>

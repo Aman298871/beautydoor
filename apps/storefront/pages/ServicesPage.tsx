@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown } from 'lucide-react';
+import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
@@ -116,7 +116,7 @@ export const ServicesPage: React.FC<Props> = ({
                 className="px-4 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs sm:text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Sparkles className="w-4 h-4 text-[#C5A880]" />
-                <span>Curated Packages (Save 20%)</span>
+                <span>Ready-Made Packages (Save 20%)</span>
               </button>
 
               <button
@@ -299,8 +299,23 @@ export const ServicesPage: React.FC<Props> = ({
                       )}
                     </div>
 
-                    {/* Card Content */}
-                    <div className="p-5 sm:p-6 space-y-2">
+                    {/* Card Content with Stylebee-inspired layout */}
+                    <div className="p-5 sm:p-6 space-y-2.5">
+                      {/* Quality & Sterile Kit Indicator */}
+                      <div className="flex items-center gap-2 text-xs text-[#6B5A5C]">
+                        {srv.brand ? (
+                          <span className="font-semibold text-[#4A0417] bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#E8DDD3] text-[10px] uppercase tracking-wider">
+                            {srv.brand}
+                          </span>
+                        ) : (
+                          <span className="font-medium text-[#7A6B6D] text-[10px] uppercase tracking-wider">
+                            BeautyDoor Exclusive
+                          </span>
+                        )}
+                        <span aria-hidden="true" className="text-[#C5A880]">·</span>
+                        <span className="text-[11px] text-[#7A6B6D]">Single-Use Sterile Kit</span>
+                      </div>
+
                       <h3
                         onClick={() => setActiveModalService(srv)}
                         className="text-lg sm:text-xl font-serif font-bold text-[#1F1A1C] hover:text-[#4A0417] cursor-pointer transition-colors leading-snug line-clamp-2"
@@ -308,9 +323,21 @@ export const ServicesPage: React.FC<Props> = ({
                         {srv.name}
                       </h3>
 
-                      <p className="text-sm text-[#554749] line-clamp-2 leading-relaxed font-light">
+                      <p className="text-xs sm:text-sm text-[#554749] line-clamp-2 leading-relaxed font-light">
                         {srv.description}
                       </p>
+
+                      {/* Feature Bullet Highlights */}
+                      <div className="pt-1 space-y-1 text-xs text-[#5C4D4F]">
+                        <div className="flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>100% Single-use sealed disposables</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Certified background-verified specialist</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -346,12 +373,12 @@ export const ServicesPage: React.FC<Props> = ({
                       {inCart ? (
                         <>
                           <Check className="w-4 h-4" />
-                          <span>In Bag</span>
+                          <span>In Cart</span>
                         </>
                       ) : (
                         <>
                           <Plus className="w-4 h-4 text-[#C5A880]" />
-                          <span>Add to Bag</span>
+                          <span>Add to Cart</span>
                         </>
                       )}
                     </button>
@@ -399,6 +426,9 @@ export const ServicesPage: React.FC<Props> = ({
             imageUrl: getServicePhoto(activeModalService),
             variants: activeModalService.variants || [],
             addons: activeModalService.addons || [],
+            treatmentSteps: activeModalService.treatmentSteps || (activeModalService.steps_json ? JSON.parse(activeModalService.steps_json) : []),
+            stepsCount: activeModalService.stepsCount || activeModalService.steps_count || 0,
+            brand: activeModalService.brand || '',
             isActive: true
           }}
           onClose={() => setActiveModalService(null)}

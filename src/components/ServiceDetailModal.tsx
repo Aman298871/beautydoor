@@ -130,7 +130,12 @@ export const ServiceDetailModal: React.FC<Props> = ({
               
               {/* Title & Key Metrics (Desktop Header) */}
               <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#4A0417] tracking-wider uppercase mb-1">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#4A0417] tracking-wider uppercase mb-1">
+                  {service.brand && (
+                    <span className="bg-[#FAF7F2] text-[#4A0417] border border-[#E8DDD3] px-2.5 py-0.5 rounded font-bold shadow-2xs">
+                      {service.brand}
+                    </span>
+                  )}
                   <span>Professional At-Home Beauty Ritual</span>
                   <span aria-hidden="true">·</span>
                   <span className="flex items-center gap-1 font-normal text-[#6B5A5C]">
@@ -211,42 +216,48 @@ export const ServiceDetailModal: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* 3. Step-by-Step Process (Where applicable) */}
-              {isFacial && (
-                <div className="space-y-2.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
-                    Step-by-Step Treatment Protocol
-                  </h3>
-                  <ol className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#554749]">
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">1.</span>
-                      <span>Deep Pore Cleanser & Surface Detox</span>
-                    </li>
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">2.</span>
-                      <span>Gentle Botanical Micro-Exfoliation Scrub</span>
-                    </li>
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">3.</span>
-                      <span>Steam & Gentle Extraction (if needed)</span>
-                    </li>
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">4.</span>
-                      <span>Calming Radiance Facial Massage</span>
-                    </li>
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">5.</span>
-                      <span>Targeted Skin Nourishing Pack / Mask</span>
-                    </li>
-                    <li className="flex items-start gap-2 p-2 bg-[#FAF7F2] rounded border border-[#E8DDD3]">
-                      <span className="font-bold text-[#4A0417] shrink-0">6.</span>
-                      <span>Hydrating Serum & Protective Finish</span>
-                    </li>
-                  </ol>
-                </div>
-              )}
+              {/* 3. Step-by-Step Treatment Protocol (Dynamic based on stored treatmentSteps) */}
+              {service.treatmentSteps && service.treatmentSteps.length > 0 ? (
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between pb-1 border-b border-[#F4EFEA]">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[#4A0417] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                      <span>Steps Included</span>
+                    </h3>
+                    <span className="text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider">
+                      {service.brand ? `${service.brand} · ` : ''}{service.treatmentSteps.length} Verified Steps
+                    </span>
+                  </div>
 
-              {service.slug?.includes('body-polishing') && (
+                  <div className="space-y-2.5">
+                    {service.treatmentSteps.map((step, idx) => (
+                      <div 
+                        key={idx}
+                        className="flex items-start gap-3.5 p-3 sm:p-3.5 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] hover:border-[#C5A880] transition-colors"
+                      >
+                        <span className="px-2 py-0.5 bg-[#4A0417] text-white text-[10px] font-bold tracking-wider rounded uppercase shrink-0 mt-0.5 shadow-2xs">
+                          STEP {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <p className="text-xs sm:text-sm text-[#1F1A1C] font-medium leading-relaxed">
+                          {step}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : isFacial ? (
+                <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] flex items-start gap-3">
+                  <Sparkles className="w-4 h-4 text-[#C5A880] shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
+                      {service.brand ? `${service.brand} Facial Protocol` : 'At-Home Facial Ceremony'}
+                    </h4>
+                    <p className="text-xs text-[#554749] mt-0.5 leading-relaxed font-light">
+                      {service.stepsCount ? `Certified ${service.stepsCount}-step professional salon protocol` : 'Certified salon-grade single-use protocol'}, unsealed and tailored to your skin type at your vanity table with hospital-grade sanitization.
+                    </p>
+                  </div>
+                </div>
+              ) : service.slug?.includes('body-polishing') ? (
                 <div className="space-y-2.5">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
                     The 5-Step Polishing Ceremony
@@ -274,7 +285,7 @@ export const ServiceDetailModal: React.FC<Props> = ({
                     </li>
                   </ol>
                 </div>
-              )}
+              ) : null}
 
               {/* 4. Before-Service Preparation & Client Guidelines */}
               <div className="bg-[#FAF7F2] p-4 rounded-xl border border-[#E8DDD3] space-y-2">
@@ -389,7 +400,7 @@ export const ServiceDetailModal: React.FC<Props> = ({
                 className="px-6 py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-sm font-semibold rounded-lg flex items-center gap-2 shadow-md hover:shadow-lg transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4A0417]"
               >
                 <Plus className="w-4 h-4 text-[#C5A880]" />
-                <span>Add to Bag / Book Service</span>
+                <span>Add to Cart</span>
               </button>
             </div>
 

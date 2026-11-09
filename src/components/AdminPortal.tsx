@@ -20,8 +20,10 @@ import {
   ShieldAlert,
   ArrowUpRight,
   TrendingUp,
-  Download,
-  AlertCircle
+  AlertCircle,
+  ChevronUp,
+  ChevronDown,
+  Sparkles
 } from 'lucide-react';
 import {
   Booking,
@@ -60,9 +62,57 @@ export const AdminPortal: React.FC<Props> = ({
   const [selectedBeauticianId, setSelectedBeauticianId] = useState<string>('');
   const [dispatchStatusNote, setDispatchStatusNote] = useState<string>('');
 
-  // Service Edit modal
   const [editingService, setEditingService] = useState<ServiceItem | null>(null);
   const [isNewService, setIsNewService] = useState(false);
+  const [newStepInput, setNewStepInput] = useState('');
+  const [showStepPreview, setShowStepPreview] = useState(false);
+
+  const handleAddStep = () => {
+    if (!editingService || !newStepInput.trim()) return;
+    const currentSteps = editingService.treatmentSteps || [];
+    const updatedSteps = [...currentSteps, newStepInput.trim()];
+    setEditingService({
+      ...editingService,
+      treatmentSteps: updatedSteps,
+      stepsCount: updatedSteps.length
+    });
+    setNewStepInput('');
+  };
+
+  const handleEditStep = (index: number, text: string) => {
+    if (!editingService) return;
+    const currentSteps = [...(editingService.treatmentSteps || [])];
+    currentSteps[index] = text;
+    setEditingService({
+      ...editingService,
+      treatmentSteps: currentSteps
+    });
+  };
+
+  const handleDeleteStep = (index: number) => {
+    if (!editingService) return;
+    const currentSteps = [...(editingService.treatmentSteps || [])];
+    currentSteps.splice(index, 1);
+    setEditingService({
+      ...editingService,
+      treatmentSteps: currentSteps,
+      stepsCount: currentSteps.length
+    });
+  };
+
+  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
+    if (!editingService) return;
+    const currentSteps = [...(editingService.treatmentSteps || [])];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentSteps.length) return;
+    const temp = currentSteps[index];
+    currentSteps[index] = currentSteps[targetIndex];
+    currentSteps[targetIndex] = temp;
+    setEditingService({
+      ...editingService,
+      treatmentSteps: currentSteps
+    });
+  };
 
   // New Beautician modal
   const [isNewBeauticianModal, setIsNewBeauticianModal] = useState(false);
@@ -929,17 +979,20 @@ export const AdminPortal: React.FC<Props> = ({
       {/* SERVICE EDIT MODAL */}
       {editingService && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-xl overflow-hidden border border-[#E8DDD3] p-6 space-y-4 animate-in fade-in duration-150">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#E8DDD3]">
-              <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
-                {isNewService ? 'Add New Beauty Treatment' : 'Edit Service & Pricing'}
-              </h4>
-              <button onClick={() => setEditingService(null)} className="p-1 text-[#6B5A5C]">
+              <div>
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  {isNewService ? 'Add New Beauty Treatment' : 'Edit Service & Treatment Protocol'}
+                </h4>
+                <p className="text-xs text-[#7A6B6D]">Manage pricing, details, and verified step-by-step treatment journey</p>
+              </div>
+              <button onClick={() => setEditingService(null)} className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveService} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveService} className="space-y-3.5 text-xs">
               <div>
                 <label className="font-semibold text-[#1F1A1C] block mb-1">Service Title *</label>
                 <input
@@ -951,6 +1004,29 @@ export const AdminPortal: React.FC<Props> = ({
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#1F1A1C] block mb-1">Brand Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. O3+, Lotus, VLCC, FYC"
+                    value={editingService.brand || ''}
+                    onChange={(e) => setEditingService({ ...editingService, brand: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#1F1A1C] block mb-1">Recorded Step Count (Metadata)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 4, 5, 7, 9"
+                    value={editingService.stepsCount || (editingService.treatmentSteps?.length || '')}
+                    onChange={(e) => setEditingService({ ...editingService, stepsCount: Number(e.target.value) })}
+                    className="w-full px-2.5 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md tabular-nums"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="font-semibold text-[#1F1A1C] block mb-1">Category</label>
@@ -959,14 +1035,19 @@ export const AdminPortal: React.FC<Props> = ({
                     onChange={(e) => setEditingService({ ...editingService, categoryId: e.target.value })}
                     className="w-full px-2.5 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
                   >
-                    <option value="waxing">Waxing</option>
-                    <option value="facial">Facial & Cleanups</option>
-                    <option value="mani-pedi">Mani-Pedi</option>
-                    <option value="hair-care">Hair Care</option>
-                    <option value="de-tan">De-Tan & Bleach</option>
-                    <option value="massage">Massage & Spa</option>
-                    <option value="threading">Threading</option>
-                    <option value="bridal">Bridal</option>
+                    <option value="cat-facials">Facials & Cleanups</option>
+                    <option value="cat-rica-waxing">Italian RICA Waxing</option>
+                    <option value="cat-honey-waxing">Classic Honey Waxing</option>
+                    <option value="cat-korean-waxing">Korean Waxing</option>
+                    <option value="cat-brazilian-peel-off">Brazilian Peel-Off</option>
+                    <option value="cat-manicure-pedicure">Mani-Pedi</option>
+                    <option value="cat-massage">Massage & Spa</option>
+                    <option value="cat-body-scrub">Body Polishing & Scrub</option>
+                    <option value="cat-bleach">Bleach</option>
+                    <option value="cat-detan">De-Tan</option>
+                    <option value="cat-threading">Threading</option>
+                    <option value="cat-hair-spa">Hair Spa & Scalp</option>
+                    <option value="cat-packages">Packages</option>
                   </select>
                 </div>
 
@@ -1026,17 +1107,132 @@ export const AdminPortal: React.FC<Props> = ({
                 />
               </div>
 
+              {/* Treatment Steps Protocol Manager */}
+              <div className="border border-[#E8DDD3] rounded-xl p-3.5 bg-[#FAF7F2] space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#E8DDD3]">
+                  <div>
+                    <h5 className="font-semibold text-xs text-[#4A0417] uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                      <span>Treatment Steps Protocol ({editingService.treatmentSteps?.length || 0} Steps)</span>
+                    </h5>
+                    <p className="text-[11px] text-[#7A6B6D] font-light">
+                      Manage actual ordered treatment steps. Empty protocols will not display fabricated steps to customers.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowStepPreview(!showStepPreview)}
+                    className="text-[11px] font-semibold text-[#4A0417] hover:underline cursor-pointer"
+                  >
+                    {showStepPreview ? 'Hide Customer Preview' : 'Show Customer Preview'}
+                  </button>
+                </div>
+
+                {/* Steps List */}
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {(editingService.treatmentSteps && editingService.treatmentSteps.length > 0) ? (
+                    editingService.treatmentSteps.map((step, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-[#E8DDD3]">
+                        <span className="px-2 py-0.5 bg-[#4A0417] text-white text-[10px] font-bold rounded shrink-0">
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <input
+                          type="text"
+                          value={step}
+                          onChange={(e) => handleEditStep(idx, e.target.value)}
+                          className="flex-1 px-2 py-1 bg-transparent border-b border-transparent focus:border-[#4A0417] text-xs text-[#1F1A1C] focus:outline-hidden"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveStep(idx, 'up')}
+                            className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C] disabled:opacity-30 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === (editingService.treatmentSteps?.length || 0) - 1}
+                            onClick={() => handleMoveStep(idx, 'down')}
+                            className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C] disabled:opacity-30 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStep(idx)}
+                            className="p-1 text-[#9C8C8E] hover:text-red-700 cursor-pointer"
+                            title="Delete Step"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-3 text-xs text-[#8C7A7C] italic">
+                      No treatment steps stored yet. Add verified steps below.
+                    </div>
+                  )}
+                </div>
+
+                {/* Add New Step Input */}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    placeholder="Enter next actual protocol step..."
+                    value={newStepInput}
+                    onChange={(e) => setNewStepInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddStep();
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddStep}
+                    className="px-3 py-1.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Step</span>
+                  </button>
+                </div>
+
+                {/* Customer View Live Preview */}
+                {showStepPreview && editingService.treatmentSteps && editingService.treatmentSteps.length > 0 && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-[#C5A880] space-y-2">
+                    <p className="text-[10px] uppercase font-bold text-[#8C7A7C]">Live Customer Preview (Timeline)</p>
+                    <div className="space-y-1.5">
+                      {editingService.treatmentSteps.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs">
+                          <span className="px-1.5 py-0.5 bg-[#4A0417] text-white text-[9px] font-bold rounded">
+                            STEP {String(i + 1).padStart(2, '0')}
+                          </span>
+                          <span className="text-[#1F1A1C]">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
                 <button
                   type="button"
                   onClick={() => setEditingService(null)}
-                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded"
+                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
+                  className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F] cursor-pointer"
                 >
                   Save Changes
                 </button>

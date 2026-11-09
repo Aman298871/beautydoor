@@ -88,15 +88,13 @@ export async function generateDynamicAnswer(handler: string | null, staticAnswer
           WHERE c.slug = 'massage' AND s.is_active = 1
         `, [])) as any;
 
-        const minOrder = await getSetting('min_order_amount', '499');
-
         let reply = `💰 Transparent BeautyDoor Pricing (No hidden travel or kit fees):\n\n`;
         reply += `• Waxing Rituals: from ₹${lowestWaxing?.min_p || 199}\n`;
         reply += `• Facials & Cleanups: from ₹${lowestFacial?.min_p || 699}\n`;
         reply += `• Manicure & Pedicure: from ₹${lowestManiPedi?.min_p || 499}\n`;
         reply += `• De-Tan & Bleach: from ₹${lowestDeTan?.min_p || 299}\n`;
         reply += `• Body Massage & Spas: from ₹${lowestMassage?.min_p || 899}\n\n`;
-        reply += `Minimum order value for doorstep delivery is ₹${minOrder}. Genuine products and disposable setup included with every visit!`;
+        reply += `Doorstep minimum booking: Delhi ₹1,000; Gurugram, Noida & Faridabad ₹1,500. Genuine products and sterile single-use setup included with every visit!`;
         return reply;
       }
 
@@ -180,8 +178,8 @@ export async function generateDynamicAnswer(handler: string | null, staticAnswer
 
       case 'get_support_contact': {
         const contactName = await getSetting('contact_name', 'Preeti Singh');
-        const phone = await getSetting('contact_phone', '+91 93103 72015');
-        const whatsapp = await getSetting('support_whatsapp', '+91 93103 72015');
+        const phone = await getSetting('contact_phone', '+91 78277 22522');
+        const whatsapp = await getSetting('support_whatsapp', '+91 78277 22522');
         const email = await getSetting('contact_email', 'hello@beautydoor.in');
         const start = await getSetting('working_hours_start', '08:00 AM');
         const end = await getSetting('working_hours_end', '06:00 PM');
@@ -326,8 +324,8 @@ faqRouter.get('/customer', async (req: Request, res: Response): Promise<void> =>
       ORDER BY display_order ASC
     `, []));
 
-    const supportPhone = await getSetting('contact_phone', '+91 93103 72015');
-    const supportWhatsapp = await getSetting('support_whatsapp', '+91 93103 72015');
+    const supportPhone = await getSetting('contact_phone', '+91 78277 22522');
+    const supportWhatsapp = await getSetting('support_whatsapp', '+91 78277 22522');
     const contactName = await getSetting('contact_name', 'Preeti Singh');
 
     res.json({
@@ -417,8 +415,8 @@ faqRouter.post('/customer/query', checkRateLimit, async (req: Request, res: Resp
       suggestedOptions,
       contactSupport: {
         contactName: await getSetting('contact_name', 'Preeti Singh'),
-        phone: await getSetting('contact_phone', '+91 93103 72015'),
-        whatsapp: await getSetting('support_whatsapp', '+91 93103 72015')
+        phone: await getSetting('contact_phone', '+91 78277 22522'),
+        whatsapp: await getSetting('support_whatsapp', '+91 78277 22522')
       }
     });
   } catch (err: any) {

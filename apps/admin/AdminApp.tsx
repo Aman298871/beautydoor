@@ -2173,10 +2173,10 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">Helpline Phone</label>
                     <input
                       type="text"
-                      value={settings.contact_phone || '+91 93103 72015'}
+                      value={settings.contact_phone || '+91 78277 22522'}
                       onChange={(e) => setSettings({ ...settings, contact_phone: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
-                      placeholder="+91 93103 72015"
+                      placeholder="+91 78277 22522"
                     />
                   </div>
 
@@ -2184,10 +2184,10 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">WhatsApp Support</label>
                     <input
                       type="text"
-                      value={settings.support_whatsapp || '+91 93103 72015'}
+                      value={settings.support_whatsapp || '+91 78277 22522'}
                       onChange={(e) => setSettings({ ...settings, support_whatsapp: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
-                      placeholder="+91 93103 72015"
+                      placeholder="+91 78277 22522"
                     />
                   </div>
 

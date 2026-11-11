@@ -246,7 +246,7 @@ export const CHATBOT_CATEGORIES: ChatbotCategory[] = [
   {
     id: 'cat-after-service',
     name: 'After-Service & Feedback',
-    tagline: 'Share review, report concerns & concierge assistance',
+    tagline: 'Share review, report concerns & customer support assistance',
     icon: 'MessageSquare',
     subcategories: [
       {
@@ -256,7 +256,7 @@ export const CHATBOT_CATEGORIES: ChatbotCategory[] = [
       },
       {
         id: 'sub-after-contact',
-        name: 'Direct Concierge Desk',
+        name: 'Direct Customer Support Desk',
         questionIds: ['faq-speak-with-owner']
       }
     ]
@@ -627,15 +627,14 @@ The total price displayed in your cart at checkout is the exact final price you 
     category: 'cat-pricing',
     subcategory: 'sub-price-min-order',
     question: 'What is the minimum order amount for doorstep service?',
-    answer: `To dispatch verified female specialists with full salon equipment to your home, the minimum booking amounts are:
+    answer: `Minimum booking amount:
+• **Delhi – ₹1,000**
+• **Haryana – ₹1,500** (Gurugram, Faridabad)
+• **Noida – ₹1,500** (Noida, Greater Noida)
 
-• **Delhi (All Zones)**: **₹1,000**
-• **Gurugram / Gurgaon**: **₹1,500**
-• **Noida & Greater Noida**: **₹1,500**
-• **Faridabad**: **₹1,500**
-• **Ghaziabad**: **₹1,500**
+Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.
 
-You can combine any number of services (e.g. Waxing + Threading + Cleanup) to easily meet your city threshold!`,
+You can combine any number of treatments (such as Waxing + Threading + Facial) to easily meet your location threshold with 100% complimentary travel!`,
     followUpQuestionIds: ['faq-min-order-why', 'faq-serviceable-cities'],
     actionType: 'services',
     keywords: ['minimum order', 'min order', 'delhi minimum order', 'gurgaon minimum order', 'minimum kitne ka book kar sakte hain']

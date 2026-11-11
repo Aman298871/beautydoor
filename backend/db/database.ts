@@ -452,6 +452,10 @@ async function seedEssentialData() {
     google_places_api_key: '',
     google_place_id: '',
     min_order_amount: '1000',
+    min_order_delhi: '1000',
+    min_order_haryana: '1500',
+    min_order_noida: '1500',
+    min_order_policy_text: 'Minimum booking amount: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500. Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.',
     hygiene_heading: 'Your Beauty. Your Comfort. Our Hygiene Promise.',
     hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.',
     restricted_locations: '["TEST_RESTRICTED_ZONE"]'
@@ -470,6 +474,9 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '+91 78277 22522' WHERE key = 'support_whatsapp' AND (value = '+91 93103 72015' OR value LIKE '%93103%' OR value = '+91 99991 23456' OR value LIKE '%99991%')");
   await db.execute("UPDATE settings SET value = 'hello@beautydoor.in' WHERE key = 'contact_email' AND (value = 'concierge@beautydoor.in' OR value LIKE '%concierge%')");
   await db.execute("UPDATE settings SET value = '06:00 PM' WHERE key = 'working_hours_end' AND value = '08:00 PM'");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_delhi', '1000') ON CONFLICT (key) DO NOTHING");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_haryana', '1500') ON CONFLICT (key) DO NOTHING");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_noida', '1500') ON CONFLICT (key) DO NOTHING");
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
 
   // 3. Official Service Categories (idempotent)
@@ -812,7 +819,96 @@ async function seedEssentialData() {
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE category_id = 'cat-manicure-pedicure' AND (steps_json = '[]' OR steps_json IS NULL)", [maniPediSteps]);
 
-  // 7. OFFICIAL PACKAGES (idempotent)
+  // --- OWNER-APPROVED AUTHORITATIVE CATALOGUE OVERRIDES (November 9, 2026) ---
+  // 1. Moonstar Korean Facial: exactly 6 steps, brand Moonstar
+  const moonstar6Steps = JSON.stringify([
+    'Double Cleansing & Purifying Prep (Deep pore impurities and surface sebum removal)',
+    'AHA/BHA Enzymatic Rice Exfoliator (Gentle buffing to lift dull surface skin cells)',
+    'Centella Asiatica Hydration Mist (Restores natural dermal pH balance)',
+    'Collagen Boosting Facial Massage (Acupressure circulation and lymphatic drainage, 15 mins)',
+    'Glass-Skin K-Beauty Glow Sheet Mask (Intensive essence penetration and cooling, 15 mins)',
+    'Ceramide Barrier Protective Sealant (Locks in moisture with lightweight sun shield)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Moonstar' WHERE id = 'srv-facial-moonstar-korean' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%moonstar%')", [moonstar6Steps]);
+
+  // 2. Body Scrub + Body Pack: single option, ₹499, 30 mins, exactly 2 steps
+  const bodyScrubPack2Steps = JSON.stringify([
+    'Botanical Body Scrub Exfoliation (Gentle full-body sloughing of dead skin cells and surface impurities)',
+    'Nourishing Mineral Body Pack (Deeply soothing Kaolin clay hydration wrap leaving skin soft and renewed)'
+  ]);
+  await db.execute("UPDATE services SET name = 'Body Scrub + Body Pack', slug = 'body-scrub-body-pack', steps_json = ?, steps_count = 2, selling_price = 499, original_price = 699, duration_mins = 30, is_published = 1 WHERE id = 'srv-body-scrub-pack-499'", [bodyScrubPack2Steps]);
+  await db.execute("UPDATE services SET is_published = 0, name = 'Body Scrub + Body Pack (Duplicate Option)' WHERE id = 'srv-body-scrub-body-pack'");
+
+  // 3. Body Massage: single option, ₹1,299, 45 mins, 5 steps
+  await db.execute("UPDATE services SET name = 'Body Massage', slug = 'body-massage', selling_price = 1299, original_price = 1799, duration_mins = 45, steps_count = 5, is_published = 1 WHERE id = 'srv-massage-full-body-olive-oil'");
+  await db.execute("UPDATE services SET is_published = 0, name = 'Full Body Massage (Legacy ₹750 Option)' WHERE id = 'srv-full-body-massage-750'");
+
+  // 4. FYC Classic Manicure & Pedicure: exactly 3 steps, brand FYC Classic
+  const fycClassic3Steps = JSON.stringify([
+    'Effervescent Warm Mineral Foot & Hand Soak (Softens cuticles and relaxes extremities)',
+    'Precision Grooming, Nail Trimming & Cuticle Care (Hygienic shaping and gentle buffing)',
+    'Soothing Massage with Hydrating Lotion & Cuticle Oil Finish (Restores moisture and natural shine)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 3, brand = 'FYC Classic', name = 'FYC Classic Mani-Pedi' WHERE id = 'srv-mani-pedi-regular-duo'", [fycClassic3Steps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 3, brand = 'FYC Classic', name = 'FYC Classic Pedicure' WHERE id = 'srv-mani-pedi-fyc-pedicure'", [fycClassic3Steps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 3, brand = 'FYC Classic', name = 'Classic FYC Manicure' WHERE id = 'srv-mani-pedi-fyc-manicure'", [fycClassic3Steps]);
+
+  // 5. Korean Mani-Pedi: Moonstar brand, ₹849, 5 steps
+  const koreanManiPedi5Steps = JSON.stringify([
+    'Korean Enzyme Hand/Foot Soak',
+    'Cuticle Precision Detailing & Nail Grooming',
+    'K-Beauty Rice Exfoliating Scrub',
+    'Ginseng & Vitamin Hydration Massage',
+    'K-Glow Moisture Seal & Oil Finish'
+  ]);
+  await db.execute("UPDATE services SET name = 'Moonstar Korean Mani-Pedi', brand = 'Moonstar', selling_price = 849, steps_count = 5, steps_json = ? WHERE id = 'srv-mani-pedi-korean-5step'", [koreanManiPedi5Steps]);
+
+  // 5b. Sara Rose Mani-Pedi: Sara Rose brand, ₹950, 5 steps
+  const saraRose5Steps = JSON.stringify([
+    'Rose Petal & Mineral Salt Warm Soak',
+    'Nail Shaping, Cuticle Care & Buffing',
+    'Botanical Rose Scrub Exfoliation',
+    'Rose Hydrating Massage Cream',
+    'Soothing Rose Pack & Cuticle Oil Finish'
+  ]);
+  await db.execute("UPDATE services SET name = 'Sara Rose Mani-Pedi', brand = 'Sara Rose', selling_price = 950, steps_count = 5, steps_json = ? WHERE id = 'srv-mani-pedi-sara-rose'", [saraRose5Steps]);
+
+  // 5c. O3 Pedicure: O3 brand, ₹799, 5 steps
+  const o3Pedicure5Steps = JSON.stringify([
+    'O3 Foot Cleansing & Bubble Soak',
+    'Nail Trimming, Cuticle Care & Shaping',
+    'O3 Deep Exfoliation Micro-Scrub',
+    'O3 Reflexology Massage Cream',
+    'O3 Dermal Protective Moisture Finish'
+  ]);
+  await db.execute("UPDATE services SET name = 'O3 Pedicure', brand = 'O3', selling_price = 799, steps_count = 5, steps_json = ? WHERE id = 'srv-mani-pedi-o3-pedicure'", [o3Pedicure5Steps]);
+
+  // 6. Underarms Waxing: clearly mention wax type in service name
+  await db.execute("UPDATE services SET name = 'RICA Underarms' WHERE id = 'srv-rica-underarms'");
+  await db.execute("UPDATE services SET name = 'Honey Wax Underarms' WHERE id = 'srv-honey-underarms'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Full Arms + Underarms + Full Legs' WHERE id = 'srv-rollon-full-arms-underarms-full-legs'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Front + Back Wax' WHERE id = 'srv-rollon-front-back-combo'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Full Arms + Underarms' WHERE id = 'srv-rollon-full-arms-underarms'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Full Legs' WHERE id = 'srv-rollon-full-legs'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Half Legs' WHERE id = 'srv-rollon-half-legs'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Half Arms' WHERE id = 'srv-rollon-half-arms'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Full Back' WHERE id = 'srv-rollon-full-back'");
+  await db.execute("UPDATE services SET name = 'RICA Roll-On Full Front' WHERE id = 'srv-rollon-full-front'");
+
+  // 7. Asta Berry Facial: exactly 5 steps, brand Asta Berry, price ₹749, duration 50 mins
+  const astaBerry5Steps = JSON.stringify([
+    'Wine Scrub',
+    'Wine Gel',
+    'Wine Creme',
+    'Wine Mask',
+    'Wine Serum'
+  ]);
+  await db.execute(
+    "UPDATE services SET name = 'Asta Berry Facial', brand = 'Asta Berry', steps_count = 5, steps_json = ?, description = '5-step Asta Berry Wine Facial kit: Wine Scrub, Wine Gel, Wine Creme, Wine Mask, and Wine Serum.' WHERE id = 'srv-facial-astaberry-wine' OR (category_id = 'cat-facials' AND (LOWER(name) LIKE '%astaberry%' OR LOWER(name) LIKE '%asta berry%'))",
+    [astaBerry5Steps]
+  );
+
+  // 8. OFFICIAL PACKAGES (idempotent)
   const pkgCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM packages');
   if (Number(pkgCountRow?.count || 0) === 0) {
     let pOrder = 1;

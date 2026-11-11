@@ -1227,17 +1227,21 @@
   "settings": {
     "brandName": "BeautyDoor",
     "tagline": "Beauty at your doorstep",
-    "contactPhone": "+91 99991 23456",
-    "contactEmail": "concierge@beautydoor.in",
-    "supportWhatsApp": "+91 99991 23456",
+    "contactPhone": "+91 78277 22522",
+    "contactEmail": "hello@beautydoor.in",
+    "supportWhatsApp": "+91 78277 22522",
     "workingHoursStart": "08:00 AM",
     "workingHoursEnd": "08:00 PM",
-    "minOrderAmount": 499,
+    "minOrderAmount": 1000,
     "cancellationWindowHours": 4,
     "cancellationPolicy": "Free cancellation up to 4 hours prior to your scheduled appointment. Rescheduling is complimentary.",
     "announcementBannerText": "✨ Delhi NCR Inaugural Offer: Flat ₹200 OFF on your first at-home appointment with code BEAUTYFIRST",
     "isAnnouncementActive": true,
     "razorpayEnabled": false,
-    "codEnabled": true
+    "codEnabled": true,
+    "minOrderDelhi": 1000,
+    "minOrderHaryana": 1500,
+    "minOrderNoida": 1500,
+    "minOrderPolicy": "Minimum booking amount: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500. Your cart must meet the minimum order amount for your selected service location before you can confirm your booking."
   }
 }

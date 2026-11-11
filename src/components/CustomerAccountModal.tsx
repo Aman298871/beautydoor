@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Phone,
@@ -28,13 +28,43 @@ export const CustomerAccountModal: React.FC<Props> = ({
   onCancelBooking,
   onRescheduleBooking
 }) => {
-  // Login state (simulated mobile OTP)
-  const [phoneNumber, setPhoneNumber] = useState('9811223344');
+  // Login state (cellular mobile OTP)
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customerBookings, setCustomerBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  // Lock background scroll on mobile and desktop while account modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [isOpen]);
+
+  // Resend countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Reschedule state
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
@@ -50,23 +80,75 @@ export const CustomerAccountModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const handleSendOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 10) return;
-    setIsOtpSent(true);
-    setOtpCode('1234'); // Auto-filled mock OTP for seamless testing
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setErrorMessage('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/customer/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setIsOtpSent(true);
+        setOtpCode('');
+        setInfoMessage(data.message || `Verification code sent to +91 ${cleanPhone}.`);
+        setResendCooldown(data.cooldownSeconds || 60);
+      } else {
+        setErrorMessage(data.error || 'Failed to dispatch verification code. Please try again.');
+        if (data.cooldownSeconds) {
+          setResendCooldown(data.cooldownSeconds);
+        }
+      }
+    } catch (err: any) {
+      setErrorMessage('Unable to connect to verification server. Please check your network.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    const cleanOtp = otpCode.trim();
+    if (cleanOtp.length !== 6) {
+      setErrorMessage('Please enter the 6-digit verification code sent to your mobile phone.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`/api/customer/bookings?phone=${phoneNumber}`);
+      const res = await fetch('/api/auth/customer/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber, otp: cleanOtp })
+      });
       const data = await res.json();
-      setCustomerBookings(data.bookings || []);
-      setIsLoggedIn(true);
+
+      if (res.ok) {
+        // Fetch customer bookings
+        const bookingsRes = await fetch(`/api/customer/bookings?phone=${phoneNumber}`);
+        const bookingsData = await bookingsRes.json();
+        setCustomerBookings(bookingsData.bookings || []);
+        setIsLoggedIn(true);
+      } else {
+        setErrorMessage(data.error || 'Invalid or expired verification code.');
+      }
     } catch (err) {
-      console.error(err);
+      setErrorMessage('Verification failed. Please check your network and try again.');
     } finally {
       setLoading(false);
     }
@@ -143,6 +225,21 @@ export const CustomerAccountModal: React.FC<Props> = ({
                 </p>
               </div>
 
+              {/* Status & Error Alerts */}
+              {errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {infoMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>{infoMessage}</span>
+                </div>
+              )}
+
               {!isOtpSent ? (
                 <form onSubmit={handleSendOtp} className="space-y-3">
                   <div className="space-y-1">
@@ -157,49 +254,65 @@ export const CustomerAccountModal: React.FC<Props> = ({
                         type="tel"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="9811223344"
-                        className="flex-1 px-3.5 py-2.5 text-sm bg-white border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] tabular-nums"
+                        placeholder="98765 43210"
+                        className="flex-1 px-3.5 py-2.5 text-sm bg-white border border-[#E8DDD3] rounded-md focus:outline-hidden focus:border-[#4A0417] tabular-nums"
                       />
                     </div>
                   </div>
                   <button
                     type="submit"
-                    className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md transition-colors shadow-xs"
+                    disabled={loading || phoneNumber.replace(/\D/g, '').length !== 10}
+                    className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                   >
-                    Send One-Time Password
+                    {loading ? 'Sending OTP to Mobile...' : 'Send One-Time Password'}
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-3">
                   <div className="space-y-1">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-[#1F1A1C]">Enter 4-Digit OTP</span>
+                      <span className="font-semibold text-[#1F1A1C]">Enter 6-Digit OTP</span>
                       <button
                         type="button"
-                        onClick={() => setIsOtpSent(false)}
-                        className="text-[#4A0417] hover:underline"
+                        onClick={() => {
+                          setIsOtpSent(false);
+                          setErrorMessage(null);
+                          setInfoMessage(null);
+                        }}
+                        className="text-[#4A0417] hover:underline cursor-pointer"
                       >
                         Change Number
                       </button>
                     </div>
                     <input
                       type="text"
-                      maxLength={4}
+                      maxLength={6}
                       value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="1234"
-                      className="w-full px-3.5 py-2.5 text-center text-lg font-mono tracking-widest bg-white border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••••"
+                      className="w-full px-3.5 py-2.5 text-center text-xl font-mono tracking-widest bg-white border border-[#E8DDD3] rounded-md focus:outline-hidden focus:border-[#4A0417]"
                     />
-                    <p className="text-[11px] text-emerald-800 text-center font-medium">
-                      ✓ Instant OTP pre-filled for testing: 1234
-                    </p>
+                    <div className="flex justify-between items-center pt-1 text-[11px] text-[#7A6B6D]">
+                      <span>Code sent to +91 {phoneNumber}</span>
+                      {resendCooldown > 0 ? (
+                        <span className="text-[#8C7A7C] tabular-nums">Resend in {resendCooldown}s</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSendOtp()}
+                          className="font-semibold text-[#4A0417] hover:underline cursor-pointer"
+                        >
+                          Resend OTP
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="submit"
-                    disabled={loading || otpCode.length < 4}
-                    className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md transition-colors disabled:opacity-50"
+                    disabled={loading || otpCode.length !== 6}
+                    className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    {loading ? 'Verifying...' : 'Verify & View Appointments'}
+                    {loading ? 'Verifying OTP...' : 'Verify & View Appointments'}
                   </button>
                 </form>
               )}

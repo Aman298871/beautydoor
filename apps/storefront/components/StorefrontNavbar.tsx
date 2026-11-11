@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ShoppingBag, User, MapPin, Sparkles, ChevronDown, Menu, X, Sparkle, Clock, ShieldCheck, Heart } from 'lucide-react';
+import { ShoppingBag, User, MapPin, Sparkles, ChevronDown, Menu, X, Sparkle, Clock, ShieldCheck, Heart, Phone, MessageCircle } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 
 interface Category {
@@ -252,8 +252,30 @@ export const StorefrontNavbar: React.FC<Props> = ({
             </button>
           </nav>
 
-          {/* Zone 3: Primary Action + Customer Account + Bag */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Zone 3: Primary Action + Direct Contact + Customer Account + Bag */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Direct Action: Call */}
+            <a
+              href="tel:+917827722522"
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold text-[#4A0417] bg-[#F4EFEA] hover:bg-[#E8DDD3] border border-[#E8DDD3] rounded-md transition-colors shadow-xs"
+              title="Call Helpline (+91 78277 22522)"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Call</span>
+            </a>
+
+            {/* Direct Action: WhatsApp */}
+            <a
+              href="https://wa.me/917827722522?text=Hi%20BeautyDoor%2C%20I%20would%20like%20to%20enquire%20about%20your%20services."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors shadow-xs"
+              title="Chat on WhatsApp (+91 78277 22522)"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>WhatsApp</span>
+            </a>
+
             <button
               onClick={() => navigate('/account')}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#4A3E3D] hover:text-[#4A0417] rounded-md hover:bg-[#F4EFEA] transition-colors"
@@ -265,10 +287,11 @@ export const StorefrontNavbar: React.FC<Props> = ({
 
             <button
               onClick={onOpenCart}
-              className="relative flex items-center gap-2 px-4 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md shadow-xs hover:shadow transition-all whitespace-nowrap active:scale-[0.98]"
+              className="relative flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md shadow-xs hover:shadow transition-all whitespace-nowrap active:scale-[0.98]"
             >
               <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-              <span>Book Appointment</span>
+              <span className="hidden xs:inline">Book Appointment</span>
+              <span className="xs:hidden">Book</span>
               {cartItemCount > 0 && (
                 <span className="ml-1 w-5 h-5 rounded-full bg-[#C5A880] text-[#1F1A1C] font-bold text-xs flex items-center justify-center">
                   {cartItemCount}
@@ -322,6 +345,39 @@ export const StorefrontNavbar: React.FC<Props> = ({
                 <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   Active
                 </span>
+              </div>
+
+              {/* Direct Mobile Quick Actions: Call & WhatsApp */}
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="tel:+917827722522"
+                  className="py-2.5 px-3 bg-white hover:bg-[#F4EFEA] border border-[#E8DDD3] rounded-xl text-xs font-semibold text-[#4A0417] flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                >
+                  <Phone className="w-4 h-4 text-[#4A0417]" />
+                  <span>Call Concierge</span>
+                </a>
+                <a
+                  href="https://wa.me/917827722522?text=Hi%20BeautyDoor%2C%20I%20would%20like%20to%20enquire%20about%20your%20services."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>WhatsApp Us</span>
+                </a>
+              </div>
+
+              {/* Minimum Order Policy Badge for Mobile */}
+              <div className="p-3 rounded-xl bg-[#F4EFEA] border border-[#E8DDD3] text-[11px] text-[#5C4D4F] space-y-1">
+                <div className="font-bold text-[#1F1A1C]">Minimum Booking Policy:</div>
+                <div className="grid grid-cols-3 gap-1 font-mono text-[10px] text-[#4A0417] font-bold">
+                  <span>Delhi: ₹1k</span>
+                  <span>Haryana: ₹1.5k</span>
+                  <span>Noida: ₹1.5k</span>
+                </div>
+                <p className="text-[10px] text-[#7A6B6D] pt-0.5">
+                  Delhi ₹1,000 · Haryana ₹1,500 · Noida ₹1,500
+                </p>
               </div>
 
               {/* Navigation Links with Expandable Services Accordion */}

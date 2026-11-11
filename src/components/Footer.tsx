@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, MapPin, ShieldCheck, Heart } from 'lucide-react';
+import { Phone, Mail, MapPin, ShieldCheck, Heart, MessageCircle } from 'lucide-react';
 import { BUSINESS_CONFIG } from '../config/businessConfig.ts';
 
 interface Props {
@@ -14,9 +14,9 @@ export const Footer: React.FC<Props> = ({
   return (
     <footer className="bg-[#1F1A1C] text-[#FAF7F2] border-t border-[#382F32] pt-16 pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 pb-12 border-b border-[#382F32]">
-          
+
           {/* Col 1: Brand & Official Logo Lockup */}
           <div className="lg:col-span-4 space-y-4">
             <img
@@ -26,7 +26,7 @@ export const Footer: React.FC<Props> = ({
               referrerPolicy="no-referrer"
             />
             <p className="text-xs sm:text-sm text-[#BDB0B2] leading-relaxed max-w-sm font-light">
-              BeautyDoor delivers certified master beauticians, hospital-grade single-use kits, and bespoke salon rituals straight to your doorstep across Delhi NCR.
+              BeautyDoor delivers certified master beauticians, hospital-grade single-use kits, and bespoke salon services straight to your doorstep across Delhi NCR.
             </p>
             <div className="flex items-center gap-2 text-xs text-[#C5A880] font-semibold">
               <ShieldCheck className="w-4 h-4" />
@@ -37,7 +37,7 @@ export const Footer: React.FC<Props> = ({
           {/* Col 2: Service Categories */}
           <div className="lg:col-span-3 space-y-3 text-xs">
             <h4 className="font-semibold text-white uppercase tracking-wider text-[11px] text-[#C5A880]">
-              Popular Rituals
+              Popular Services
             </h4>
             <ul className="space-y-2 text-[#BDB0B2]">
               <li>
@@ -86,31 +86,43 @@ export const Footer: React.FC<Props> = ({
               <li>Greater Noida & Ghaziabad (Indirapuram, Vaishali)</li>
               <li>Faridabad (Sector 14, 15, Greenfield Colony)</li>
             </ul>
-            <button
-              onClick={onOpenPincodeModal}
-              className="text-xs text-[#C5A880] hover:underline pt-1 inline-block font-semibold"
-            >
-              Verify Your Pincode →
-            </button>
+            <p className="text-xs text-[#C5A880] pt-1 font-semibold">
+              Serving All Across Delhi NCR
+            </p>
+            <div className="pt-2 text-[11px] text-[#A6979A] space-y-0.5 border-t border-[#382F32]">
+              <span className="font-semibold text-white">Min Order:</span> Delhi ₹1,000 · Haryana ₹1,500 · Noida ₹1,500
+            </div>
           </div>
 
-          {/* Col 4: Concierge & Helpline */}
+          {/* Col 4: Customer Support & Helpline */}
           <div className="lg:col-span-2 space-y-3 text-xs">
             <h4 className="font-semibold text-white uppercase tracking-wider text-[11px] text-[#C5A880]">
-              Client Care
+              Customer Support
             </h4>
             <div className="space-y-2 text-[#BDB0B2]">
               <p className="text-[11px] text-[#C5A880] font-medium">
-                Concierge: {BUSINESS_CONFIG.contactPerson}
+                Support Lead: {BUSINESS_CONFIG.contactPerson}
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
                 <a
                   href={BUSINESS_CONFIG.phoneTel}
                   className="tabular-nums hover:text-white hover:underline transition-colors"
-                  title="Call BeautyDoor Concierge"
+                  title="Call BeautyDoor Customer Support"
                 >
                   {BUSINESS_CONFIG.phone}
+                </a>
+              </p>
+              <p className="flex items-center gap-2">
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <a
+                  href={BUSINESS_CONFIG.whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tabular-nums hover:text-white hover:underline transition-colors"
+                  title="WhatsApp BeautyDoor Support"
+                >
+                  {BUSINESS_CONFIG.whatsapp}
                 </a>
               </p>
               <p className="flex items-center gap-2">

@@ -63,14 +63,14 @@ export const RateCardPage: React.FC = () => {
 
   const { categories, groupedServices, packages, hygieneCommitments } = data;
 
-  const categoriesToShow = activeTab === 'all' 
-    ? categories 
+  const categoriesToShow = activeTab === 'all'
+    ? categories
     : categories.filter((c: any) => c.id === activeTab);
 
   return (
     <div className="bg-[#FAF7F2] min-h-screen py-8 sm:py-12 print:bg-white print:py-0">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 print:p-0">
-        
+
         {/* Navigation & Controls Bar (Hidden when printing) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 print:hidden">
           <div className="flex items-center gap-2">
@@ -111,21 +111,19 @@ export const RateCardPage: React.FC = () => {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-6 scrollbar-none print:hidden text-xs font-semibold">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-              activeTab === 'all'
+            className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${activeTab === 'all'
                 ? 'bg-[#4A0417] text-white shadow-xs'
                 : 'bg-white text-[#554749] border border-[#E8DDD3] hover:bg-[#FAF7F2]'
-            }`}
+              }`}
           >
             Complete Catalogue
           </button>
           <button
             onClick={() => setActiveTab('packages')}
-            className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-              activeTab === 'packages'
+            className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${activeTab === 'packages'
                 ? 'bg-[#4A0417] text-white shadow-xs'
                 : 'bg-white text-[#554749] border border-[#E8DDD3] hover:bg-[#FAF7F2]'
-            }`}
+              }`}
           >
             10 Official Packages
           </button>
@@ -133,11 +131,10 @@ export const RateCardPage: React.FC = () => {
             <button
               key={c.id}
               onClick={() => setActiveTab(c.id)}
-              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-                activeTab === c.id
+              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${activeTab === c.id
                   ? 'bg-[#4A0417] text-white shadow-xs'
                   : 'bg-white text-[#554749] border border-[#E8DDD3] hover:bg-[#FAF7F2]'
-              }`}
+                }`}
             >
               {c.name}
             </button>
@@ -146,7 +143,7 @@ export const RateCardPage: React.FC = () => {
 
         {/* PRINTABLE A4 RATE CARD CONTAINER */}
         <div className="bg-white rounded-2xl border border-[#E8DDD3] p-6 sm:p-10 print:p-8 print:border-none print:shadow-none shadow-sm space-y-8">
-          
+
           {/* Header Block */}
           <div className="border-b-2 border-[#4A0417] pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -164,13 +161,16 @@ export const RateCardPage: React.FC = () => {
               <p className="text-[11px] text-[#8C7A7C] mt-0.5">
                 Service Hubs: <strong>{data.serviceArea}</strong>
               </p>
+              <div className="mt-2 p-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-lg text-[11px] text-[#4A0417] font-medium">
+                <strong>Minimum booking amount:</strong> Delhi – ₹1,000 · Haryana – ₹1,500 · Noida – ₹1,500
+              </div>
             </div>
 
             <div className="text-left sm:text-right text-xs text-[#5C4D4F] space-y-0.5 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto">
               <p className="font-semibold text-[#1F1A1C]">Operating Hours: {data.operatingHours || BUSINESS_CONFIG.operatingHoursDisplay}</p>
               <p className="text-[11px] text-[#8C7A7C]">
-                Concierge ({BUSINESS_CONFIG.contactPerson}):{' '}
-                <a href={BUSINESS_CONFIG.phoneTel} className="font-semibold text-[#4A0417] hover:underline tabular-nums" title="Call Concierge">
+                Customer Support ({BUSINESS_CONFIG.contactPerson}):{' '}
+                <a href={BUSINESS_CONFIG.phoneTel} className="font-semibold text-[#4A0417] hover:underline tabular-nums" title="Call Customer Support">
                   {BUSINESS_CONFIG.phone}
                 </a>
               </p>
@@ -275,7 +275,7 @@ export const RateCardPage: React.FC = () => {
                     {cat.name}
                   </h3>
                   <span className="text-xs text-[#8C7A7C]">
-                    {catServices.length} Rituals
+                    {catServices.length} Services
                   </span>
                 </div>
 
@@ -283,7 +283,7 @@ export const RateCardPage: React.FC = () => {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-[#E8DDD3] text-[#7A6B6D] font-semibold text-[11px] uppercase tracking-wider">
-                        <th className="py-2 pr-4 font-semibold">Service / Ritual</th>
+                        <th className="py-2 pr-4 font-semibold">Service Name</th>
                         <th className="py-2 px-3 font-semibold text-center w-24">Type</th>
                         <th className="py-2 px-3 font-semibold text-center w-24">Duration</th>
                         <th className="py-2 pl-4 font-semibold text-right w-24">Price</th>
@@ -304,7 +304,7 @@ export const RateCardPage: React.FC = () => {
                                 )}
                               </p>
                               {srv.steps_count && (
-                                <p className="text-[10px] text-[#8C7A7C]">{srv.steps_count}-Step Ritual</p>
+                                <p className="text-[10px] text-[#8C7A7C]">{srv.steps_count}-Step Treatment</p>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-center">

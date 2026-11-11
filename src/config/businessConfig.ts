@@ -22,6 +22,10 @@ export interface BusinessConfig {
   slotSurcharge6pm: number;
   cancellationWindowHours: number;
   minimumOrderAmount: number;
+  minOrderDelhi: number;
+  minOrderHaryana: number;
+  minOrderNoida: number;
+  minOrderDisplay: string;
   coverageAreas: string;
   hubLocations: string;
 }
@@ -44,7 +48,11 @@ export const BUSINESS_CONFIG: BusinessConfig = {
   slotSurcharge8am: 100,
   slotSurcharge6pm: 100,
   cancellationWindowHours: 4,
-  minimumOrderAmount: 499,
+  minimumOrderAmount: 1000,
+  minOrderDelhi: 1000,
+  minOrderHaryana: 1500,
+  minOrderNoida: 1500,
+  minOrderDisplay: 'Delhi ₹1,000 · Haryana ₹1,500 · Noida ₹1,500',
   coverageAreas: 'Delhi NCR (Delhi, Gurugram, Noida, Greater Noida, Ghaziabad, Faridabad)',
   hubLocations: 'DLF Phase 2, Gurugram & GK II, Delhi',
 };

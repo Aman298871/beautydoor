@@ -142,6 +142,24 @@ export const CustomizePackageModal: React.FC<Props> = ({
     }
   }, [isOpen, basePackage, availableServices]);
 
+  // Lock background scroll on mobile and desktop while customize modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [isOpen]);
+
   if (!isOpen || !basePackage) return null;
 
   // Actions
@@ -292,11 +310,11 @@ export const CustomizePackageModal: React.FC<Props> = ({
     return true;
   });
 
-  const handleAddBundleToBag = () => {
+  const handleAddBundleToCart = () => {
     const customizedPackage = {
       id: `custom-${basePackage.id}-${Date.now()}`,
       basePackageId: basePackage.id,
-      name: `${basePackage.name} (Custom Ritual)`,
+      name: `${basePackage.name} (Custom Package)`,
       originalName: basePackage.name,
       selling_price: finalPrice,
       sellingPrice: finalPrice,
@@ -319,8 +337,18 @@ export const CustomizePackageModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs">
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-[#E8DDD3] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div 
+      className="fixed inset-0 z-50 bg-black/75 overscroll-contain flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 md:p-6"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="relative w-full max-w-4xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-[#E8DDD3] flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden overscroll-contain animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Modal Top Header */}
         <div className="bg-[#FAF7F2] p-5 border-b border-[#E8DDD3] flex items-start justify-between gap-4 shrink-0">
@@ -603,7 +631,7 @@ export const CustomizePackageModal: React.FC<Props> = ({
 
             <button
               type="button"
-              onClick={handleAddBundleToBag}
+              onClick={handleAddBundleToCart}
               className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4 text-[#C5A880]" />

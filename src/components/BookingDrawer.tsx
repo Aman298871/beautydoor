@@ -17,7 +17,8 @@ import {
   Phone,
   User,
   Home,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import { CartItem, Booking, Territory, Coupon } from '../types.ts';
 import { formatDuration } from '../utils/formatters.ts';
@@ -80,6 +81,24 @@ export const BookingDrawer: React.FC<Props> = ({
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Lock background scroll on mobile and desktop while booking drawer is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [isOpen]);
+
   // Reset step if reopening with items
   useEffect(() => {
     if (isOpen && step === 5 && !createdBooking) {
@@ -127,11 +146,12 @@ export const BookingDrawer: React.FC<Props> = ({
   const deliveryFee = matchedTerritory ? matchedTerritory.deliveryFee : 0;
   const finalTotal = Math.max(0, amountAfterBundle - couponDiscount + deliveryFee + slotCharge);
 
-  // City-level minimum order logic: Delhi ₹1,000; Gurugram/Noida/Faridabad/Ghaziabad ₹1,500
+  // Regional minimum order policy: Delhi ₹1,000 | Haryana ₹1,500 | Noida ₹1,500
   const getCityMinOrder = (selectedCity: string): number => {
     const c = (selectedCity || '').toLowerCase();
-    if (c.includes('delhi') && !c.includes('greater')) return 1000;
-    if (c.includes('gurugram') || c.includes('noida') || c.includes('faridabad') || c.includes('ghaziabad')) return 1500;
+    if (c.includes('haryana') || c.includes('gurugram') || c.includes('gurgaon') || c.includes('faridabad') || c.includes('sonipat')) return 1500;
+    if (c.includes('noida') || c.includes('greater noida') || c.includes('ghaziabad')) return 1500;
+    if (c.includes('delhi')) return 1000;
     return 1000;
   };
 
@@ -330,7 +350,7 @@ export const BookingDrawer: React.FC<Props> = ({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 340 }}
-            className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden z-10"
+            className="relative w-full max-w-lg bg-white h-full h-[100dvh] max-h-[100dvh] shadow-2xl flex flex-col justify-between overflow-hidden z-10"
           >
             {/* Drawer Header */}
             <div className="bg-[#FAF7F2] p-4 sm:p-5 border-b border-[#E8DDD3] flex items-center justify-between shrink-0">
@@ -349,7 +369,7 @@ export const BookingDrawer: React.FC<Props> = ({
                 )}
                 <div>
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
-                    <span>BeautyDoor Concierge</span>
+                    <span>BeautyDoor Customer Support</span>
                     <span aria-hidden="true">·</span>
                     <span>{city}</span>
                   </div>
@@ -385,7 +405,7 @@ export const BookingDrawer: React.FC<Props> = ({
                   onClick={() => setStep(1)}
                   className={`hover:text-[#4A0417] transition-colors cursor-pointer ${step === 1 ? 'text-[#4A0417] font-bold underline decoration-[#C5A880]' : ''}`}
                 >
-                  1. Rituals
+                  1. Services
                 </button>
                 <ChevronRight className="w-3.5 h-3.5 text-[#D8CCC0]" />
                 <button
@@ -435,7 +455,7 @@ export const BookingDrawer: React.FC<Props> = ({
                         <div className="w-12 h-12 rounded-full bg-[#FAF7F2] text-[#4A0417] flex items-center justify-center mx-auto">
                           <Sparkles className="w-6 h-6 text-[#C5A880]" />
                         </div>
-                        <h4 className="text-base font-semibold text-[#1F1A1C]">Your ritual bag is empty</h4>
+                        <h4 className="text-base font-semibold text-[#1F1A1C]">Your cart is empty</h4>
                         <p className="text-xs text-[#7A6B6D] max-w-xs mx-auto">
                           Explore our salon and spa treatments or build a custom package to book at home.
                         </p>
@@ -503,26 +523,82 @@ export const BookingDrawer: React.FC<Props> = ({
                           ))}
                         </div>
 
+                        {/* Minimum Booking Policy & Service Location Selector */}
+                        <div className="p-4 rounded-xl border border-[#E8DDD3] bg-white space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#1F1A1C] uppercase tracking-wide flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-[#C5A880]" />
+                              <span>Select Service Location</span>
+                            </span>
+                            <span className="text-xs font-bold text-[#4A0417] tabular-nums">
+                              Min Required: ₹{activeMinOrder.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'Delhi', label: 'Delhi', min: 1000 },
+                              { id: 'Haryana', label: 'Haryana', min: 1500 },
+                              { id: 'Noida', label: 'Noida', min: 1500 }
+                            ].map((loc) => {
+                              const isSelected =
+                                (loc.id === 'Delhi' && city.toLowerCase().includes('delhi')) ||
+                                (loc.id === 'Haryana' && (city.toLowerCase().includes('haryana') || city.toLowerCase().includes('gurugram') || city.toLowerCase().includes('faridabad'))) ||
+                                (loc.id === 'Noida' && (city.toLowerCase().includes('noida') || city.toLowerCase().includes('ghaziabad')));
+                              return (
+                                <button
+                                  key={loc.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCity(loc.id === 'Haryana' ? 'Gurugram' : loc.id);
+                                    setMatchedTerritory(null);
+                                  }}
+                                  className={`p-2.5 rounded-lg text-center border transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
+                                      : 'bg-[#FAF7F2] text-[#1F1A1C] border-[#E8DDD3] hover:border-[#4A0417]'
+                                  }`}
+                                >
+                                  <div className="text-xs font-bold">{loc.label}</div>
+                                  <div className={`text-[10px] mt-0.5 font-medium ${isSelected ? 'text-[#C5A880]' : 'text-[#7A6B6D]'}`}>
+                                    Min ₹{loc.min.toLocaleString('en-IN')}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="p-3 bg-[#FAF7F2] rounded-lg border border-[#E8DDD3] text-[11px] text-[#554749] leading-relaxed space-y-1">
+                            <div className="font-semibold text-[#1F1A1C]">Minimum booking amount:</div>
+                            <div className="grid grid-cols-3 gap-1 font-mono text-[11px] text-[#4A0417] font-semibold">
+                              <span>Delhi – ₹1,000</span>
+                              <span>Haryana – ₹1,500</span>
+                              <span>Noida – ₹1,500</span>
+                            </div>
+                            <p className="text-[10px] text-[#7A6B6D] pt-1 italic">
+                              Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.
+                            </p>
+                          </div>
+
+                          {isBelowMin ? (
+                            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-bold">Minimum Amount Needed:</span> Current subtotal is ₹{subtotal.toLocaleString('en-IN')}. For <strong>{city}</strong>, please add treatments worth <strong>₹{minDeficit.toLocaleString('en-IN')}</strong> more to proceed.
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Minimum order requirement for <strong>{city}</strong> is satisfied (₹{subtotal.toLocaleString('en-IN')} / ₹{activeMinOrder.toLocaleString('en-IN')}).</span>
+                            </div>
+                          )}
+                        </div>
+
                         {bundlePercent > 0 && (
                           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
                             <span className="font-semibold">Tiered Bundle Discount ({bundlePercent}%)</span>
                             <span className="font-bold tabular-nums">-₹{packageDiscount}</span>
-                          </div>
-                        )}
-
-                        {isBelowMin && (
-                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
-                            <span className="font-bold text-[#4A0417] uppercase tracking-wider text-[10px] bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 shrink-0">
-                              Min Order
-                            </span>
-                            <div>
-                              <p className="font-semibold text-[#1F1A1C]">
-                                At-home visits in {city} require a minimum booking of ₹{activeMinOrder.toLocaleString('en-IN')}.
-                              </p>
-                              <p className="text-[#6B5A5C] text-[11px] mt-0.5">
-                                Add treatments worth <strong>₹{minDeficit.toLocaleString('en-IN')}</strong> more to unlock doorstep arrival.
-                              </p>
-                            </div>
                           </div>
                         )}
                       </>
@@ -604,21 +680,30 @@ export const BookingDrawer: React.FC<Props> = ({
                           className="w-full px-3 py-2.5 text-xs sm:text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-[#1F1A1C] focus:outline-hidden focus:border-[#4A0417]"
                         >
                           <option value="Delhi">Delhi (Min ₹1,000)</option>
-                          <option value="Gurugram">Gurugram (Min ₹1,500)</option>
+                          <option value="Gurugram">Haryana – Gurugram (Min ₹1,500)</option>
+                          <option value="Faridabad">Haryana – Faridabad (Min ₹1,500)</option>
                           <option value="Noida">Noida (Min ₹1,500)</option>
                           <option value="Greater Noida">Greater Noida (Min ₹1,500)</option>
                           <option value="Ghaziabad">Ghaziabad (Min ₹1,500)</option>
-                          <option value="Faridabad">Faridabad (Min ₹1,500)</option>
                         </select>
                       </div>
                     </div>
 
-                    {isBelowMin && (
+                    {isBelowMin ? (
                       <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
-                        <span className="font-bold text-[#4A0417] shrink-0">City Minimum:</span>
-                        <span>
-                          Service in <strong>{city}</strong> requires a minimum order of <strong>₹{activeMinOrder.toLocaleString('en-IN')}</strong>. Current ritual bag is ₹{subtotal.toLocaleString('en-IN')}. Please add ₹{minDeficit.toLocaleString('en-IN')} more to unlock doorstep scheduling.
-                        </span>
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-[#4A0417] mb-0.5">Minimum Booking Amount Policy:</div>
+                          <div className="text-[11px] mb-1">Delhi – ₹1,000 · Haryana – ₹1,500 · Noida – ₹1,500</div>
+                          <div>
+                            Service in <strong>{city}</strong> requires a minimum order of <strong>₹{activeMinOrder.toLocaleString('en-IN')}</strong>. Current cart subtotal is ₹{subtotal.toLocaleString('en-IN')}. Please add ₹{minDeficit.toLocaleString('en-IN')} more to unlock doorstep scheduling.
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Minimum order requirement for <strong>{city}</strong> is satisfied (₹{subtotal.toLocaleString('en-IN')} / ₹{activeMinOrder.toLocaleString('en-IN')}).</span>
                       </div>
                     )}
 
@@ -886,6 +971,25 @@ export const BookingDrawer: React.FC<Props> = ({
                       </div>
                     </div>
 
+                    {isBelowMin ? (
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                        <div className="font-bold text-[#4A0417] flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Minimum Booking Amount Not Met</span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed">
+                          Delhi: ₹1,000 · Haryana: ₹1,500 · Noida: ₹1,500.
+                          <br />
+                          Your current order for <strong>{city}</strong> is ₹{subtotal.toLocaleString('en-IN')}. Please add treatments worth <strong>₹{minDeficit.toLocaleString('en-IN')}</strong> more to confirm this appointment.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Minimum booking requirement for <strong>{city}</strong> satisfied (₹{subtotal.toLocaleString('en-IN')} / ₹{activeMinOrder.toLocaleString('en-IN')}).</span>
+                      </div>
+                    )}
+
                     {submitError && (
                       <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
                         {submitError}
@@ -970,10 +1074,10 @@ export const BookingDrawer: React.FC<Props> = ({
                       transition={{ delay: 0.42, duration: 0.3 }}
                       className="text-xs text-[#7A6B6D] max-w-xs mx-auto leading-relaxed"
                     >
-                      Our concierge is assigning your certified beautician. You will receive an SMS and WhatsApp confirmation prior to arrival.
+                      Our customer support team is assigning your certified beautician. You will receive an SMS and WhatsApp confirmation prior to arrival.
                     </motion.p>
 
-                    {/* Verified Concierge Help Box */}
+                    {/* Verified Customer Support Help Box */}
                     <motion.div
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -988,7 +1092,7 @@ export const BookingDrawer: React.FC<Props> = ({
                         <a
                           href={BUSINESS_CONFIG.phoneTel}
                           className="font-bold text-[#4A0417] hover:underline tabular-nums"
-                          title="Call Concierge"
+                          title="Call Customer Support"
                         >
                           {BUSINESS_CONFIG.phone}
                         </a>{' '}
@@ -996,7 +1100,7 @@ export const BookingDrawer: React.FC<Props> = ({
                         <a
                           href={BUSINESS_CONFIG.emailMailto}
                           className="font-bold text-[#4A0417] hover:underline"
-                          title="Email Concierge"
+                          title="Email Customer Support"
                         >
                           {BUSINESS_CONFIG.email}
                         </a>

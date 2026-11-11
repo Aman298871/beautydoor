@@ -17,7 +17,7 @@ import { BookingDrawer } from '../../src/components/BookingDrawer.tsx';
 import { PincodeCheckerModal } from '../../src/components/PincodeCheckerModal.tsx';
 import { WriteReviewModal } from '../../src/components/WriteReviewModal.tsx';
 import { CustomerChatbot } from './components/CustomerChatbot.tsx';
-import { Sparkles, ShoppingBag } from 'lucide-react';
+import { Sparkles, ShoppingBag, Phone, MessageCircle, Calendar } from 'lucide-react';
 
 function StorefrontContent() {
   const { path, params, navigate } = useRouter();
@@ -124,6 +124,16 @@ function StorefrontContent() {
     handleAddToCart(service, defaultVariant, []);
   };
 
+  const handleBookNow = (service: any, variant?: any, addons: any[] = []) => {
+    handleAddToCart(service, variant, addons);
+    setIsCartOpen(true);
+  };
+
+  const handleQuickBook = (service: any) => {
+    handleQuickAdd(service);
+    setIsCartOpen(true);
+  };
+
   const handleAddOfficialPackage = (pkg: any, selectedVariant?: string) => {
     const pkgName = selectedVariant ? `${pkg.name} (${selectedVariant})` : pkg.name;
     const newItem = {
@@ -222,6 +232,8 @@ function StorefrontContent() {
           showToast(`Selected area: ${t.area_name}, ${t.city}`);
         }}
         onQuickAdd={handleQuickAdd}
+        onQuickBook={handleQuickBook}
+        onBookNow={handleBookNow}
         onAddPackage={handleAddOfficialPackage}
         cartItemIds={cartItemIds}
         onOpenWriteReview={() => setIsWriteReviewOpen(true)}
@@ -233,6 +245,8 @@ function StorefrontContent() {
         services={services}
         categories={categories}
         onQuickAdd={handleQuickAdd}
+        onQuickBook={handleQuickBook}
+        onBookNow={handleBookNow}
         cartItemIds={cartItemIds}
       />
     );
@@ -241,6 +255,7 @@ function StorefrontContent() {
       <ServiceDetailPage
         slug={params.slug}
         onAddToCart={handleAddToCart}
+        onBookNow={handleBookNow}
         onOpenCart={() => setIsCartOpen(true)}
       />
     );
@@ -345,7 +360,7 @@ function StorefrontContent() {
       />
 
       {/* 3. Main Multi-Page Content */}
-      <main className="flex-1">
+      <main className="flex-1 pb-16 sm:pb-0">
         {pageContent}
       </main>
 
@@ -360,6 +375,37 @@ function StorefrontContent() {
           else if (sec === 'reviews') navigate('/#reviews');
         }}
       />
+
+      {/* Mobile Sticky Quick Action Bar (when cart is empty) */}
+      {cartItems.length === 0 && !isCartOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md text-[#1F1A1C] p-2.5 sm:hidden border-t border-[#E8DDD3] flex items-center justify-between gap-2 shadow-2xl">
+          <a
+            href="tel:+917827722522"
+            className="flex-1 py-2.5 bg-white border border-[#E8DDD3] rounded-xl text-xs font-semibold text-[#4A0417] flex items-center justify-center gap-1.5 shadow-xs"
+            title="Call Helpline (+91 78277 22522)"
+          >
+            <Phone className="w-4 h-4 text-[#4A0417]" />
+            <span>Call</span>
+          </a>
+          <a
+            href="https://wa.me/917827722522?text=Hi%20BeautyDoor%2C%20I%20would%20like%20to%20enquire%20about%20your%20doorstep%20services."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5 shadow-xs"
+            title="WhatsApp Support (+91 78277 22522)"
+          >
+            <MessageCircle className="w-4 h-4 text-emerald-600" />
+            <span>WhatsApp</span>
+          </a>
+          <button
+            onClick={() => navigate('/services')}
+            className="flex-1.5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <Calendar className="w-4 h-4 text-[#C5A880]" />
+            <span>Book Now</span>
+          </button>
+        </div>
+      )}
 
       {/* Floating Mobile Cart Bar */}
       {cartItems.length > 0 && !isCartOpen && (
@@ -377,7 +423,7 @@ function StorefrontContent() {
             className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md flex items-center gap-1.5 shadow-xs"
           >
             <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-            <span>View Cart</span>
+            <span>Book Now ({cartItems.length})</span>
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star } from 'lucide-react';
+import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star, Calendar } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
@@ -9,6 +9,8 @@ interface Props {
   services: any[];
   categories: any[];
   onQuickAdd: (service: any) => void;
+  onQuickBook?: (service: any) => void;
+  onBookNow?: (service: any, variant?: any, addons?: any[]) => void;
   cartItemIds: string[];
 }
 
@@ -16,6 +18,8 @@ export const ServicesPage: React.FC<Props> = ({
   services,
   categories,
   onQuickAdd,
+  onQuickBook,
+  onBookNow,
   cartItemIds
 }) => {
   const { path, navigate } = useRouter();
@@ -106,7 +110,7 @@ export const ServicesPage: React.FC<Props> = ({
                 {currentCategoryObj ? currentCategoryObj.name : 'At-Home Beauty Services'}
               </h1>
               <p className="text-base sm:text-lg text-[#554749] mt-2 font-light leading-relaxed">
-                {currentCategoryObj?.description || 'Certified female beauty specialists, sterile single-use kits, and professional salon rituals delivered across Delhi NCR. Pay after service.'}
+                {currentCategoryObj?.description || 'Certified female beauty specialists, sterile single-use kits, and professional salon services delivered across Delhi NCR. Pay after service.'}
               </p>
             </div>
 
@@ -281,7 +285,7 @@ export const ServicesPage: React.FC<Props> = ({
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3.5">
                         <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                           <Eye className="w-3.5 h-3.5" />
-                          <span>View Complete Ritual Protocol</span>
+                          <span>View Full Service Details</span>
                         </span>
                       </div>
 
@@ -362,26 +366,38 @@ export const ServicesPage: React.FC<Props> = ({
                       </button>
                     </div>
 
-                    <button
-                      onClick={() => onQuickAdd(srv)}
-                      className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
-                        inCart
-                          ? 'bg-emerald-700 text-white'
-                          : 'bg-[#4A0417] hover:bg-[#36020F] text-white hover:shadow-md active:scale-95'
-                      }`}
-                    >
-                      {inCart ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>In Cart</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4 text-[#C5A880]" />
-                          <span>Add to Cart</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <button
+                        onClick={() => onQuickAdd(srv)}
+                        className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border ${
+                          inCart
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-white border-[#E8DDD3] text-[#4A0417] hover:bg-[#FAF7F2]'
+                        }`}
+                        title="Add to cart"
+                      >
+                        {inCart ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => (onQuickBook ? onQuickBook(srv) : onQuickAdd(srv))}
+                        className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold bg-[#4A0417] hover:bg-[#36020F] text-white transition-all flex items-center gap-1.5 shadow-xs hover:shadow-md cursor-pointer whitespace-nowrap active:scale-95"
+                        title="Book Now"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-[#C5A880]" />
+                        <span>Book Now</span>
+                      </button>
+                    </div>
                   </div>
                 </article>
               );
@@ -434,6 +450,11 @@ export const ServicesPage: React.FC<Props> = ({
           onClose={() => setActiveModalService(null)}
           onAddToCart={(s, v, a) => {
             onQuickAdd(s);
+          }}
+          onBookNow={(s, v, a) => {
+            if (onBookNow) onBookNow(s, v, a);
+            else if (onQuickBook) onQuickBook(s);
+            else onQuickAdd(s);
           }}
         />
       )}

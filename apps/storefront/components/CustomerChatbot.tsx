@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  MessageSquare, X, Send, Sparkles, Phone, ChevronRight, 
+import {
+  MessageSquare, X, Send, Sparkles, Phone, ChevronRight,
   RotateCcw, HelpCircle, ExternalLink, Calendar, CheckCircle2,
   Clock, ShieldCheck, MapPin, Tag, Heart, ArrowLeft, Lightbulb,
   MessageCircle, Smartphone, UserCheck, CreditCard
 } from 'lucide-react';
 import { BUSINESS_CONFIG } from '../../../src/config/businessConfig.ts';
-import { 
-  CHATBOT_CATEGORIES, 
-  CHATBOT_ANSWERS, 
+import {
+  CHATBOT_CATEGORIES,
+  CHATBOT_ANSWERS,
   matchQueryToAnswer,
   ChatbotCategory,
-  ChatbotAnswer 
+  ChatbotAnswer
 } from '../data/chatbotKnowledgeBase.ts';
 
 interface Message {
@@ -103,7 +103,7 @@ export const CustomerChatbot: React.FC<CustomerChatbotProps> = ({ onOpenBookingM
     if (!item) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     // Mark question as asked so it is removed from suggestions
     setUsedQuestionIds(prev => new Set(prev).add(qId));
 
@@ -198,28 +198,28 @@ While I don't have an exact match for "${query}", you can:
   // Get visible questions for current subcategory (excluding already asked questions)
   const currentQuestions = currentSubcategory
     ? currentSubcategory.questionIds
-        .filter(qId => !usedQuestionIds.has(qId))
-        .map(qId => CHATBOT_ANSWERS[qId])
-        .filter(Boolean)
+      .filter(qId => !usedQuestionIds.has(qId))
+      .map(qId => CHATBOT_ANSWERS[qId])
+      .filter(Boolean)
     : [];
 
   return (
     <>
       {/* Floating Launcher Button */}
-      <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3">
+      <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-3">
         {!isOpen && (
-          <div 
+          <div
             onClick={() => setIsOpen(true)}
             className="hidden sm:flex items-center gap-2 bg-white/95 backdrop-blur px-3.5 py-2 rounded-full shadow-lg border border-[#E8DDD3] text-xs font-medium text-[#1F1A1C] cursor-pointer hover:border-[#4A0417] transition-all group"
           >
             <span className="font-semibold text-[#4A0417]">Need Help?</span>
-            <span className="text-[#6B5A5C]">Chat with Concierge</span>
+            <span className="text-[#6B5A5C]">Chat with Customer Support</span>
           </div>
         )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}
-          aria-label="Open BeautyDoor Concierge"
+          aria-label="Open BeautyDoor Customer Support"
           className="relative w-14 h-14 rounded-full bg-[#4A0417] text-white shadow-2xl hover:shadow-[#4A0417]/40 flex items-center justify-center border-2 border-[#C5A880]/60 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer"
         >
           {isOpen ? (
@@ -239,7 +239,7 @@ While I don't have an exact match for "${query}", you can:
       {/* Floating Inline Chat Panel */}
       {isOpen && (
         <div className="fixed inset-x-3 bottom-20 sm:bottom-24 sm:right-6 sm:left-auto sm:w-[420px] max-h-[82vh] sm:max-h-[640px] h-[580px] bg-white rounded-3xl shadow-2xl border border-[#E8DDD3] flex flex-col z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          
+
           {/* Header */}
           <div className="bg-[#4A0417] text-white px-5 py-4 flex items-center justify-between border-b border-[#C5A880]/30 shrink-0">
             <div className="flex items-center gap-3">
@@ -248,7 +248,7 @@ While I don't have an exact match for "${query}", you can:
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-serif font-bold text-base tracking-wide text-[#FAF7F2]">BeautyDoor Concierge</h3>
+                  <h3 className="font-serif font-bold text-base tracking-wide text-[#FAF7F2]">BeautyDoor Customer Support</h3>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded-full font-medium">Online</span>
                 </div>
                 <p className="text-[11px] text-[#FAF7F2]/80">Doorstep salon assistance across Delhi NCR</p>
@@ -256,15 +256,15 @@ While I don't have an exact match for "${query}", you can:
             </div>
 
             <div className="flex items-center gap-1">
-              <button 
-                onClick={handleRestartConversation} 
+              <button
+                onClick={handleRestartConversation}
                 title="Restart conversation"
                 className="p-1.5 text-[#FAF7F2]/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
-              <button 
-                onClick={() => setIsOpen(false)} 
+              <button
+                onClick={() => setIsOpen(false)}
                 title="Close chat"
                 className="p-1.5 text-[#FAF7F2]/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
@@ -275,22 +275,21 @@ While I don't have an exact match for "${query}", you can:
 
           {/* Chat Messages Body */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#FAF7F2]">
-            
+
             {messages.map((m) => (
-              <div 
-                key={m.id} 
+              <div
+                key={m.id}
                 className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
               >
-                <div 
-                  className={`max-w-[88%] rounded-2xl px-4 py-3 text-xs sm:text-sm shadow-xs ${
-                    m.sender === 'user'
+                <div
+                  className={`max-w-[88%] rounded-2xl px-4 py-3 text-xs sm:text-sm shadow-xs ${m.sender === 'user'
                       ? 'bg-[#4A0417] text-white rounded-tr-none'
                       : 'bg-white text-[#1F1A1C] border border-[#E8DDD3] rounded-tl-none'
-                  }`}
+                    }`}
                 >
                   <p className="whitespace-pre-line leading-relaxed font-normal">{m.text}</p>
                 </div>
-                
+
                 <span className="text-[10px] text-[#8C7A7C] mt-1 px-1">
                   {m.timestamp}
                 </span>
@@ -358,17 +357,17 @@ While I don't have an exact match for "${query}", you can:
 
             {/* Guided Conversation Navigator (Shivnath Pattern) */}
             <div className="bg-white rounded-2xl p-3.5 border border-[#E8DDD3] shadow-2xs mt-2 space-y-2.5">
-              
+
               {/* Header with Navigation Breadcrumbs */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-xs font-bold text-[#4A0417] uppercase tracking-wider">
                   <HelpCircle className="w-3.5 h-3.5 text-[#C5A880]" />
                   <span>
-                    {currentSubcategory 
+                    {currentSubcategory
                       ? currentSubcategory.name
-                      : currentCategory 
-                      ? currentCategory.name 
-                      : 'Browse by Topic'}
+                      : currentCategory
+                        ? currentCategory.name
+                        : 'Browse by Topic'}
                   </span>
                 </div>
 
@@ -500,7 +499,7 @@ While I don't have an exact match for "${query}", you can:
             <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-[#8C7A7C]">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                Verified BeautyDoor Concierge
+                Verified BeautyDoor Support
               </span>
               <span>Delhi NCR Doorstep Service</span>
             </div>

@@ -76,6 +76,19 @@ export const PincodeCheckerModal: React.FC<Props> = ({
               </button>
             ))}
           </div>
+
+          {/* Minimum Booking Amount Policy Info */}
+          <div className="p-3 bg-[#FAF7F2] border border-[#E8DDD3] rounded-xl text-xs space-y-1">
+            <div className="font-bold text-[#1F1A1C]">Minimum booking amount:</div>
+            <div className="grid grid-cols-3 gap-1 font-mono text-[11px] text-[#4A0417] font-semibold">
+              <span>Delhi: ₹1,000</span>
+              <span>Haryana: ₹1,500</span>
+              <span>Noida: ₹1,500</span>
+            </div>
+            <p className="text-[10px] text-[#7A6B6D] pt-0.5">
+              Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.
+            </p>
+          </div>
         </div>
 
         {/* List */}

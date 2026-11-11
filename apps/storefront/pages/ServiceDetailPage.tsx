@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Check, Plus, ShieldCheck, Sparkles, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Clock, Check, Plus, ShieldCheck, Sparkles, ArrowLeft, ShoppingBag, Phone, MessageCircle, Calendar, AlertCircle } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
 import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
@@ -7,12 +7,14 @@ import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
 interface Props {
   slug: string;
   onAddToCart: (service: any, variant?: any, addons?: any[]) => void;
+  onBookNow?: (service: any, variant?: any, addons?: any[]) => void;
   onOpenCart: () => void;
 }
 
 export const ServiceDetailPage: React.FC<Props> = ({
   slug,
   onAddToCart,
+  onBookNow,
   onOpenCart
 }) => {
   const { navigate } = useRouter();
@@ -89,6 +91,24 @@ export const ServiceDetailPage: React.FC<Props> = ({
     );
     setAddedSuccess(true);
     setTimeout(() => setAddedSuccess(false), 2500);
+  };
+
+  const handleBookNowAction = () => {
+    const srvPayload = {
+      id: service.id,
+      name: service.name,
+      sellingPrice: service.selling_price,
+      durationMins: service.duration_mins
+    };
+    const varPayload = selectedVariant ? { id: selectedVariant.id, name: selectedVariant.name, priceDelta: selectedVariant.price_delta } : undefined;
+    const addonsPayload = chosenAddons.map((a: any) => ({ id: a.id, name: a.name, price: a.price, durationMins: a.duration_mins }));
+
+    if (onBookNow) {
+      onBookNow(srvPayload, varPayload, addonsPayload);
+    } else {
+      onAddToCart(srvPayload, varPayload, addonsPayload);
+      onOpenCart();
+    }
   };
 
   return (
@@ -274,28 +294,63 @@ export const ServiceDetailPage: React.FC<Props> = ({
             )}
 
             {/* Actions */}
-            <div className="pt-2 space-y-2">
+            <div className="pt-2 space-y-2.5">
+              <button
+                onClick={handleBookNowAction}
+                className="w-full py-3.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-sm font-semibold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <Calendar className="w-4 h-4 text-[#C5A880]" />
+                <span>Book Now (₹{finalPrice})</span>
+              </button>
+
               <button
                 onClick={handleAdd}
-                className="w-full py-3.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-sm font-semibold rounded-md shadow-md transition-colors flex items-center justify-center gap-2 active:scale-98"
+                className="w-full py-3 bg-white border border-[#4A0417] text-[#4A0417] hover:bg-[#FAF7F2] text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Plus className="w-4 h-4 text-[#C5A880]" />
-                <span>Add to Cart (₹{finalPrice})</span>
+                <Plus className="w-4 h-4" />
+                <span>Add to Cart</span>
               </button>
 
               {addedSuccess && (
-                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-center text-xs text-emerald-800 font-semibold flex items-center justify-center gap-1.5 animate-in fade-in">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Added! Proceed to checkout in your cart.</span>
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-center text-xs text-emerald-800 font-semibold flex items-center justify-center gap-1.5 animate-in fade-in">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Added! Cart updated.</span>
                 </div>
               )}
 
-              <button
-                onClick={onOpenCart}
-                className="w-full py-2.5 bg-white border border-[#E8DDD3] text-[#4A0417] text-xs font-semibold rounded-md hover:bg-[#FAF7F2] transition-colors"
-              >
-                View Cart
-              </button>
+              {/* Direct Actions: Call & WhatsApp */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <a
+                  href={`https://wa.me/917827722522?text=${encodeURIComponent(`Hi BeautyDoor, I want to book or enquire about ${service.name} (₹${finalPrice}).`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5 shadow-xs hover:bg-emerald-100 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>WhatsApp</span>
+                </a>
+
+                <a
+                  href="tel:+917827722522"
+                  className="py-2.5 px-3 bg-[#FAF7F2] border border-[#E8DDD3] rounded-xl text-xs font-semibold text-[#4A0417] flex items-center justify-center gap-1.5 shadow-xs hover:bg-[#EAE2D8] transition-colors"
+                >
+                  <Phone className="w-4 h-4 text-[#4A0417]" />
+                  <span>Call Us</span>
+                </a>
+              </div>
+
+              {/* Minimum Order Policy Notice */}
+              <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] text-[11px] text-[#5C4D4F] space-y-1">
+                <div className="font-bold text-[#1F1A1C]">Minimum Booking Policy:</div>
+                <div className="grid grid-cols-3 gap-1 font-mono text-[10px] text-[#4A0417] font-semibold">
+                  <span>Delhi: ₹1,000</span>
+                  <span>Haryana: ₹1,500</span>
+                  <span>Noida: ₹1,500</span>
+                </div>
+                <p className="text-[10px] text-[#7A6B6D] pt-0.5">
+                  Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.
+                </p>
+              </div>
             </div>
 
           </div>

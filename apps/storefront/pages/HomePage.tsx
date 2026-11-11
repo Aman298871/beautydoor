@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Clock, Plus, Check, CheckCircle2, ChevronRight, Wind, HeartHandshake, Star, HelpCircle, ChevronDown, MapPin, Search, AlertCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Clock, Plus, Check, CheckCircle2, ChevronRight, Wind, HeartHandshake, Star, HelpCircle, ChevronDown, MapPin, Search, AlertCircle, Calendar, MessageCircle, Phone } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
@@ -17,6 +17,8 @@ interface Props {
   onCheckPincode?: (pincode: string) => Promise<any>;
   onSelectTerritory?: (territory: any) => void;
   onQuickAdd: (service: any) => void;
+  onQuickBook?: (service: any) => void;
+  onBookNow?: (service: any, variant?: any, addons?: any[]) => void;
   onAddPackage?: (pkg: any) => void;
   cartItemIds: string[];
   onOpenWriteReview: () => void;
@@ -30,6 +32,8 @@ export const HomePage: React.FC<Props> = ({
   packages = [],
   reviews = [],
   onQuickAdd,
+  onQuickBook,
+  onBookNow,
   onAddPackage,
   cartItemIds = [],
   onOpenWriteReview,
@@ -86,6 +90,10 @@ export const HomePage: React.FC<Props> = ({
   // Frequently Asked Questions
   const faqs = [
     {
+      q: 'What is the minimum booking amount for doorstep appointments?',
+      a: 'Minimum booking amount:\n• Delhi – ₹1,000\n• Haryana – ₹1,500\n• Noida – ₹1,500\n\nYour cart must meet the minimum order amount for your selected service location before you can confirm your booking.'
+    },
+    {
       q: 'How does BeautyDoor at-home service work?',
       a: 'Choose your desired beauty treatments or packages online. Select your preferred date, convenient 2-hour arrival window, and Delhi NCR address. A verified, certified female beauty specialist arrives at your doorstep with sterilized tools and single-use disposables. You pay after your service via UPI, Card, or Cash.'
     },
@@ -127,12 +135,12 @@ export const HomePage: React.FC<Props> = ({
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold text-[#1F1A1C] tracking-tight leading-[1.15]">
-                Your Beauty Ritual, <br />
-                <span className="italic font-medium text-[#4A0417]">Delivered Home.</span>
+                Beauty Services <br />
+                <span className="italic font-medium text-[#4A0417]">At Your Doorstep.</span>
               </h1>
 
               <p className="text-base sm:text-lg lg:text-xl text-[#554749] font-light leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                Certified female beauty specialists, sterile single-use kits, and salon-grade rituals delivered across Delhi, Gurugram, and Noida. Transparent pricing, zero hidden fees, and pay only after your service.
+                Certified female beauty specialists, sterile single-use kits, and professional salon services delivered across Delhi, Gurugram, and Noida. Transparent pricing, zero hidden fees, and pay only after your service.
               </p>
 
               {/* CTAs & Trust Badges */}
@@ -205,104 +213,62 @@ export const HomePage: React.FC<Props> = ({
         </div>
       </section>
 
-      {/* 1.5 CHECK IF WE SERVE YOUR AREA */}
+      {/* 1.5 SERVING ALL ACROSS DELHI NCR */}
       <section className="bg-white border-b border-[#E8DDD3] py-8 sm:py-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-[#FAF7F2] border border-[#E8DDD3] rounded-2xl p-6 sm:p-8 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <div>
-                <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
                   <MapPin className="w-3.5 h-3.5 text-[#C5A880]" />
                   <span>Doorstep Service Coverage</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C]">
-                  Check if We Serve Your Area
+                  Serving Homes Across Delhi NCR
                 </h2>
-                <p className="text-xs sm:text-sm text-[#554749] mt-0.5 font-light">
-                  Serving homes across South Delhi, Gurugram, Noida, and surrounding Delhi NCR hubs.
+                <p className="text-xs sm:text-sm text-[#554749] font-light max-w-xl">
+                  BeautyDoor specialists visit homes across South, Central, West & North Delhi, Gurugram (DLF & Sohna Rd), Noida, Greater Noida, Ghaziabad, and Faridabad.
                 </p>
-              </div>
-            </div>
+                <div className="pt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Delhi</span>
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Gurugram</span>
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Noida</span>
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Greater Noida</span>
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Ghaziabad</span>
+                  <span className="px-2.5 py-1 bg-white border border-[#E8DDD3] rounded-md text-[#4A3E3D] font-medium">✨ Faridabad</span>
+                </div>
 
-            <form onSubmit={handlePincodeSubmit} className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <MapPin className="w-4 h-4 text-[#8C7A7C] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={pincodeInput}
-                  onChange={(e) => {
-                    setPincodeInput(e.target.value.replace(/\D/g, ''));
-                    setPincodeResult(null);
-                  }}
-                  placeholder="Enter your 6-digit PIN code (e.g. 110017)"
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-[#E8DDD3] focus:border-[#4A0417] focus:ring-1 focus:ring-[#4A0417] rounded-lg text-sm text-[#1F1A1C] placeholder-[#8C7A7C] outline-hidden font-medium"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={checkingPincode}
-                className="px-6 py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-sm font-semibold rounded-lg shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {checkingPincode ? (
-                  <span>Checking...</span>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 text-[#C5A880]" />
-                    <span>Check Area</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Quick Select Popular Areas */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#7A6B6D]">
-              <span className="font-medium text-[#4A0417]">Popular Areas:</span>
-              {[
-                { name: 'South Delhi', pin: '110017' },
-                { name: 'Gurugram DLF', pin: '122002' },
-                { name: 'Noida Sec 62', pin: '201301' },
-                { name: 'West Delhi', pin: '110027' },
-                { name: 'East Delhi', pin: '110092' }
-              ].map((area) => (
-                <button
-                  key={area.pin}
-                  type="button"
-                  onClick={() => {
-                    setPincodeInput(area.pin);
-                    handlePincodeSubmit(undefined, area.pin);
-                  }}
-                  className="px-2.5 py-1 bg-white hover:bg-[#F4EFEA] border border-[#E8DDD3] rounded-md text-[#4A3E3D] hover:text-[#4A0417] transition-colors"
-                >
-                  {area.name} ({area.pin})
-                </button>
-              ))}
-            </div>
-
-            {/* Pincode Result Banner */}
-            {pincodeResult && (
-              <div
-                className={`mt-4 p-4 rounded-xl flex items-start gap-3 text-xs sm:text-sm ${
-                  pincodeResult.isServiceable
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
-                    : 'bg-amber-50 border border-amber-200 text-amber-900'
-                }`}
-              >
-                {pincodeResult.isServiceable ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <div className="font-semibold">
-                    {pincodeResult.isServiceable ? 'Yes! We serve your location.' : 'Area Check Notice'}
+                <div className="mt-3 p-3.5 bg-white border border-[#E8DDD3] rounded-xl text-xs space-y-1.5 shadow-xs">
+                  <div className="font-bold text-[#1F1A1C] flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#4A0417]" />
+                    <span>Minimum booking amount:</span>
                   </div>
-                  <div className="mt-0.5 text-xs text-opacity-90">
-                    {pincodeResult.message || (pincodeResult.isServiceable ? 'Verified beauticians are ready to visit your home.' : 'Please check the entered pincode or contact us directly.')}
+                  <div className="flex flex-wrap gap-2 text-xs font-mono font-bold text-[#4A0417]">
+                    <span className="px-2.5 py-1 bg-[#FAF7F2] rounded-md border border-[#E8DDD3]">Delhi – ₹1,000</span>
+                    <span className="px-2.5 py-1 bg-[#FAF7F2] rounded-md border border-[#E8DDD3]">Haryana – ₹1,500</span>
+                    <span className="px-2.5 py-1 bg-[#FAF7F2] rounded-md border border-[#E8DDD3]">Noida – ₹1,500</span>
                   </div>
+                  <p className="text-[11px] text-[#6B5A5C] pt-0.5 leading-relaxed">
+                    Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.
+                  </p>
                 </div>
               </div>
-            )}
+
+              <div className="flex flex-col sm:flex-row md:flex-col gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/services')}
+                  className="px-6 py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs sm:text-sm font-semibold rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Search className="w-4 h-4 text-[#C5A880]" />
+                  <span>Browse All Services</span>
+                </button>
+                <div className="text-[11px] text-[#7A6B6D] text-center flex items-center justify-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Free doorstep arrival · Pay after service</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -397,26 +363,38 @@ export const HomePage: React.FC<Props> = ({
                         </button>
                       </div>
 
-                      <button
-                        onClick={() => onQuickAdd(srv)}
-                        className={`px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs ${
-                          inCart
-                            ? 'bg-emerald-700 text-white'
-                            : 'bg-[#4A0417] hover:bg-[#36020F] text-white hover:shadow-md'
-                        }`}
-                      >
-                        {inCart ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            <span>In Cart</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 text-[#C5A880]" />
-                            <span>Add to Cart</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <button
+                          onClick={() => onQuickAdd(srv)}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border ${
+                            inCart
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : 'bg-white border-[#E8DDD3] text-[#4A0417] hover:bg-[#FAF7F2]'
+                          }`}
+                          title="Add to cart"
+                        >
+                          {inCart ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Added</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => (onQuickBook ? onQuickBook(srv) : onQuickAdd(srv))}
+                          className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold bg-[#4A0417] hover:bg-[#36020F] text-white transition-all flex items-center gap-1.5 shadow-xs hover:shadow-md cursor-pointer whitespace-nowrap active:scale-95"
+                          title="Book Now"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-[#C5A880]" />
+                          <span>Book Now</span>
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -562,26 +540,38 @@ export const HomePage: React.FC<Props> = ({
                         )}
                       </div>
 
-                      <button
-                        onClick={() => onAddPackage && onAddPackage(pkg)}
-                        className={`px-4 py-2.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs ${
-                          inCart
-                            ? 'bg-emerald-700 text-white'
-                            : 'bg-[#4A0417] hover:bg-[#36020F] text-white hover:shadow-md'
-                        }`}
-                      >
-                        {inCart ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>In Cart</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5 text-[#C5A880]" />
-                            <span>Add to Cart</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <button
+                          onClick={() => onAddPackage && onAddPackage(pkg)}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border ${
+                            inCart
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : 'bg-white border-[#E8DDD3] text-[#4A0417] hover:bg-[#FAF7F2]'
+                          }`}
+                          title="Add package to cart"
+                        >
+                          {inCart ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Added</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => onAddPackage && onAddPackage(pkg)}
+                          className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold bg-[#4A0417] hover:bg-[#36020F] text-white transition-all flex items-center gap-1.5 shadow-xs hover:shadow-md cursor-pointer whitespace-nowrap active:scale-95"
+                          title="Book this package directly"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-[#C5A880]" />
+                          <span>Book Now</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -833,6 +823,11 @@ export const HomePage: React.FC<Props> = ({
           }}
           onClose={() => setActiveModalService(null)}
           onAddToCart={(s) => onQuickAdd(s)}
+          onBookNow={(s, v, a) => {
+            if (onBookNow) onBookNow(s, v, a);
+            else if (onQuickBook) onQuickBook(s);
+            else onQuickAdd(s);
+          }}
         />
       )}
 

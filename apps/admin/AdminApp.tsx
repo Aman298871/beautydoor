@@ -1317,6 +1317,12 @@ export default function AdminApp() {
 
                       <button
                         onClick={() => {
+                          let steps: string[] = [];
+                          if (Array.isArray(s.treatmentSteps)) {
+                            steps = s.treatmentSteps;
+                          } else if (typeof s.steps_json === 'string') {
+                            try { steps = JSON.parse(s.steps_json); } catch {}
+                          }
                           setEditingService({
                             ...s,
                             categoryId: s.category_id,
@@ -1324,6 +1330,9 @@ export default function AdminApp() {
                             originalPrice: s.original_price,
                             sellingPrice: s.selling_price,
                             discountPercent: s.discount_percent,
+                            treatmentSteps: steps,
+                            steps_count: steps.length || s.steps_count || 0,
+                            brand: s.brand || '',
                             isActive: s.is_active === 1,
                             isPublished: s.is_published !== 0
                           });
@@ -2865,6 +2874,53 @@ export default function AdminApp() {
                   value={editingService.description || ''}
                   onChange={(e) => setEditingService({ ...editingService, description: e.target.value })}
                   className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Brand Name</label>
+                  <input
+                    type="text"
+                    value={editingService.brand || ''}
+                    onChange={(e) => setEditingService({ ...editingService, brand: e.target.value })}
+                    placeholder="e.g. Asta Berry, Moonstar, RICA, FYC Classic"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">
+                    Steps Count: {Array.isArray(editingService.treatmentSteps) ? editingService.treatmentSteps.length : (editingService.steps_count || 0)}
+                  </label>
+                  <input
+                    type="number"
+                    value={Array.isArray(editingService.treatmentSteps) ? editingService.treatmentSteps.length : (editingService.steps_count || 0)}
+                    readOnly
+                    className="w-full px-3 py-2 bg-[#F4EFEA] border border-[#E8DDD3] rounded-md text-[#6B5A5C] font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">
+                  Treatment Steps (One step per line)
+                </label>
+                <p className="text-[10px] text-[#7A6B6D] mb-1">
+                  Enter each verified step on a separate line (e.g. for Asta Berry Facial: Wine Scrub, Wine Gel, Wine Creme, Wine Mask, Wine Serum).
+                </p>
+                <textarea
+                  rows={4}
+                  value={Array.isArray(editingService.treatmentSteps) ? editingService.treatmentSteps.join('\n') : (editingService.treatment_steps ? (Array.isArray(editingService.treatment_steps) ? editingService.treatment_steps.join('\n') : editingService.treatment_steps) : '')}
+                  onChange={(e) => {
+                    const lines = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+                    setEditingService({
+                      ...editingService,
+                      treatmentSteps: lines,
+                      steps_count: lines.length
+                    });
+                  }}
+                  placeholder={"Wine Scrub\nWine Gel\nWine Creme\nWine Mask\nWine Serum"}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-xs leading-relaxed"
                 />
               </div>
 

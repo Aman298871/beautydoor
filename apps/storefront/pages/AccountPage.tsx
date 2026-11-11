@@ -4,12 +4,24 @@ import { useRouter } from '../router.tsx';
 
 export const AccountPage: React.FC = () => {
   const { navigate } = useRouter();
-  const [phone, setPhone] = useState('9811223344');
+  const [phone, setPhone] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  // Resend countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Reschedule & cancel state
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
@@ -29,21 +41,36 @@ export const AccountPage: React.FC = () => {
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phone || phone.replace(/\D/g, '').length < 10) return;
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setErrorMessage('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/customer/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone })
+        body: JSON.stringify({ phone: cleanPhone })
       });
       const data = await res.json();
       if (res.ok) {
         setIsOtpSent(true);
-        setOtp(data.devOtp || '1234');
+        setOtp('');
+        setInfoMessage(data.message || `Verification code sent to +91 ${cleanPhone}.`);
+        setResendCooldown(data.cooldownSeconds || 60);
+      } else {
+        setErrorMessage(data.error || 'Failed to dispatch verification code.');
+        if (data.cooldownSeconds) setResendCooldown(data.cooldownSeconds);
       }
+    } catch (err) {
+      setErrorMessage('Unable to reach authentication server. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -51,18 +78,31 @@ export const AccountPage: React.FC = () => {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    const cleanOtp = otp.trim();
+    if (cleanOtp.length !== 6) {
+      setErrorMessage('Please enter the 6-digit verification code sent to your phone.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/customer/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp })
+        body: JSON.stringify({ phone, otp: cleanOtp })
       });
       const data = await res.json();
       if (res.ok) {
         setIsLoggedIn(true);
         await fetchBookings(phone);
+      } else {
+        setErrorMessage(data.error || 'Invalid or expired verification code.');
       }
+    } catch (err) {
+      setErrorMessage('Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -137,10 +177,25 @@ export const AccountPage: React.FC = () => {
               </p>
             </div>
 
+            {/* Status & Error Alerts */}
+            {errorMessage && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {infoMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>{infoMessage}</span>
+              </div>
+            )}
+
             {!isOtpSent ? (
               <form onSubmit={handleSendOtp} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#1F1A1C]">Mobile Number</label>
+                  <label className="text-xs font-semibold text-[#1F1A1C]">Mobile Number (India)</label>
                   <div className="flex gap-2">
                     <span className="px-3 py-2 text-xs font-semibold bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-[#4A3E3D] flex items-center">
                       +91
@@ -149,7 +204,7 @@ export const AccountPage: React.FC = () => {
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="9811223344"
+                      placeholder="9876543210"
                       className="flex-1 px-3.5 py-2 text-sm bg-white border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] tabular-nums"
                     />
                   </div>
@@ -158,43 +213,58 @@ export const AccountPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading || phone.replace(/\D/g, '').length < 10}
-                  className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors disabled:opacity-50"
+                  className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Sending OTP...' : 'Send OTP'}
+                  {loading ? 'Sending OTP to Mobile...' : 'Send Verification OTP'}
                 </button>
               </form>
             ) : (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="space-y-1">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="font-semibold text-[#1F1A1C]">Enter 4-Digit OTP</span>
+                    <span className="font-semibold text-[#1F1A1C]">Enter 6-Digit Verification Code</span>
                     <button
                       type="button"
-                      onClick={() => setIsOtpSent(false)}
-                      className="text-[#4A0417] hover:underline"
+                      onClick={() => {
+                        setIsOtpSent(false);
+                        setErrorMessage(null);
+                        setInfoMessage(null);
+                      }}
+                      className="text-[#4A0417] hover:underline cursor-pointer"
                     >
                       Change Number
                     </button>
                   </div>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={6}
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="1234"
-                    className="w-full px-3.5 py-2.5 text-center text-lg font-mono tracking-widest bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="••••••"
+                    className="w-full px-3.5 py-2.5 text-center text-xl font-mono tracking-widest bg-white border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
                   />
-                  <p className="text-[11px] text-emerald-800 text-center font-medium">
-                    ✓ Development OTP pre-filled: 1234
-                  </p>
+                  <div className="flex justify-between items-center pt-1 text-[11px] text-[#7A6B6D]">
+                    <span>Code sent to +91 {phone}</span>
+                    {resendCooldown > 0 ? (
+                      <span className="text-[#8C7A7C] tabular-nums">Resend in {resendCooldown}s</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="text-[#4A0417] font-semibold hover:underline cursor-pointer"
+                      >
+                        Resend Code
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={loading || otp.length < 4}
-                  className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors disabled:opacity-50"
+                  disabled={loading || otp.replace(/\D/g, '').length !== 6}
+                  className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? 'Verifying...' : 'Verify & Open Portal'}
+                  {loading ? 'Verifying Code...' : 'Verify & Open Portal'}
                 </button>
               </form>
             )}

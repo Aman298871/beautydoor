@@ -547,6 +547,24 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
 
     const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);
 
+    // Calculate minimum order requirement for selected city / state / territory
+    const cityParam = (req.body.city || '').trim().toLowerCase();
+    let minOrderAmount = 1000;
+    let minOrderRegion = 'Delhi';
+    if (cityParam.includes('haryana') || cityParam.includes('gurugram') || cityParam.includes('gurgaon') || cityParam.includes('faridabad')) {
+      minOrderAmount = 1500;
+      minOrderRegion = 'Haryana';
+    } else if (cityParam.includes('noida') || cityParam.includes('greater noida') || cityParam.includes('ghaziabad')) {
+      minOrderAmount = 1500;
+      minOrderRegion = 'Noida';
+    } else if (cityParam.includes('delhi')) {
+      minOrderAmount = 1000;
+      minOrderRegion = 'Delhi';
+    }
+
+    const isBelowMin = subtotal < minOrderAmount;
+    const minDeficit = Math.max(0, minOrderAmount - subtotal);
+
     res.json({
       items: validatedItems,
       subtotal,
@@ -556,7 +574,17 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
       appliedCoupon,
       deliveryFee,
       slotCharge,
-      totalPayable
+      totalPayable,
+      minOrderPolicy: {
+        delhi: 1000,
+        haryana: 1500,
+        noida: 1500,
+        activeRegion: minOrderRegion,
+        activeMinOrder: minOrderAmount,
+        isBelowMin,
+        minDeficit,
+        policyNotice: 'Minimum booking amount: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500'
+      }
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to calculate price' });
@@ -766,28 +794,45 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       });
     }
 
-    // Determine city-level minimum order threshold
-    // Delhi: ₹1,000; Gurugram / Noida / Faridabad / Ghaziabad: ₹1,500
-    const cityNormalized = (address.city || (territory ? territory.city : 'Delhi')).trim().toLowerCase();
+    // Determine region/city-level minimum order threshold
+    // Authoritative Policy: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500
+    const cityRaw = (address.city || (territory ? territory.city : 'Delhi')).trim();
+    const cityNormalized = cityRaw.toLowerCase();
+    const stateNormalized = (address.state || '').trim().toLowerCase();
+
     let cityMinOrder = 1000;
-    if (cityNormalized.includes('delhi') && !cityNormalized.includes('greater')) {
-      cityMinOrder = 1000;
-    } else if (
+    let regionLabel = 'Delhi';
+
+    if (
+      cityNormalized.includes('haryana') ||
+      stateNormalized.includes('haryana') ||
       cityNormalized.includes('gurugram') ||
-      cityNormalized.includes('noida') ||
-      cityNormalized.includes('ghaziabad') ||
-      cityNormalized.includes('faridabad')
+      cityNormalized.includes('gurgaon') ||
+      cityNormalized.includes('faridabad') ||
+      cityNormalized.includes('sonipat')
     ) {
       cityMinOrder = 1500;
+      regionLabel = 'Haryana';
+    } else if (
+      cityNormalized.includes('noida') ||
+      cityNormalized.includes('greater noida') ||
+      cityNormalized.includes('ghaziabad')
+    ) {
+      cityMinOrder = 1500;
+      regionLabel = 'Noida';
+    } else if (cityNormalized.includes('delhi')) {
+      cityMinOrder = 1000;
+      regionLabel = 'Delhi';
     } else if (territory?.min_order_amount) {
       cityMinOrder = territory.min_order_amount;
+      regionLabel = territory.city || 'your location';
     }
 
     const requiredMin = territory?.min_order_amount || cityMinOrder;
     if (subtotal < requiredMin) {
-      const areaLabel = territory?.area_name || address.city || 'your area';
+      const deficit = requiredMin - subtotal;
       res.status(400).json({
-        error: `Minimum order amount for ${areaLabel} is ₹${requiredMin}. Current order is ₹${subtotal}.`
+        error: `Minimum booking amount requirement not met. Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500. Your cart total is ₹${subtotal.toLocaleString('en-IN')}. For ${regionLabel} (${cityRaw}), please add treatments worth ₹${deficit.toLocaleString('en-IN')} more to confirm your appointment.`
       });
       return;
     }

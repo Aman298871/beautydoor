@@ -151,8 +151,8 @@ export const FAQPage: React.FC = () => {
       a: 'Yes. BeautyDoor supports Cash on Delivery (Pay After Treatment). You may hand cash or scan the beautician’s verified UPI QR code once you are fully satisfied.'
     },
     {
-      q: 'What is your cancellation policy?',
-      a: 'Cancellations and rescheduling are 100% complimentary up to 4 hours prior to your scheduled appointment. Within 4 hours, our dispatch team can assist you with flexible rescheduling.'
+      q: 'What is your cancellation and refund policy?',
+      a: '• Free Cancellation: Cancellations made at least 2 hours prior to your scheduled service slot incur no charge (₹0 fee).\n• Late Cancellation: Cancellations made less than 2 hours before your scheduled appointment slot incur a ₹200 convenience charge.\n• Refund Processing: For online-paid orders, the ₹200 fee is deducted and the net balance is refunded to your original payment method in 5–7 business days. For Cash-on-Delivery orders, ₹200 is recorded on your account.'
     }
   ];
 
@@ -231,9 +231,16 @@ export const PolicyPage: React.FC<{ type: 'privacy' | 'terms' | 'cancellation' }
           <p>
             <strong>Doorstep Safety & Vetting:</strong> All female beauticians are certified cosmetology professionals who have passed background checks, identity verification, and monthly hygiene assessments.
           </p>
-          <p>
-            <strong>Payment & Refund Terms:</strong> Charges are payable at home via Cash or UPI, or online via Razorpay. Any pre-paid cancellation initiated more than 4 hours before the appointment is processed back to the original payment source within 24–48 hours.
-          </p>
+          <div className="p-4 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] space-y-2">
+            <h4 className="font-bold text-sm text-[#4A0417]">Doorstep Cancellation & Refund Policy</h4>
+            <p className="font-semibold text-[#1F1A1C]">
+              • Free Cancellation: At least 2 hours before scheduled booking slot (₹0 charge).<br />
+              • Late Cancellation: Less than 2 hours before scheduled booking slot incurs a ₹200 convenience charge.
+            </p>
+            <p className="text-xs text-[#6B5A5C]">
+              For online-paid appointments, the ₹200 convenience fee is deducted and the net balance is refunded to your source payment method within 5–7 business days. For Cash-on-Delivery (COD) appointments, no advance was collected, so ₹200 is recorded on your customer account for admin recovery.
+            </p>
+          </div>
         </div>
       </div>
     </div>

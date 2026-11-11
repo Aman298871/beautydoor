@@ -990,6 +990,19 @@ export const BookingDrawer: React.FC<Props> = ({
                       </div>
                     )}
 
+                    {/* Cancellation & Refund Policy Notice */}
+                    <div className="p-3 bg-[#FAF7F2] border border-[#E8DDD3] rounded-xl text-xs space-y-1.5 text-[#554749]">
+                      <div className="flex items-center gap-1.5 font-bold text-[#4A0417] text-[11px] uppercase tracking-wider">
+                        <Clock className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                        <span>Cancellation & Refund Policy</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-[#554749]">
+                        • <strong>Free Cancellation:</strong> 100% free (₹0 fee) if cancelled at least <strong>2 hours</strong> before your appointment.<br />
+                        • <strong>Late Cancellation:</strong> Cancellations made less than 2 hours before the slot incur a <strong>₹200 convenience fee</strong>.<br />
+                        • <strong>Refunds:</strong> For online-paid orders, balance is refunded to source account. For Cash-on-Delivery, ₹200 late fee is recorded on your account.
+                      </p>
+                    </div>
+
                     {submitError && (
                       <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
                         {submitError}

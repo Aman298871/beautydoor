@@ -1096,9 +1096,13 @@ export default function AdminApp() {
                                 setSelectedBeauticianId(b.assigned_beautician_id || '');
                                 setDispatchError(null);
                               }}
-                              className="px-3 py-1 bg-[#4A0417] text-white hover:bg-[#36020F] rounded text-xs font-semibold"
+                              className={`px-3 py-1 rounded text-xs font-semibold ${
+                                b.booking_status === 'cancelled'
+                                  ? 'bg-red-100 text-red-900 hover:bg-red-200'
+                                  : 'bg-[#4A0417] text-white hover:bg-[#36020F]'
+                              }`}
                             >
-                              Dispatch
+                              {b.booking_status === 'cancelled' ? 'Audit Details' : 'Dispatch'}
                             </button>
                           </td>
                         </tr>
@@ -2731,7 +2735,32 @@ export default function AdminApp() {
             <div className="bg-[#FAF7F2] p-3 rounded-lg text-xs space-y-1">
               <p><strong>Appointment:</strong> {selectedBookingForDispatch.appointment_date} at {selectedBookingForDispatch.appointment_slot}</p>
               <p><strong>Location:</strong> {selectedBookingForDispatch.flat}, {selectedBookingForDispatch.city} ({selectedBookingForDispatch.pincode})</p>
+              <p><strong>Total Value:</strong> ₹{selectedBookingForDispatch.total_payable} ({selectedBookingForDispatch.payment_method})</p>
             </div>
+
+            {selectedBookingForDispatch.booking_status === 'cancelled' && (
+              <div className="bg-red-50/90 border border-red-200 p-3.5 rounded-xl text-xs space-y-2 text-red-950">
+                <div className="flex items-center justify-between font-bold text-red-900 border-b border-red-200 pb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    <span>Cancellation Audit & Refund Record</span>
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
+                    selectedBookingForDispatch.cancellation_window_breached ? 'bg-red-200 text-red-900' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {selectedBookingForDispatch.cancellation_window_breached ? 'Within 2 Hours (< 2h)' : 'Eligible (> 2h Free)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] leading-relaxed">
+                  <div><strong>Cancelled At:</strong> {selectedBookingForDispatch.cancelled_at || 'Recorded'}</div>
+                  <div><strong>Scheduled Service:</strong> {selectedBookingForDispatch.appointment_date} at {selectedBookingForDispatch.appointment_slot}</div>
+                  <div><strong>Convenience Fee:</strong> ₹{selectedBookingForDispatch.cancellation_fee || 0}</div>
+                  <div><strong>Refund Amount:</strong> ₹{selectedBookingForDispatch.refund_amount || 0}</div>
+                  <div><strong>Refund/Payment Status:</strong> {selectedBookingForDispatch.refund_status || selectedBookingForDispatch.payment_status} ({selectedBookingForDispatch.payment_method})</div>
+                  <div><strong>Cancellation Reason:</strong> {selectedBookingForDispatch.cancellation_reason || 'Client request'}</div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#1F1A1C]">Select Beautician for this Slot:</label>

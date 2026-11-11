@@ -21,6 +21,8 @@ export interface BusinessConfig {
   slotSurcharge8am: number;
   slotSurcharge6pm: number;
   cancellationWindowHours: number;
+  cancellationFeeLate: number;
+  cancellationPolicyDisplay: string;
   minimumOrderAmount: number;
   minOrderDelhi: number;
   minOrderHaryana: number;
@@ -47,7 +49,9 @@ export const BUSINESS_CONFIG: BusinessConfig = {
   operatingDaysDisplay: '7 Days a Week (Monday – Sunday)',
   slotSurcharge8am: 100,
   slotSurcharge6pm: 100,
-  cancellationWindowHours: 4,
+  cancellationWindowHours: 2,
+  cancellationFeeLate: 200,
+  cancellationPolicyDisplay: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
   minimumOrderAmount: 1000,
   minOrderDelhi: 1000,
   minOrderHaryana: 1500,

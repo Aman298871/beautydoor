@@ -1090,6 +1090,84 @@ storefrontRouter.get('/bookings/track', async (req: Request, res: Response): Pro
   }
 });
 
+// Helper to parse appointment date and slot in India Standard Time (+05:30)
+function parseAppointmentDateTime(dateStr: string, slotStr: string): number | null {
+  if (!dateStr || !slotStr) return null;
+  const match = slotStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  const cleanDate = dateStr.trim();
+  const iso = `${cleanDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+  const t = new Date(iso).getTime();
+  return isNaN(t) ? null : t;
+}
+
+// 1. Cancellation Preview (Calculates fee and refund before customer confirms)
+const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { bookingId, phone } = req.body;
+    if (!bookingId || !phone) {
+      res.status(400).json({ error: 'Booking ID and registered phone are required.' });
+      return;
+    }
+    const clean = phone.replace(/\D/g, '').slice(-10);
+    const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ? AND customer_phone LIKE ?', [bookingId, `%${clean}%`])) as any;
+
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found.' });
+      return;
+    }
+
+    if (booking.booking_status === 'cancelled') {
+      res.status(400).json({ error: 'This booking has already been cancelled.' });
+      return;
+    }
+
+    if (booking.booking_status === 'completed') {
+      res.status(400).json({ error: 'Completed appointments cannot be cancelled.' });
+      return;
+    }
+
+    const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
+    const now = req.body.simulateNow ? new Date(req.body.simulateNow).getTime() : Date.now();
+    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
+    const isWithin2Hours = diffMinutes < 120;
+    const cancellationFee = isWithin2Hours ? 200 : 0;
+    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid';
+
+    let refundableAmount = 0;
+    if (isPrepaid) {
+      refundableAmount = Math.max(0, booking.total_payable - cancellationFee);
+    }
+
+    res.json({
+      bookingId: booking.id,
+      appointmentDate: booking.appointment_date,
+      appointmentSlot: booking.appointment_slot,
+      minutesUntilAppointment: diffMinutes,
+      isWithin2Hours,
+      cancellationFee,
+      isPrepaid,
+      paymentMethod: booking.payment_method,
+      totalPayable: booking.total_payable,
+      refundableAmount,
+      policyNotice: isWithin2Hours
+        ? 'Late cancellation policy: You are cancelling less than 2 hours before the appointment. A ₹200 convenience fee applies.'
+        : 'Free cancellation policy: You are cancelling at least 2 hours before the appointment. No cancellation fee applies (₹0).'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to calculate cancellation preview.' });
+  }
+};
+
+storefrontRouter.post('/bookings/cancel-preview', cancelPreviewHandler);
+storefrontRouter.post('/customer/cancel-preview', cancelPreviewHandler);
+
+// 2. Cancellation Confirmation (Enforces 2-hour window and handles Prepaid vs COD)
 const cancelBookingHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const { bookingId, phone, reason } = req.body;
@@ -1105,24 +1183,98 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (booking.booking_status === 'completed' || booking.booking_status === 'cancelled') {
-      res.status(400).json({ error: `Cannot cancel booking that is already ${booking.booking_status}.` });
+    // Idempotency: Prevent duplicate cancellations or charges
+    if (booking.booking_status === 'cancelled') {
+      res.status(409).json({
+        error: 'This booking has already been cancelled. No duplicate cancellation charge was applied.',
+        bookingId: booking.id,
+        cancelledAt: booking.cancelled_at,
+        cancellationFee: booking.cancellation_fee || 0,
+        refundAmount: booking.refund_amount || 0
+      });
       return;
     }
 
-    const cancelNote = ` | Cancelled by customer: ${reason || 'Client request'}`;
-    const updatedNotes = (booking.internal_notes || '') + cancelNote;
+    if (booking.booking_status === 'completed') {
+      res.status(400).json({ error: 'Cannot cancel an appointment that is already completed.' });
+      return;
+    }
+
+    // Trusted server-side time calculation (IST +05:30)
+    const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
+    const now = req.body.simulateNow ? new Date(req.body.simulateNow).getTime() : Date.now();
+    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
+    const isWithin2Hours = diffMinutes < 120;
+    const cancellationFee = isWithin2Hours ? 200 : 0;
+    const windowBreached = isWithin2Hours ? 1 : 0;
+    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid';
+
+    let refundAmount = 0;
+    let refundStatus = 'not_applicable_cod';
+    let paymentStatus = booking.payment_status;
+    let customerMessage = '';
+
+    if (isPrepaid) {
+      refundAmount = Math.max(0, booking.total_payable - cancellationFee);
+      refundStatus = cancellationFee === 0 ? 'full_refund_pending' : 'partial_refund_pending';
+      paymentStatus = 'refund_pending';
+      customerMessage = cancellationFee === 0
+        ? `Appointment cancelled at least 2 hours before scheduled slot. 100% full refund of ₹${refundAmount} has been initiated to your original payment method (5–7 business days).`
+        : `Appointment cancelled less than 2 hours before scheduled slot. Late convenience fee of ₹200 deducted. Net refund of ₹${refundAmount} has been initiated to your original payment method (5–7 business days).`;
+    } else {
+      // Cash on Delivery: No advance payment was made
+      refundAmount = 0;
+      refundStatus = 'not_applicable_cod';
+      paymentStatus = cancellationFee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
+      customerMessage = cancellationFee === 0
+        ? 'Cash-on-Delivery appointment cancelled at least 2 hours before scheduled slot. No cancellation fee applies.'
+        : 'Cash-on-Delivery appointment cancelled less than 2 hours before scheduled slot. A late cancellation convenience fee of ₹200 is recorded on your account for admin recovery.';
+    }
+
+    const cancelTimestamp = new Date(now).toISOString();
+    const cancelReasonClean = reason || 'Client cancellation request';
+    const updatedNotes = `${booking.internal_notes || ''} | Cancelled at ${cancelTimestamp}: ${cancelReasonClean} (Fee: ₹${cancellationFee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid' : 'COD'})`;
 
     await db.execute(`
       UPDATE bookings 
-      SET booking_status = 'cancelled', 
+      SET booking_status = 'cancelled',
+          cancelled_at = ?,
+          cancellation_reason = ?,
+          cancellation_fee = ?,
+          cancellation_window_breached = ?,
+          refund_amount = ?,
+          refund_status = ?,
+          payment_status = ?,
           internal_notes = ?
       WHERE id = ?
-    `, [updatedNotes, bookingId]);
+    `, [
+      cancelTimestamp,
+      cancelReasonClean,
+      cancellationFee,
+      windowBreached,
+      refundAmount,
+      refundStatus,
+      paymentStatus,
+      updatedNotes,
+      bookingId
+    ]);
 
-    res.json({ success: true, message: 'Your appointment has been cancelled.' });
+    res.json({
+      success: true,
+      bookingId,
+      bookingStatus: 'cancelled',
+      scheduledSlot: `${booking.appointment_date} at ${booking.appointment_slot}`,
+      cancelledAt: cancelTimestamp,
+      isWithin2Hours,
+      minutesBeforeSlot: diffMinutes,
+      cancellationFee,
+      refundAmount,
+      refundStatus,
+      paymentMethod: booking.payment_method,
+      message: customerMessage
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to cancel booking' });
+    res.status(500).json({ error: err.message || 'Failed to cancel booking.' });
   }
 };
 

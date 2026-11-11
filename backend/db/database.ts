@@ -348,6 +348,12 @@ async function initPostgresSchema(pool: pg.Pool) {
       booking_status VARCHAR(64) NOT NULL DEFAULT 'pending',
       assigned_beautician_id VARCHAR(255),
       internal_notes TEXT,
+      cancelled_at VARCHAR(64),
+      cancellation_reason TEXT,
+      cancellation_fee INTEGER NOT NULL DEFAULT 0,
+      cancellation_window_breached INTEGER NOT NULL DEFAULT 0,
+      refund_amount INTEGER NOT NULL DEFAULT 0,
+      refund_status VARCHAR(64) NOT NULL DEFAULT 'not_applicable',
       created_at VARCHAR(64) NOT NULL
     );
 
@@ -477,6 +483,25 @@ async function seedEssentialData() {
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_delhi', '1000') ON CONFLICT (key) DO NOTHING");
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_haryana', '1500') ON CONFLICT (key) DO NOTHING");
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_noida', '1500') ON CONFLICT (key) DO NOTHING");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('cancellation_fee_late', '200') ON CONFLICT (key) DO NOTHING");
+  await db.execute("INSERT INTO settings (key, value) VALUES ('cancellation_window_hours', '2') ON CONFLICT (key) DO NOTHING");
+
+  // Idempotent migration for cancellation tracking columns in bookings
+  const newBookingCols = [
+    { name: 'cancelled_at', type: 'VARCHAR(64)' },
+    { name: 'cancellation_reason', type: 'TEXT' },
+    { name: 'cancellation_fee', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'cancellation_window_breached', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'refund_amount', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'refund_status', type: "VARCHAR(64) NOT NULL DEFAULT 'not_applicable'" }
+  ];
+  for (const col of newBookingCols) {
+    try {
+      await db.execute(`ALTER TABLE bookings ADD COLUMN ${col.name} ${col.type}`);
+    } catch {
+      // Column already exists
+    }
+  }
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
 
   // 3. Official Service Categories (idempotent)

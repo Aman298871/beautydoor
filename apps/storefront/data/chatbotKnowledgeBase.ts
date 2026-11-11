@@ -210,7 +210,7 @@ export const CHATBOT_CATEGORIES: ChatbotCategory[] = [
   {
     id: 'cat-cancellation',
     name: 'Cancellation & Refunds',
-    tagline: 'Free cancellation up to 4 hrs, rescheduling & refunds',
+    tagline: 'Free cancellation up to 2 hrs, ₹200 late fee & refund terms',
     icon: 'RotateCcw',
     subcategories: [
       {
@@ -965,10 +965,11 @@ Check our "Offers" page for all seasonal festival codes.`,
     id: 'faq-cancel-policy',
     category: 'cat-cancellation',
     subcategory: 'sub-cancel-policy',
-    question: 'What is BeautyDoor\'s cancellation and rescheduling policy?',
-    answer: `• **Free Cancellation**: You can cancel or reschedule with **zero penalty up to 4 hours** prior to your appointment time.
-• **How to Cancel/Reschedule**: Simply go to "My Bookings" in your account or message our Customer Support Helpline on WhatsApp at +91 78277 22522.
-• We understand plans change—our team will happily reschedule your session to a more convenient date or slot!`,
+    question: 'What is BeautyDoor\'s cancellation and refund policy?',
+    answer: `• **Free Cancellation**: You can cancel with **zero penalty up to 2 hours** prior to your appointment time.
+• **Late Cancellation**: Cancellations made **less than 2 hours** before the slot incur a **₹200 convenience fee**.
+• **Prepaid vs COD**: For online-paid bookings, ₹200 is deducted and net refund credited to source account in 5–7 days. For Cash-on-Delivery, ₹200 late fee is recorded on your customer account.
+• **How to Cancel/Reschedule**: Simply go to "My Bookings" in your account or message our Customer Support Helpline on WhatsApp at +91 78277 22522.`,
     followUpQuestionIds: ['faq-reschedule-appointment', 'faq-refund-process'],
     actionType: 'contact',
     keywords: ['cancellation policy', 'cancel booking', 'cancel kaise kare', 'reschedule policy', 'cancel charge']

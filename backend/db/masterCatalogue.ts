@@ -23,6 +23,7 @@ export interface MasterService {
   discount_percent?: number;
   brand?: string;
   steps_count?: number;
+  treatment_steps?: string[];
   service_type: 'single' | 'combo' | 'full_body';
   is_combo: number;
   combo_items?: string[];
@@ -52,6 +53,7 @@ export interface MasterPackage {
   selling_price: number;
   discount_percent: number;
   badge?: string;
+  category_ids: string[];
   inclusions: { name: string; is_free?: boolean }[];
   benefits: string[];
 }
@@ -1307,7 +1309,7 @@ export const MASTER_SERVICES: MasterService[] = [
     original_price: 1299,
     selling_price: 999,
     brand: 'Raaga',
-    steps_count: 7,
+    steps_count: 6,
     service_type: 'single',
     is_combo: 0,
     is_published: 1
@@ -2015,12 +2017,13 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     slug: 'glow-and-smooth',
     subtitle: 'VLCC Facial + FYC Pedicure + Korean Waxing',
     description: 'Essential radiance package combining VLCC fruit facial, FYC 3-step pedicure, and gentle Korean waxing for arms, underarms, and legs.',
-    duration_mins: 95,
-    duration_display: '1 hour 35 minutes',
+    duration_mins: 120,
+    duration_display: '2 hours',
     original_price: 2199,
     selling_price: 1649,
     discount_percent: 25,
     badge: 'Popular Glow',
+    category_ids: ['cat-facials', 'cat-korean-waxing', 'cat-manicure-pedicure'],
     inclusions: [
       { name: 'VLCC Fruit Facial', is_free: false },
       { name: 'FYC Pedicure — 3 Step', is_free: false },
@@ -2042,6 +2045,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 1299,
     discount_percent: 24,
     badge: 'Waxing Essential',
+    category_ids: ['cat-honey-waxing', 'cat-brazilian-peel-off', 'cat-threading'],
     inclusions: [
       { name: 'Honey Wax — Full Arms', is_free: false },
       { name: 'Honey Wax — Full Legs', is_free: false },
@@ -2063,6 +2067,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 1699,
     discount_percent: 29,
     badge: 'Includes Free Bikini',
+    category_ids: ['cat-facials', 'cat-honey-waxing', 'cat-bleach', 'cat-manicure-pedicure', 'cat-threading', 'cat-brazilian-peel-off'],
     inclusions: [
       { name: 'VLCC Tan Facial', is_free: false },
       { name: 'Oxy Bleach — Face & Neck', is_free: false },
@@ -2087,6 +2092,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 2099,
     discount_percent: 25,
     badge: 'K-Beauty Care',
+    category_ids: ['cat-facials', 'cat-korean-waxing', 'cat-manicure-pedicure', 'cat-threading'],
     inclusions: [
       { name: 'Korean Facial — 6 Step', is_free: false },
       { name: 'Korean Wax — Full Arms + Underarms', is_free: false },
@@ -2108,6 +2114,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 1695,
     discount_percent: 26,
     badge: 'Colophony Free',
+    category_ids: ['cat-rica-waxing', 'cat-cleanup', 'cat-brazilian-peel-off', 'cat-threading'],
     inclusions: [
       { name: 'VLCC Cleanup', is_free: false },
       { name: 'RICA Wax — Full Arms', is_free: false },
@@ -2130,6 +2137,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 3199,
     discount_percent: 27,
     badge: 'Celebrity O3+ Care',
+    category_ids: ['cat-facials', 'cat-rica-waxing', 'cat-bleach', 'cat-manicure-pedicure', 'cat-threading'],
     inclusions: [
       { name: 'O3+ Shine & Glow Facial', is_free: false },
       { name: 'O3+ Bleach — Face & Neck', is_free: false },
@@ -2146,13 +2154,14 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     name: 'Beauty Bliss Body Package',
     slug: 'beauty-bliss',
     subtitle: 'Lotus Facial + Body Polish + Honey Wax',
-    description: 'Complete 3-hour self-care package with Lotus White Glow facial, Oxy bleach, Honey waxing, full Body Scrub + Body Pack, and threading.',
-    duration_mins: 180,
-    duration_display: '3 hours',
+    description: 'Complete 2.5-hour self-care package with Lotus White Glow facial, Oxy bleach, Honey waxing, full Body Scrub + Body Pack, and threading.',
+    duration_mins: 150,
+    duration_display: '2 hours 30 minutes',
     original_price: 2299,
     selling_price: 1649,
     discount_percent: 28,
     badge: 'Full Body Polish',
+    category_ids: ['cat-facials', 'cat-honey-waxing', 'cat-body-scrub', 'cat-bleach', 'cat-threading'],
     inclusions: [
       { name: 'Lotus White Glow Facial', is_free: false },
       { name: 'Oxy Bleach — Face & Neck', is_free: false },
@@ -2176,6 +2185,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 1399,
     discount_percent: 26,
     badge: 'Includes Free Bikini',
+    category_ids: ['cat-facials', 'cat-honey-waxing', 'cat-detan', 'cat-threading', 'cat-brazilian-peel-off'],
     inclusions: [
       { name: 'VLCC Facial — Insta Glow / Anti-Tan (Choice)', is_free: false },
       { name: 'Raaga De-Tan — Face & Neck', is_free: false },
@@ -2199,6 +2209,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 2295,
     discount_percent: 28,
     badge: 'Includes Free Bleach',
+    category_ids: ['cat-facials', 'cat-rica-waxing', 'cat-massage', 'cat-bleach'],
     inclusions: [
       { name: 'Sara Gold Facial', is_free: false },
       { name: 'RICA Wax — Full Arms', is_free: false },
@@ -2221,6 +2232,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     selling_price: 2095,
     discount_percent: 28,
     badge: 'Complete Grooming',
+    category_ids: ['cat-facials', 'cat-rica-waxing', 'cat-brazilian-peel-off', 'cat-manicure-pedicure', 'cat-threading'],
     inclusions: [
       { name: 'VLCC Facial — Anti-Tan / Insta Glow (Choice)', is_free: false },
       { name: 'RICA Wax — Full Arms', is_free: false },

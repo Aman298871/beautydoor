@@ -72,6 +72,14 @@ export const ServiceDetailPage: React.FC<Props> = ({
   const finalPrice = service.selling_price + variantDelta + addonsDelta;
   const finalDuration = service.duration_mins + variantDuration + addonsDuration;
 
+  const treatmentSteps: string[] = service.treatmentSteps || (service.steps_json ? (() => {
+    try {
+      return JSON.parse(service.steps_json);
+    } catch {
+      return [];
+    }
+  })() : []);
+
   const handleToggleAddon = (id: string) => {
     setSelectedAddonIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -112,7 +120,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
   };
 
   return (
-    <div className="py-10 sm:py-14 bg-[#FAF7F2] min-h-[85vh]">
+    <div className="pt-6 pb-28 sm:py-14 bg-[#FAF7F2] min-h-[85vh]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         
         {/* Breadcrumb Navigation */}
@@ -127,7 +135,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
         {/* 2-Column Product Detail Layout */}
         <div className="bg-white rounded-2xl border border-[#E8DDD3] shadow-md p-6 sm:p-8 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           
-          {/* Left Column: Details, Benefits, Included */}
+          {/* Left Column: Details, Benefits, Included, Treatment Steps */}
           <div className="md:col-span-7 space-y-6">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold text-[#4A0417] tracking-wider uppercase mb-1.5">
@@ -163,6 +171,39 @@ export const ServiceDetailPage: React.FC<Props> = ({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Treatment Steps Protocol */}
+            {treatmentSteps.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-[#E8DDD3]">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[#4A0417] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                    <span>Verified Procedure Steps ({treatmentSteps.length})</span>
+                  </h4>
+                  {service.brand && (
+                    <span className="text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider">
+                      {service.brand} Salon Protocol
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  {treatmentSteps.map((step: string, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 p-3 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3]"
+                    >
+                      <span className="px-2 py-0.5 bg-[#4A0417] text-white text-[10px] font-bold tracking-wider rounded uppercase shrink-0 mt-0.5">
+                        STEP {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <p className="text-xs text-[#1F1A1C] font-medium leading-relaxed">
+                        {step}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

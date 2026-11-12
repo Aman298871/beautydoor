@@ -235,6 +235,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       inclusions_json TEXT NOT NULL DEFAULT '[]',
       benefits_json TEXT NOT NULL DEFAULT '[]',
       badge VARCHAR(64),
+      category_ids_json TEXT NOT NULL DEFAULT '[]',
       is_published INTEGER NOT NULL DEFAULT 1,
       display_order INTEGER NOT NULL DEFAULT 0,
       created_at VARCHAR(64) NOT NULL,
@@ -502,6 +503,14 @@ async function seedEssentialData() {
       // Column already exists
     }
   }
+
+  // Idempotent migration for category_ids_json in packages
+  try {
+    await db.execute("ALTER TABLE packages ADD COLUMN category_ids_json TEXT DEFAULT '[]'");
+  } catch {
+    // Column already exists
+  }
+
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
 
   // 3. Official Service Categories (idempotent)
@@ -758,48 +767,207 @@ async function seedEssentialData() {
   await db.execute("UPDATE services SET image_url = '/images/service_full_body_wax_combo.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full body%' OR LOWER(name) LIKE '%arms + underarms + full legs%' OR LOWER(name) LIKE '%arms + underarms + half legs%' OR LOWER(name) LIKE '%front + back%')");
 
 
-  // 10. Authentic Treatment Protocols (steps_json)
+  // 10. Authentic Product-Specific Facial Treatment Protocols (steps_json)
+  // Replaces all generic/fallback steps with official owner-approved manufacturer packaging procedures
   const o3ShineSteps = JSON.stringify([
-    'Deep Pore Cleansing Foam (Purifies surface sebum & pollution debris)',
-    'D-Tan Micro-Derma Exfoliator (Enzymatic gentle buffing to lift dead surface cells)',
-    'Whitening Massage Cream (Nutritive bio-botanical circulation enhancement, 15 mins)',
-    'Meladerm Micro-Emulsion Tonic (Tones pores & restores dermal skin pH)',
-    'Whitening Radiance Serum (High-potency botanical depigmentation infusion)',
-    'Peel-Off Algae Glow Mask (Cooling occlusive mask for instant luminosity, 15 mins)',
-    'SPF 30+ Post-Facial Protection Barrier (Blocks UV-induced free radicals)'
+    'Deep Pore Cleansing Foam',
+    'D-Tan Micro-Derma Exfoliator',
+    'Whitening Massage Cream',
+    'Meladerm Micro-Emulsion Tonic',
+    'Whitening Radiance Serum',
+    'Peel-Off Algae Glow Mask',
+    'SPF 30+ Post-Facial Protection Barrier'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7 WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%') AND (steps_json = '[]' OR steps_json IS NULL)", [o3ShineSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7, brand = 'O3+' WHERE id = 'srv-facial-o3-shine-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%'))", [o3ShineSteps]);
 
   const o3BridalSteps = JSON.stringify([
-    'Gentle Cleanser Emulsion (Melt away atmospheric impurities and makeup)',
-    'Seaweed Enzymatic Scrub (Targeted cellular renewal and dead skin lifting)',
-    'Seaweed Nourishing Massage Gel (Intense deep dermal hydration, 15 mins)',
-    'Oxygenating Ampoule Serum (Infuses active marine minerals and vital ions)',
-    'Seaweed Rubberizing Peel-Off Mask (Firms skin tissue and seals moisture, 15 mins)',
-    'Cellular Protective Emulsion (Silky protective environmental shield)'
+    'Gentle Cleanser Emulsion',
+    'Seaweed Enzymatic Scrub',
+    'Seaweed Nourishing Massage Gel',
+    'Oxygenating Ampoule Serum',
+    'Seaweed Rubberizing Peel-Off Mask',
+    'High-Potency Vitamin C Booster',
+    'Whitening Tonic Infusion',
+    'Dermal Moisture Complex',
+    'Cellular Protective Emulsion'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6 WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%bridal%' OR LOWER(name) LIKE '%seaweed%') AND (steps_json = '[]' OR steps_json IS NULL)", [o3BridalSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 9, brand = 'O3+' WHERE id = 'srv-facial-o3-bridal-glow-vit-c' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%bridal%' OR LOWER(name) LIKE '%vit-c%'))", [o3BridalSteps]);
 
-  const koreanSteps = JSON.stringify([
-    'Double Oil-to-Milk Deep Cleanse (Dissolves impurities without barrier disruption)',
-    'AHA/BHA Mild Enzymatic Rice Polish (Dissolves surface keratosis for glass clarity)',
-    'Centella Asiatica Balancing Skin Hydrator (Multi-depth hydration prep)',
-    'Collagen Booster Lymphatic Facial Massage (Stimulates micro-circulation & cheek contour)',
-    'Hyaluronic Acid & Niacinamide Radiance Ampoule (Deep glass luminosity infusion)',
-    'K-Beauty Hydrogel Cooling Glow Sheet Mask (Seals essence deep into dermal layers, 15 mins)',
-    'Ceramide Barrier Sealant & SPF Shield (Glass skin moisture barrier preservation)'
+  const o3AntiAgingSteps = JSON.stringify([
+    'Oxygenating Cleanser',
+    'Micro-Peel Exfoliator',
+    'Collagen Firming Cream',
+    'Dermal Lift Mask'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7 WHERE category_id = 'cat-facials' AND (LOWER(name) LIKE '%korean%' OR LOWER(name) LIKE '%glass%') AND (steps_json = '[]' OR steps_json IS NULL)", [koreanSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'O3+' WHERE id = 'srv-facial-o3-anti-aging' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND LOWER(name) LIKE '%anti-aging%')", [o3AntiAgingSteps]);
 
-  const genericFacialSteps = JSON.stringify([
-    'Double Surface Cleansing & Balancing Toner (Purifies and primes facial skin)',
-    'Micro-Dermabrasion Polishing Scrub (Gently clears dead epidermal cells)',
-    'Radiant Botanical Massage Gel (Stimulates cellular nutrient absorption)',
-    'Deep Nourishing Rejuvenation Cream (Pressure point soothing facial massage, 15 mins)',
-    'Radiance Firming Pack / Peel-Off Mask (Restores elasticity and youthful glow, 15 mins)',
-    'Hydrating Moisture Seal & Broad-Spectrum Sun Shield'
+  // VLCC Facial Protocols (Official 4 & 5-Step Kits)
+  const vlccFruitSteps = JSON.stringify([
+    'Papaya Seed Scrub',
+    'Cucumber Gel',
+    'Peach Massage Cream',
+    'Orange Anti-Tan Pack',
+    'Green Apple Skin Guard Lotion'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6 WHERE category_id = 'cat-facials' AND (steps_json = '[]' OR steps_json IS NULL)", [genericFacialSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 5, brand = 'VLCC' WHERE id = 'srv-facial-vlcc-fruit' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vlcc%' AND LOWER(name) LIKE '%fruit%')", [vlccFruitSteps]);
+
+  const vlccAntiTanSteps = JSON.stringify([
+    'Cleanser cum Toner',
+    'Oatmeal Scrub',
+    'Melawhite Gel',
+    'Pista Massage Cream',
+    'Melawhite Pack'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 5, brand = 'VLCC' WHERE id = 'srv-facial-vlcc-anti-tan' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vlcc%' AND LOWER(name) LIKE '%anti-tan%')", [vlccAntiTanSteps]);
+
+  const vlccInstaGlowSteps = JSON.stringify([
+    'Indian Berberry Face Scrub',
+    'Saffron Massage Gel',
+    'Snigdha Face Cream',
+    'Insta Glow Face Pack'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'VLCC' WHERE id = 'srv-facial-vlcc-insta-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vlcc%' AND LOWER(name) LIKE '%insta%')", [vlccInstaGlowSteps]);
+
+  const vlccSkinTighteningSteps = JSON.stringify([
+    'Indian Pomelo Face Scrub',
+    'Pomegranate Massage Gel',
+    'Snigdha Massage Cream',
+    'Skin Tightening Face Pack'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'VLCC' WHERE id = 'srv-facial-vlcc-skin-tightening' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vlcc%' AND (LOWER(name) LIKE '%tightening%' OR LOWER(name) LIKE '%skin tightening%'))", [vlccSkinTighteningSteps]);
+
+  // Lotus Professional Facial Protocols (Official 4-Step Salon Kits)
+  const lotusWhiteGlowSteps = JSON.stringify([
+    'WhiteGlow Cleansing Milk',
+    'WhiteGlow Oatmeal & Yogurt Skin Whitening Scrub',
+    'WhiteGlow Skin Whitening & Brightening Massage Creme',
+    'WhiteGlow Yogurt Skin Whitening & Brightening Masque'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'Lotus' WHERE id = 'srv-facial-lotus-white-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%lotus%' AND LOWER(name) LIKE '%white%')", [lotusWhiteGlowSteps]);
+
+  const lotusGoldSteps = JSON.stringify([
+    'Radiant Gold Exfoliating Cleanser',
+    'Radiant Gold Activator',
+    'Radiant Gold Massage Creme with Gold Leaves',
+    'Radiant Gold Mask'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'Lotus' WHERE id = 'srv-facial-lotus-gold' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%lotus%' AND LOWER(name) LIKE '%gold%')", [lotusGoldSteps]);
+
+  const lotusDiamondSteps = JSON.stringify([
+    'Radiant Diamond Deep Cleanser',
+    'Radiant Diamond Exfoliating Scrub',
+    'Radiant Diamond Massage Creme',
+    'Radiant Diamond Mask'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'Lotus' WHERE id = 'srv-facial-lotus-diamond' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%lotus%' AND LOWER(name) LIKE '%diamond%')", [lotusDiamondSteps]);
+
+  const lotusPearlSteps = JSON.stringify([
+    'Radiant Pearl Exfoliating Cleanser',
+    'Radiant Pearl Activator',
+    'Radiant Pearl Massage Creme',
+    'Radiant Pearl Mask'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'Lotus' WHERE id = 'srv-facial-lotus-pearl' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%lotus%' AND LOWER(name) LIKE '%pearl%')", [lotusPearlSteps]);
+
+  // FYC Facial Protocols (Official Salon Kits)
+  const fycWineSteps = JSON.stringify([
+    'Glow Cleanser',
+    'Renewing Face Scrub',
+    'Massage Gel',
+    'Massage Cream',
+    'Face Pack',
+    'Serum / Moisturizer'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'FYC' WHERE id = 'srv-facial-fyc-wine' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND LOWER(name) LIKE '%wine%')", [fycWineSteps]);
+
+  const fycDeTanSteps = JSON.stringify([
+    'De-Tan Cleanser',
+    'De-Tan AHA Enzyme Powder',
+    'AHA Massage Gel',
+    'Renewing Massage Cream',
+    'AHA Tan Removal Face Pack',
+    'Skin Serum'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'FYC' WHERE id = 'srv-facial-fyc-detan' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%detan%' OR LOWER(name) LIKE '%de-tan%'))", [fycDeTanSteps]);
+
+  const fycKoreanGlassSteps = JSON.stringify([
+    'Deep Cleansing Foam',
+    'AHA/BHA Enzymatic Rice Exfoliator',
+    'Hydrating Essence Toner',
+    'Hydro-Nutritive Massage Gel',
+    'Collagen Firming Massage Cream',
+    'Radiance Boosting Ampoule',
+    'K-Beauty Hydrogel Glow Mask',
+    'Centella Calming Emulsion',
+    'Ceramide UV Protective Barrier'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 9, brand = 'FYC' WHERE id = 'srv-facial-fyc-korean-glass' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%glass%' OR LOWER(name) LIKE '%korean%'))", [fycKoreanGlassSteps]);
+
+  // Blossom Kochhar Aroma Magic Facial Protocols
+  const aromaSkinGlowSteps = JSON.stringify([
+    'Face Cleanser',
+    'Protein Bleach / Exfoliating Gel',
+    'Skin Serum',
+    'Nourishing Cream',
+    'Face Pack',
+    'Sunscreen / Hydrating Gel'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Blossom Kochhar' WHERE id = 'srv-facial-aroma-magic-skin-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%aroma%' AND LOWER(name) LIKE '%skin glow%')", [aromaSkinGlowSteps]);
+
+  const aromaBridalGlowSteps = JSON.stringify([
+    'Cleansing Gel',
+    'Peeling Gel',
+    'Skin Serum',
+    'Nourishing Cream',
+    'Hydrating Gel',
+    'Face Pack',
+    'Sunscreen'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7, brand = 'Blossom Kochhar' WHERE id = 'srv-facial-aroma-magic-bridal-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%aroma%' AND LOWER(name) LIKE '%bridal%')", [aromaBridalGlowSteps]);
+
+  // Raaga / Rasa Anti-Aging Facial Protocol (Stem Cells Infused 6-Step Kit)
+  const raagaAntiAgingSteps = JSON.stringify([
+    'Cleanser',
+    'Exfoliator (Scrub)',
+    'Toner',
+    'Serum',
+    'Massage Cream',
+    'Peel-Off Masque'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Raaga' WHERE id = 'srv-facial-raaga-anti-aging' OR (category_id = 'cat-facials' AND (LOWER(name) LIKE '%raaga%' OR LOWER(name) LIKE '%rasa%') AND LOWER(name) LIKE '%anti-aging%')", [raagaAntiAgingSteps]);
+
+  // Sara Gold Facial Protocol
+  const saraGoldSteps = JSON.stringify([
+    'Sara Gold Cleansing Gel',
+    'Sara Gold Scrub',
+    'Sara Gold Massage Cream',
+    'Sara Gold Mask',
+    'Sara Gold Serum',
+    'Sara Gold Radiance Cream'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Sara' WHERE id = 'srv-facial-sara-gold' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%sara%' AND LOWER(name) LIKE '%gold%')", [saraGoldSteps]);
+
+  // Vedicline Facial Protocols
+  const vediclineBioWhiteSteps = JSON.stringify([
+    'Bio White Cleanser',
+    'Bio White Scrub',
+    'Bio White Gel',
+    'Bio White Cream',
+    'Bio White Pack',
+    'Bio White Serum',
+    'Bio White Moisture Shield'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7, brand = 'Vedicline' WHERE id = 'srv-facial-vedicline-bio-white' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vedicline%' AND LOWER(name) LIKE '%bio%')", [vediclineBioWhiteSteps]);
+
+  const vediclineArganSteps = JSON.stringify([
+    'Argan Cleanser',
+    'Argan Scrub',
+    'Argan Massage Gel',
+    'Argan Nourishing Cream',
+    'Argan Firming Pack',
+    'Argan Glow Serum'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Vedicline' WHERE id = 'srv-facial-vedicline-moroccan-argan' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vedicline%' AND LOWER(name) LIKE '%argan%')", [vediclineArganSteps]);
 
   const cleanupSteps = JSON.stringify([
     'Deep Surface Cleansing (Purifies excess sebum, dust, and environmental residue)',
@@ -942,8 +1110,8 @@ async function seedEssentialData() {
         INSERT INTO packages (
           id, name, slug, subtitle, description, duration_mins, duration_display,
           original_price, selling_price, discount_percent, inclusions_json, benefits_json,
-          badge, is_published, display_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          badge, category_ids_json, is_published, display_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         p.id,
         p.name,
@@ -958,6 +1126,7 @@ async function seedEssentialData() {
         JSON.stringify(p.inclusions),
         JSON.stringify(p.benefits),
         p.badge || null,
+        JSON.stringify(p.category_ids || []),
         1,
         pOrder++,
         now,
@@ -966,11 +1135,88 @@ async function seedEssentialData() {
     }
   }
 
-  // Ensure package names use simple customer-friendly titles
-  await db.execute("UPDATE packages SET name = 'Facial & Waxing Package' WHERE id = 'pkg-glow-and-smooth'");
-  await db.execute("UPDATE packages SET name = 'Head-to-Toe Beauty Package' WHERE id = 'pkg-korean-glow'");
-  await db.execute("UPDATE packages SET name = 'Massage & Relaxation Package' WHERE id = 'pkg-just-relax'");
-  await db.execute("UPDATE packages SET name = 'Monthly Beauty Package' WHERE id = 'pkg-monthly-glow'");
+  // Ensure owner-approved package durations, titles, and category-wise mappings are actively synced
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Facial & Waxing Package',
+      duration_mins = 120,
+      duration_display = '2 hours',
+      category_ids_json = '["cat-facials", "cat-korean-waxing", "cat-manicure-pedicure"]'
+    WHERE id = 'pkg-glow-and-smooth'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Waxing & Brazilian Bikini Package',
+      duration_mins = 80,
+      duration_display = '1 hour 20 minutes',
+      category_ids_json = '["cat-honey-waxing", "cat-brazilian-peel-off", "cat-threading"]'
+    WHERE id = 'pkg-honey-brazilian-bikini'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Monthly Beauty Package',
+      duration_mins = 140,
+      duration_display = '2 hours 20 minutes',
+      category_ids_json = '["cat-facials", "cat-honey-waxing", "cat-bleach", "cat-manicure-pedicure", "cat-threading", "cat-brazilian-peel-off"]'
+    WHERE id = 'pkg-monthly-glow'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Head-to-Toe Beauty Package',
+      duration_mins = 150,
+      duration_display = '2 hours 30 minutes',
+      category_ids_json = '["cat-facials", "cat-korean-waxing", "cat-manicure-pedicure", "cat-threading"]'
+    WHERE id = 'pkg-korean-glow'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Waxing & Cleanup Package',
+      duration_mins = 120,
+      duration_display = '2 hours',
+      category_ids_json = '["cat-rica-waxing", "cat-cleanup", "cat-brazilian-peel-off", "cat-threading"]'
+    WHERE id = 'pkg-special-rica'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Luxury Head-to-Toe Package',
+      duration_mins = 200,
+      duration_display = '3 hours 20 minutes',
+      category_ids_json = '["cat-facials", "cat-rica-waxing", "cat-bleach", "cat-manicure-pedicure", "cat-threading"]'
+    WHERE id = 'pkg-signature-beauty'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Beauty Bliss Body Package',
+      duration_mins = 150,
+      duration_display = '2 hours 30 minutes',
+      description = 'Complete 2.5-hour self-care package with Lotus White Glow facial, Oxy bleach, Honey waxing, full Body Scrub + Body Pack, and threading.',
+      category_ids_json = '["cat-facials", "cat-honey-waxing", "cat-body-scrub", "cat-bleach", "cat-threading"]'
+    WHERE id = 'pkg-beauty-bliss'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Smooth & Silky Package',
+      duration_mins = 120,
+      duration_display = '2 hours',
+      category_ids_json = '["cat-facials", "cat-honey-waxing", "cat-detan", "cat-threading", "cat-brazilian-peel-off"]'
+    WHERE id = 'pkg-smooth-and-silky'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Massage & Relaxation Package',
+      duration_mins = 150,
+      duration_display = '2 hours 30 minutes',
+      category_ids_json = '["cat-facials", "cat-rica-waxing", "cat-massage", "cat-bleach"]'
+    WHERE id = 'pkg-just-relax'
+  `);
+  await db.execute(`
+    UPDATE packages SET
+      name = 'BeautyDoor Glamour Essentials',
+      duration_mins = 150,
+      duration_display = '2 hours 30 minutes',
+      category_ids_json = '["cat-facials", "cat-rica-waxing", "cat-brazilian-peel-off", "cat-manicure-pedicure", "cat-threading"]'
+    WHERE id = 'pkg-glamour-essentials'
+  `);
 
   // 8. HYGIENE & SAFETY COMMITMENTS (idempotent)
   const hygCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM hygiene_commitments');

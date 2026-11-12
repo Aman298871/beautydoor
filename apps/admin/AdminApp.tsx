@@ -3396,7 +3396,7 @@ export default function AdminApp() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="font-semibold block mb-1">Selling Price (₹) *</label>
                   <input
@@ -3419,13 +3419,25 @@ export default function AdminApp() {
                 </div>
 
                 <div>
+                  <label className="font-semibold block mb-1">Duration (Mins) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingPackage.duration_mins || ''}
+                    onChange={(e) => setEditingPackage({ ...editingPackage, duration_mins: Number(e.target.value) })}
+                    placeholder="e.g. 120"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
+                  />
+                </div>
+
+                <div>
                   <label className="font-semibold block mb-1">Duration (Display Text) *</label>
                   <input
                     type="text"
                     required
                     value={editingPackage.duration_display || ''}
                     onChange={(e) => setEditingPackage({ ...editingPackage, duration_display: e.target.value })}
-                    placeholder="e.g. 1 hour 35 minutes"
+                    placeholder="e.g. 2 hours"
                     className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
                   />
                 </div>

@@ -40,7 +40,8 @@ storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<v
     const packages = rawPackages.map((p) => ({
       ...p,
       inclusions: JSON.parse(p.inclusions_json || '[]'),
-      benefits: JSON.parse(p.benefits_json || '[]')
+      benefits: JSON.parse(p.benefits_json || '[]'),
+      category_ids: JSON.parse(p.category_ids_json || '[]')
     }));
 
     const hygieneCommitments = await db.query('SELECT * FROM hygiene_commitments WHERE is_active = 1 ORDER BY display_order ASC', []);
@@ -78,7 +79,8 @@ storefrontRouter.get('/packages', async (_req: Request, res: Response): Promise<
     const packages = rawPackages.map((p) => ({
       ...p,
       inclusions: JSON.parse(p.inclusions_json || '[]'),
-      benefits: JSON.parse(p.benefits_json || '[]')
+      benefits: JSON.parse(p.benefits_json || '[]'),
+      category_ids: JSON.parse(p.category_ids_json || '[]')
     }));
     res.json({ packages });
   } catch (err: any) {
@@ -98,7 +100,8 @@ storefrontRouter.get('/packages/:slug', async (req: Request, res: Response): Pro
       package: {
         ...p,
         inclusions: JSON.parse(p.inclusions_json || '[]'),
-        benefits: JSON.parse(p.benefits_json || '[]')
+        benefits: JSON.parse(p.benefits_json || '[]'),
+        category_ids: JSON.parse(p.category_ids_json || '[]')
       }
     });
   } catch (err: any) {

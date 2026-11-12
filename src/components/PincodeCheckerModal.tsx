@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Territory } from '../types.ts';
 
@@ -17,6 +17,20 @@ export const PincodeCheckerModal: React.FC<Props> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [selectedCityFilter, setSelectedCityFilter] = useState<string>('All');
+
+  // Lock background scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

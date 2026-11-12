@@ -686,7 +686,8 @@ adminRouter.get('/packages', async (_req: Request, res: Response): Promise<void>
   const packages = rawPackages.map((p) => ({
     ...p,
     inclusions: JSON.parse(p.inclusions_json || '[]'),
-    benefits: JSON.parse(p.benefits_json || '[]')
+    benefits: JSON.parse(p.benefits_json || '[]'),
+    category_ids: JSON.parse(p.category_ids_json || '[]')
   }));
   res.json({ packages });
 });
@@ -701,8 +702,8 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     INSERT INTO packages (
       id, name, slug, subtitle, description, original_price, selling_price,
       discount_percent, duration_mins, duration_display, inclusions_json,
-      benefits_json, is_published, badge, display_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      benefits_json, category_ids_json, is_published, badge, display_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [id,
     p.name,
     slug,
@@ -715,6 +716,7 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     p.duration_display || `${p.duration_mins} mins`,
     JSON.stringify(p.inclusions || []),
     JSON.stringify(p.benefits || []),
+    JSON.stringify(p.category_ids || []),
     p.is_published !== false ? 1 : 0,
     p.badge || null,
     Number(p.display_order || 0),
@@ -748,7 +750,9 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
       UPDATE packages 
       SET name = ?, slug = ?, subtitle = ?, description = ?, original_price = ?,
           selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
-          inclusions_json = ?, benefits_json = ?, is_published = ?, badge = ?,
+          inclusions_json = ?, benefits_json = ?,
+          category_ids_json = CASE WHEN ? IS NOT NULL THEN ? ELSE category_ids_json END,
+          is_published = ?, badge = ?,
           display_order = ?, updated_at = ?
       WHERE id = ?
     `, [p.name,
@@ -762,6 +766,8 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
       p.duration_display || `${p.duration_mins} mins`,
       JSON.stringify(p.inclusions || []),
       JSON.stringify(p.benefits || []),
+      p.category_ids ? JSON.stringify(p.category_ids) : null,
+      p.category_ids ? JSON.stringify(p.category_ids) : null,
       p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
       p.badge || null,
       Number(p.display_order || 0),

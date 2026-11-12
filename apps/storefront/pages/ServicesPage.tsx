@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star, Calendar } from 'lucide-react';
+import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star, Calendar, Gift, Wind, SlidersHorizontal, ChevronRight, Tag } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
@@ -8,6 +8,8 @@ import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
 interface Props {
   services: any[];
   categories: any[];
+  packages?: any[];
+  onAddPackage?: (pkg: any, selectedVariant?: string) => void;
   onQuickAdd: (service: any) => void;
   onQuickBook?: (service: any) => void;
   onBookNow?: (service: any, variant?: any, addons?: any[]) => void;
@@ -17,6 +19,8 @@ interface Props {
 export const ServicesPage: React.FC<Props> = ({
   services,
   categories,
+  packages = [],
+  onAddPackage,
   onQuickAdd,
   onQuickBook,
   onBookNow,
@@ -28,6 +32,26 @@ export const ServicesPage: React.FC<Props> = ({
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'popular' | 'priceAsc' | 'priceDesc' | 'durationAsc'>('popular');
   const [activeModalService, setActiveModalService] = useState<any | null>(null);
+  const [activeModalPackage, setActiveModalPackage] = useState<any | null>(null);
+  const [selectedFacialVariant, setSelectedFacialVariant] = useState<Record<string, string>>({
+    'pkg-total-care': 'Insta Glow',
+    'pkg-just-relax': 'Insta Glow',
+    'pkg-glamour-essentials': 'Anti-Tan'
+  });
+
+  // Lock background scroll when any modal is active
+  useEffect(() => {
+    if (activeModalService || activeModalPackage) {
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [activeModalService, activeModalPackage]);
 
   // Sync category from URL parameter
   useEffect(() => {
@@ -84,8 +108,29 @@ export const ServicesPage: React.FC<Props> = ({
 
   const currentCategoryObj = categories.find(c => c.id === selectedCat);
 
+  // Filter packages for currently selected category
+  const categoryPackages = (packages || []).filter((p: any) => {
+    if (selectedCat === 'all') return false;
+    let catIds = p.category_ids;
+    if (!catIds && p.category_ids_json) {
+      try {
+        catIds = JSON.parse(p.category_ids_json);
+      } catch (e) {
+        catIds = [];
+      }
+    }
+    return Array.isArray(catIds) && catIds.includes(selectedCat);
+  });
+
+  const handleBookPackage = (pkg: any) => {
+    const chosenVariant = selectedFacialVariant[pkg.id] || (pkg.slug?.includes('total-care') || pkg.slug?.includes('just-relax') || pkg.slug?.includes('glamour-essentials') ? 'Insta Glow' : undefined);
+    if (onAddPackage) {
+      onAddPackage(pkg, chosenVariant);
+    }
+  };
+
   return (
-    <div className="py-8 sm:py-12 bg-[#FAF7F2] min-h-[90vh]">
+    <div className="pt-6 pb-28 sm:py-12 bg-[#FAF7F2] min-h-[90vh] overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         
         {/* Breadcrumb & Header */}
@@ -254,6 +299,186 @@ export const ServicesPage: React.FC<Props> = ({
           </div>
           <span className="font-semibold text-[#4A0417]">Zero Doorstep Visiting Charge</span>
         </div>
+
+        {/* Category-Wise Value Packages Section */}
+        {categoryPackages.length > 0 && (
+          <section className="bg-gradient-to-br from-[#FFFBF7] to-white rounded-2xl border-2 border-[#C5A880]/40 p-5 sm:p-7 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E8DDD3]">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#4A0417]">
+                  <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                  <span>Curated Package Bundles</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C] mt-0.5">
+                  Ready-Made Packages with {currentCategoryObj ? currentCategoryObj.name : 'this Category'}
+                </h2>
+                <p className="text-xs sm:text-sm text-[#7A6B6D] font-light mt-0.5">
+                  Save up to 30% by bundling your {currentCategoryObj?.name || 'services'} with waxing, manicure, bleach or body polishing.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/packages')}
+                className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-white border border-[#C5A880] text-xs font-semibold text-[#4A0417] hover:bg-[#FAF7F2] transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <span>View all packages</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {categoryPackages.map((pkg: any) => {
+                const pkgSellingPrice = pkg.selling_price || pkg.sellingPrice || 0;
+                const pkgOriginalPrice = pkg.original_price || pkg.originalPrice || 0;
+                const pkgDurationMins = pkg.duration_mins || pkg.durationMins || 0;
+                const pkgInclusions = pkg.inclusions || (pkg.inclusions_json ? JSON.parse(pkg.inclusions_json) : []);
+                const hasVlccChoice = pkg.slug?.includes('total-care') || pkg.slug?.includes('just-relax') || pkg.slug?.includes('glamour-essentials') || pkg.vlcc_facial_variant;
+                const selectedVariant = selectedFacialVariant[pkg.id] || 'Insta Glow';
+                const isAdded = cartItemIds.some((id: string) => id.includes(pkg.id));
+
+                return (
+                  <article
+                    key={pkg.id}
+                    className="bg-white rounded-xl border border-[#E8DDD3] hover:border-[#C5A880] transition-all hover:shadow-lg p-4 sm:p-5 flex flex-col justify-between relative group"
+                  >
+                    <div className="space-y-3">
+                      {/* Top Badges */}
+                      <div className="flex items-center justify-between gap-2">
+                        {pkg.badge ? (
+                          <span className="px-2.5 py-0.5 bg-[#4A0417] text-white text-[10px] font-bold tracking-wider rounded uppercase">
+                            {pkg.badge}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 bg-[#C5A880]/20 text-[#4A0417] text-[10px] font-bold tracking-wider rounded uppercase">
+                            Value Bundle
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-[#6B5A5C]">
+                          <Clock className="w-3 h-3 text-[#4A0417]" />
+                          <span className="tabular-nums">{formatDuration(pkgDurationMins)}</span>
+                        </span>
+                      </div>
+
+                      {/* Package Title & Subtitle */}
+                      <div>
+                        <h3 className="font-serif font-bold text-base sm:text-lg text-[#1F1A1C] group-hover:text-[#4A0417] transition-colors leading-snug">
+                          {pkg.name}
+                        </h3>
+                        {pkg.subtitle && (
+                          <p className="text-xs text-[#8C7A7C] font-light mt-0.5 line-clamp-1">
+                            {pkg.subtitle}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Inclusions Preview */}
+                      <div className="bg-[#FAF7F2] p-3 rounded-lg border border-[#E8DDD3]/70 space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A0417] block">
+                          Included Treatments ({pkgInclusions.length}):
+                        </span>
+                        <ul className="space-y-1">
+                          {pkgInclusions.slice(0, 3).map((item: any, idx: number) => {
+                            const name = typeof item === 'object' ? item.name : String(item);
+                            const isFree = typeof item === 'object' ? !!item.is_free : name.toLowerCase().includes('free');
+                            return (
+                              <li key={idx} className="flex items-center gap-1.5 text-xs text-[#4A3E3D]">
+                                {isFree ? (
+                                  <Gift className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                )}
+                                <span className={`truncate ${isFree ? 'font-bold text-amber-900' : ''}`}>
+                                  {name}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {pkgInclusions.length > 3 && (
+                          <p className="text-[10px] font-semibold text-[#8C7A7C] pt-0.5">
+                            +{pkgInclusions.length - 3} more treatments included
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Facial Variant Selector if applicable */}
+                      {hasVlccChoice && (
+                        <div className="pt-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-[#4A0417] block mb-1">
+                            Choose Facial Variant:
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {['Insta Glow', 'Anti-Tan'].map((vName) => {
+                              const active = selectedVariant === vName;
+                              return (
+                                <button
+                                  key={vName}
+                                  type="button"
+                                  onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: vName }))}
+                                  className={`py-1 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                    active
+                                      ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-2xs'
+                                      : 'bg-white text-[#4A3E3D] border-[#E8DDD3] hover:border-[#C5A880]'
+                                  }`}
+                                >
+                                  {vName}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pricing & Actions */}
+                    <div className="pt-4 mt-3 border-t border-[#E8DDD3] flex items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xl font-serif font-bold text-[#4A0417] tabular-nums">
+                            ₹{pkgSellingPrice.toLocaleString('en-IN')}
+                          </span>
+                          {pkgOriginalPrice > pkgSellingPrice && (
+                            <span className="text-xs text-[#8C7A7C] line-through tabular-nums">
+                              ₹{pkgOriginalPrice.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveModalPackage(pkg)}
+                          className="text-[11px] font-semibold text-[#8C7A7C] hover:text-[#4A0417] underline decoration-[#C5A880] transition-colors cursor-pointer"
+                        >
+                          View package details
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBookPackage(pkg)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                          isAdded
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                            : 'bg-[#4A0417] hover:bg-[#36020F] text-white active:scale-95'
+                        }`}
+                      >
+                        {isAdded ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 text-[#C5A880]" />
+                            <span>Add Package</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Phase 2 & 3: Direct Full-Width Service Cards Grid (3 Columns on Large Screens) */}
         {sorted.length > 0 ? (
@@ -457,6 +682,158 @@ export const ServicesPage: React.FC<Props> = ({
             else onQuickAdd(s);
           }}
         />
+      )}
+
+      {/* Package Detail Modal */}
+      {activeModalPackage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setActiveModalPackage(null)}
+        >
+          <div
+            className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-[#E8DDD3] p-5 sm:p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setActiveModalPackage(null)}
+              aria-label="Close modal"
+              className="absolute top-4 right-4 p-1.5 text-[#8C7A7C] hover:text-[#1F1A1C] hover:bg-[#FAF7F2] rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  {activeModalPackage.badge && (
+                    <span className="px-2.5 py-0.5 bg-[#4A0417] text-white text-[10px] font-bold tracking-wider rounded uppercase">
+                      {activeModalPackage.badge}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-xs text-[#6B5A5C] font-semibold">
+                    <Clock className="w-3.5 h-3.5 text-[#4A0417]" />
+                    <span className="tabular-nums">{formatDuration(activeModalPackage.duration_mins || activeModalPackage.durationMins || 0)}</span>
+                  </span>
+                </div>
+
+                <h3 className="font-serif text-2xl font-bold text-[#1F1A1C]">
+                  {activeModalPackage.name}
+                </h3>
+                {activeModalPackage.subtitle && (
+                  <p className="text-xs text-[#8C7A7C] mt-0.5">
+                    {activeModalPackage.subtitle}
+                  </p>
+                )}
+                {activeModalPackage.description && (
+                  <p className="text-xs text-[#554749] mt-2 font-light leading-relaxed">
+                    {activeModalPackage.description}
+                  </p>
+                )}
+              </div>
+
+              {/* All Inclusions List */}
+              <div className="bg-[#FAF7F2] p-4 rounded-xl border border-[#E8DDD3] space-y-2.5">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[#4A0417] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                  <span>Full Package Inclusions</span>
+                </h4>
+                <ul className="space-y-2 text-xs text-[#3D3335]">
+                  {(activeModalPackage.inclusions || (activeModalPackage.inclusions_json ? JSON.parse(activeModalPackage.inclusions_json) : [])).map((item: any, idx: number) => {
+                    const name = typeof item === 'object' ? item.name : String(item);
+                    const isFree = typeof item === 'object' ? !!item.is_free : name.toLowerCase().includes('free');
+                    return (
+                      <li key={idx} className="flex items-start gap-2.5">
+                        {isFree ? (
+                          <Gift className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        )}
+                        <span className={`leading-snug ${isFree ? 'font-bold text-amber-900' : 'font-medium'}`}>
+                          {name}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Variant Selector if applicable */}
+              {(activeModalPackage.slug?.includes('total-care') || activeModalPackage.slug?.includes('just-relax') || activeModalPackage.slug?.includes('glamour-essentials') || activeModalPackage.vlcc_facial_variant) && (
+                <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#4A0417] block">
+                    Select Facial Variant:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Insta Glow', 'Anti-Tan'].map((vName) => {
+                      const active = (selectedFacialVariant[activeModalPackage.id] || 'Insta Glow') === vName;
+                      return (
+                        <button
+                          key={vName}
+                          type="button"
+                          onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [activeModalPackage.id]: vName }))}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            active
+                              ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
+                              : 'bg-white text-[#4A3E3D] border-[#E8DDD3] hover:border-[#C5A880]'
+                          }`}
+                        >
+                          {vName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* AC Room & Hair Growth Prep Notice */}
+              <div className="p-3 rounded-xl bg-[#FFFBF0] border border-[#F3E5AB] space-y-1 text-xs text-[#7A5A1E]">
+                <p className="font-bold text-[#4A0417] flex items-center gap-1.5">
+                  <Wind className="w-3.5 h-3.5 text-[#C5A880]" />
+                  AC Room & Hair Growth Preparation Required
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Please ensure an air-conditioned room (approx. 22-24°C) is ready upon beautician arrival. Hair length should be at least 1/4 inch for painless, smooth waxing.
+                </p>
+              </div>
+
+              {/* Single-Use Hygiene Guarantee */}
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1 text-xs text-emerald-950">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  Our Single-Use Hygiene Guarantee
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Disposables unsealed in front of you. Beautician uses sanitized stainless steel tweezers, single-use wooden spatulas, disposable bedsheets, and leaves your space immaculate.
+                </p>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-4 border-t border-[#EAE2D8] flex items-center justify-between gap-3">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-serif font-bold text-[#1F1A1C] tabular-nums">
+                    ₹{(activeModalPackage.selling_price || activeModalPackage.sellingPrice || 0).toLocaleString('en-IN')}
+                  </span>
+                  {(activeModalPackage.original_price || activeModalPackage.originalPrice) && (
+                    <span className="text-xs text-[#8C7A7C] line-through tabular-nums">
+                      ₹{(activeModalPackage.original_price || activeModalPackage.originalPrice).toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleBookPackage(activeModalPackage);
+                    setActiveModalPackage(null);
+                  }}
+                  className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Add Package to Cart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

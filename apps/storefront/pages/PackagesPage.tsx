@@ -50,6 +50,20 @@ export const PackagesPage: React.FC<Props> = ({
   const [activeModalPackage, setActiveModalPackage] = useState<PackageItem | null>(null);
   const [customizingPackage, setCustomizingPackage] = useState<PackageItem | null>(null);
 
+  // Lock background scroll when modal is active
+  useEffect(() => {
+    if (activeModalPackage || customizingPackage) {
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [activeModalPackage, customizingPackage]);
+
   useEffect(() => {
     fetch('/api/storefront/packages')
       .then((res) => res.json())
@@ -94,7 +108,7 @@ export const PackagesPage: React.FC<Props> = ({
   };
 
   return (
-    <div className="py-10 sm:py-16 bg-[#FAF7F2] min-h-[85vh]">
+    <div className="pt-6 pb-28 sm:py-16 bg-[#FAF7F2] min-h-[85vh]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Breadcrumb & Header */}

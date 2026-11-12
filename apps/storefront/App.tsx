@@ -244,6 +244,8 @@ function StorefrontContent() {
       <ServicesPage
         services={services}
         categories={categories}
+        packages={packages}
+        onAddPackage={handleAddOfficialPackage}
         onQuickAdd={handleQuickAdd}
         onQuickBook={handleQuickBook}
         onBookNow={handleBookNow}

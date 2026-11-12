@@ -891,15 +891,15 @@ async function seedEssentialData() {
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'FYC' WHERE id = 'srv-facial-fyc-detan' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%detan%' OR LOWER(name) LIKE '%de-tan%'))", [fycDeTanSteps]);
 
   const fycKoreanGlassSteps = JSON.stringify([
-    'Deep Cleansing Foam',
-    'AHA/BHA Enzymatic Rice Exfoliator',
-    'Hydrating Essence Toner',
-    'Hydro-Nutritive Massage Gel',
-    'Collagen Firming Massage Cream',
-    'Radiance Boosting Ampoule',
-    'K-Beauty Hydrogel Glow Mask',
-    'Centella Calming Emulsion',
-    'Ceramide UV Protective Barrier'
+    'Rice Foaming Cleanser',
+    'Hyaluron Detox',
+    'Exfoliator Cream',
+    'Lippy Exfol',
+    'Niacin-Rice Collagen Mask',
+    'Rice Cream',
+    'Ginseng Alginate Powder Mask',
+    'AHA BHA Serum',
+    'Lippy Elixir'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 9, brand = 'FYC' WHERE id = 'srv-facial-fyc-korean-glass' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%glass%' OR LOWER(name) LIKE '%korean%'))", [fycKoreanGlassSteps]);
 
@@ -1013,14 +1013,14 @@ async function seedEssentialData() {
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE category_id = 'cat-manicure-pedicure' AND (steps_json = '[]' OR steps_json IS NULL)", [maniPediSteps]);
 
   // --- OWNER-APPROVED AUTHORITATIVE CATALOGUE OVERRIDES (November 9, 2026) ---
-  // 1. Moonstar Korean Facial: exactly 6 steps, brand Moonstar
+  // 1. Moonstar Korean Facial: exactly 6 steps, brand Moonstar (Official Milk Shake Skincare FAQ)
   const moonstar6Steps = JSON.stringify([
-    'Double Cleansing & Purifying Prep (Deep pore impurities and surface sebum removal)',
-    'AHA/BHA Enzymatic Rice Exfoliator (Gentle buffing to lift dull surface skin cells)',
-    'Centella Asiatica Hydration Mist (Restores natural dermal pH balance)',
-    'Collagen Boosting Facial Massage (Acupressure circulation and lymphatic drainage, 15 mins)',
-    'Glass-Skin K-Beauty Glow Sheet Mask (Intensive essence penetration and cooling, 15 mins)',
-    'Ceramide Barrier Protective Sealant (Locks in moisture with lightweight sun shield)'
+    'Cleanser',
+    'Scrub',
+    'Gel',
+    'Cream',
+    'Face Pack',
+    'Serum'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Moonstar' WHERE id = 'srv-facial-moonstar-korean' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%moonstar%')", [moonstar6Steps]);
 

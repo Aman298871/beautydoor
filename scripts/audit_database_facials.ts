@@ -13,7 +13,7 @@ async function audit() {
   const published = allFacials.filter(f => f.is_published === 1);
   const unpublished = allFacials.filter(f => f.is_published === 0);
 
-  const ownerApprovedIds = ['srv-facial-astaberry-wine', 'srv-facial-moonstar-korean'];
+  const ownerApprovedIds = ['srv-facial-astaberry-wine'];
   const ownerApproved = published.filter(f => ownerApprovedIds.includes(f.id));
 
   const emptyOrUnverified = allFacials.filter(f => {
@@ -23,7 +23,7 @@ async function audit() {
     } catch {
       steps = [];
     }
-    return steps.length === 0 || f.id === 'srv-facial-raaga-fairness';
+    return steps.length === 0;
   });
 
   const verified = published.filter(f => !ownerApprovedIds.includes(f.id) && !emptyOrUnverified.map(x => x.id).includes(f.id));

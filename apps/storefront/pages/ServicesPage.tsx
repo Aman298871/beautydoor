@@ -111,6 +111,7 @@ export const ServicesPage: React.FC<Props> = ({
   // Filter packages for currently selected category
   const categoryPackages = (packages || []).filter((p: any) => {
     if (selectedCat === 'all') return false;
+    if (selectedCat === 'cat-packages') return true;
     let catIds = p.category_ids;
     if (!catIds && p.category_ids_json) {
       try {
@@ -205,7 +206,7 @@ export const ServicesPage: React.FC<Props> = ({
           {/* Sort Selector & Count */}
           <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
             <div className="text-xs text-[#7A6B6D] font-medium hidden sm:block">
-              Showing <span className="font-bold text-[#1F1A1C]">{sorted.length}</span> {sorted.length === 1 ? 'treatment' : 'treatments'}
+              Showing <span className="font-bold text-[#1F1A1C]">{selectedCat === 'cat-packages' ? categoryPackages.length : sorted.length}</span> {selectedCat === 'cat-packages' ? 'packages' : (sorted.length === 1 ? 'treatment' : 'treatments')}
             </div>
 
             <div className="flex items-center gap-2">
@@ -264,7 +265,7 @@ export const ServicesPage: React.FC<Props> = ({
 
             {/* Individual Category Chips */}
             {categories.map((cat) => {
-              const count = services.filter(s => s.category_id === cat.id).length;
+              const count = cat.id === 'cat-packages' ? (packages || []).length : services.filter(s => s.category_id === cat.id).length;
               const isSelected = selectedCat === cat.id;
 
               return (
@@ -627,6 +628,27 @@ export const ServicesPage: React.FC<Props> = ({
                 </article>
               );
             })}
+          </div>
+        ) : selectedCat === 'cat-packages' ? (
+          <div className="bg-white rounded-2xl border border-[#E8DDD3] p-8 text-center space-y-3 shadow-xs">
+            <h3 className="text-lg font-serif font-bold text-[#1F1A1C]">Looking for single services?</h3>
+            <p className="text-xs sm:text-sm text-[#7A6B6D] max-w-md mx-auto font-light">
+              All {categoryPackages.length} ready-made packages are shown above. You can also view our full individual treatment menu or build your own custom bundle.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <button
+                onClick={() => handleSelectCategory('all')}
+                className="px-4 py-2 bg-[#4A0417] text-white text-xs font-semibold rounded-lg hover:bg-[#36020F] transition-all cursor-pointer"
+              >
+                View All Single Services
+              </button>
+              <button
+                onClick={() => navigate('/packages')}
+                className="px-4 py-2 bg-white border border-[#C5A880] text-[#4A0417] text-xs font-semibold rounded-lg hover:bg-[#FAF7F2] transition-all cursor-pointer"
+              >
+                Make Your Own Package
+              </button>
+            </div>
           </div>
         ) : (
           /* Empty Search / Filter State */

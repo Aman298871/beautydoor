@@ -199,6 +199,42 @@ storefrontRouter.get('/bestsellers', async (_req: Request, res: Response): Promi
   }
 });
 
+// 4b. All Active Services List
+storefrontRouter.get('/services', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const rawServices = (await db.query('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 ORDER BY created_at DESC', [])) as any[];
+    const allVariants = (await db.query('SELECT * FROM service_variants', [])) as any[];
+    const allAddons = (await db.query('SELECT * FROM service_addons', [])) as any[];
+
+    const variantsByServiceId: Record<string, any[]> = {};
+    for (const v of allVariants) {
+      if (!variantsByServiceId[v.service_id]) variantsByServiceId[v.service_id] = [];
+      variantsByServiceId[v.service_id].push(v);
+    }
+
+    const addonsByServiceId: Record<string, any[]> = {};
+    for (const a of allAddons) {
+      if (!addonsByServiceId[a.service_id]) addonsByServiceId[a.service_id] = [];
+      addonsByServiceId[a.service_id].push(a);
+    }
+
+    const services = rawServices.map((s) => ({
+      ...s,
+      benefits: JSON.parse(s.benefits_json || '[]'),
+      whatsIncluded: JSON.parse(s.whats_included_json || '[]'),
+      treatmentSteps: JSON.parse(s.steps_json || '[]'),
+      stepsCount: s.steps_count || 0,
+      brand: s.brand || '',
+      variants: variantsByServiceId[s.id] || [],
+      addons: addonsByServiceId[s.id] || []
+    }));
+
+    res.json({ services });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to load services' });
+  }
+});
+
 // 5. Individual Service Details by Slug
 storefrontRouter.get('/services/:slug', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -311,9 +347,15 @@ const checkServiceabilityHandler = async (req: Request, res: Response): Promise<
       return;
     }
 
-    if (pincode && typeof pincode === 'string') {
-      const cleanPin = pincode.trim();
-      const territory = (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any;
+    const locationQuery = (pincode || locality || address || '').toString().trim();
+    if (locationQuery) {
+      const cleanInput = locationQuery.toLowerCase();
+      // Try exact pincode or area/city match
+      const territory = (await db.queryRow(
+        'SELECT * FROM territories WHERE (pincode = ? OR LOWER(area_name) LIKE ? OR LOWER(city) LIKE ?) AND is_active = 1',
+        [locationQuery, `%${cleanInput}%`, `%${cleanInput}%`]
+      )) as any;
+
       if (territory) {
         res.json({
           isServiceable: true,
@@ -686,9 +728,11 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       return;
     }
 
-    // Determine territory & pincode without blocking customers
-    const cleanPin = address.pincode ? address.pincode.trim() : (address.city?.toLowerCase().includes('gurugram') ? '122002' : (address.city?.toLowerCase().includes('noida') ? '201301' : '110001'));
-    const territory = cleanPin ? (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any : null;
+    // Determine territory & pincode without blocking customers (pincode is 100% optional)
+    const cleanPin = address.pincode && address.pincode.trim() ? address.pincode.trim() : null;
+    const territory = cleanPin 
+      ? (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any 
+      : (await db.queryRow('SELECT * FROM territories WHERE LOWER(city) LIKE ? AND is_active = 1', [`%${(address.city || 'delhi').toLowerCase()}%`])) as any;
 
     // Calculate pricing strictly from DB
     let subtotal = 0;

@@ -144,7 +144,12 @@ export async function initDatabase(): Promise<void> {
   await seedFaqData();
 }
 
+let schemaInitialized = false;
+
 async function initPostgresSchema(pool: pg.Pool) {
+  if (schemaInitialized && !process.env.DATABASE_URL) {
+    return;
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_users (
       id VARCHAR(255) PRIMARY KEY,
@@ -331,7 +336,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       landmark VARCHAR(255),
       area VARCHAR(255) NOT NULL,
       city VARCHAR(128) NOT NULL,
-      pincode VARCHAR(32) NOT NULL,
+      pincode VARCHAR(32),
       subtotal INTEGER NOT NULL,
       package_discount INTEGER NOT NULL DEFAULT 0,
       campaign_discount INTEGER NOT NULL DEFAULT 0,
@@ -416,6 +421,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       updated_at VARCHAR(64) NOT NULL
     );
   `);
+  schemaInitialized = true;
 }
 
 async function seedEssentialData() {
@@ -509,6 +515,13 @@ async function seedEssentialData() {
     await db.execute("ALTER TABLE packages ADD COLUMN category_ids_json TEXT DEFAULT '[]'");
   } catch {
     // Column already exists
+  }
+
+  // Idempotent migration to make pincode column nullable in bookings for existing databases
+  try {
+    await db.execute("ALTER TABLE bookings ALTER COLUMN pincode DROP NOT NULL");
+  } catch {
+    // Column already nullable or in-memory SQLite emulator
   }
 
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
@@ -781,23 +794,24 @@ async function seedEssentialData() {
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 7, brand = 'O3+' WHERE id = 'srv-facial-o3-shine-glow' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%'))", [o3ShineSteps]);
 
   const o3BridalSteps = JSON.stringify([
-    'Gentle Cleanser Emulsion',
-    'Seaweed Enzymatic Scrub',
-    'Seaweed Nourishing Massage Gel',
-    'Oxygenating Ampoule Serum',
-    'Seaweed Rubberizing Peel-Off Mask',
-    'High-Potency Vitamin C Booster',
-    'Whitening Tonic Infusion',
-    'Dermal Moisture Complex',
-    'Cellular Protective Emulsion'
+    'Vitamin C Cleanser (8ml)',
+    'Microderma Abrasion Facial Peel (8g, 2-3 mins)',
+    'Vitamin C Tonic Solution (5ml)',
+    'Vitamin C Massage Cream (8g, 10-15 mins)',
+    'Brightening Mask (8g, 10 mins)',
+    'Facial Power Mask 2030 Gel (60ml)',
+    'Facial Power Mask C11 Brightening 2030 (20g, mix with step 6 for 12-15 mins)',
+    'Hydrogel Mask Vitamin C (35g, 15-20 mins)',
+    'Vitamin C Serum Solution (5ml, 2-3 mins)',
+    'Brightening Cream SPF 30 (5g)'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 9, brand = 'O3+' WHERE id = 'srv-facial-o3-bridal-glow-vit-c' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%bridal%' OR LOWER(name) LIKE '%vit-c%'))", [o3BridalSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 10, brand = 'O3+' WHERE id = 'srv-facial-o3-bridal-glow-vit-c' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%bridal%' OR LOWER(name) LIKE '%vit-c%'))", [o3BridalSteps]);
 
   const o3AntiAgingSteps = JSON.stringify([
-    'Oxygenating Cleanser',
-    'Micro-Peel Exfoliator',
-    'Collagen Firming Cream',
-    'Dermal Lift Mask'
+    'Milk Wash (5ml)',
+    'Sugar Scrub (5g)',
+    'Dermamelan Massage Cream (5g)',
+    'Anti-Ageing Peel-Off Mask (30g, 15-20 mins)'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 4, brand = 'O3+' WHERE id = 'srv-facial-o3-anti-aging' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND LOWER(name) LIKE '%anti-aging%')", [o3AntiAgingSteps]);
 
@@ -871,35 +885,35 @@ async function seedEssentialData() {
 
   // FYC Facial Protocols (Official Salon Kits)
   const fycWineSteps = JSON.stringify([
-    'Glow Cleanser',
-    'Renewing Face Scrub',
-    'Massage Gel',
-    'Massage Cream',
-    'Face Pack',
-    'Serum / Moisturizer'
+    'Glow Cleanser (10g)',
+    'Renewing Face Scrub (10g)',
+    'Regenerative Massage Gel (10g)',
+    'Massage Cream (10g)',
+    'Mela Bright Face Pack (10g)',
+    'Skin Whitening Essence Serum (5g)'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'FYC' WHERE id = 'srv-facial-fyc-wine' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND LOWER(name) LIKE '%wine%')", [fycWineSteps]);
 
   const fycDeTanSteps = JSON.stringify([
-    'De-Tan Cleanser',
-    'De-Tan AHA Enzyme Powder',
-    'AHA Massage Gel',
-    'Renewing Massage Cream',
-    'AHA Tan Removal Face Pack',
-    'Skin Serum'
+    'De-Tan Cleanser (10g, 5-7 mins)',
+    'Scrub (10g, 5-7 mins)',
+    'AHA Massage Gel (10g, 7-10 mins)',
+    'Renewing Massage Cream (10g, 10-15 mins)',
+    'AHA Tan Removal Face Pack (10g, 10-15 mins)',
+    'Skin Serum (5g, deep absorption finish)'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'FYC' WHERE id = 'srv-facial-fyc-detan' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%detan%' OR LOWER(name) LIKE '%de-tan%'))", [fycDeTanSteps]);
 
   const fycKoreanGlassSteps = JSON.stringify([
-    'Rice Foaming Cleanser',
-    'Hyaluron Detox',
-    'Exfoliator Cream',
-    'Lippy Exfol',
-    'Niacin-Rice Collagen Mask',
-    'Rice Cream',
-    'Ginseng Alginate Powder Mask',
-    'AHA BHA Serum',
-    'Lippy Elixir'
+    'Rice Foaming Cleanser 10g (5-7 mins)',
+    'Hyaluron Detox 10g (10-15 mins)',
+    'Exfoliator Cream 10g (5-7 mins)',
+    'Lippy Exfol 3g (5-7 mins)',
+    'Niacin-Rice Collagen Mask & Step 5B Niacin-Rice Tonic (10g, 3-5 mins)',
+    'Cerate the Rice Cream 10g (10-15 mins)',
+    'Ginseng Alginate Mask 30g+90g (15-20 mins)',
+    'AHA BHA Serum 5g',
+    'Lippy Elixir 5g'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 9, brand = 'FYC' WHERE id = 'srv-facial-fyc-korean-glass' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%fyc%' AND (LOWER(name) LIKE '%glass%' OR LOWER(name) LIKE '%korean%'))", [fycKoreanGlassSteps]);
 
@@ -936,28 +950,38 @@ async function seedEssentialData() {
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Raaga' WHERE id = 'srv-facial-raaga-anti-aging' OR (category_id = 'cat-facials' AND (LOWER(name) LIKE '%raaga%' OR LOWER(name) LIKE '%rasa%') AND LOWER(name) LIKE '%anti-aging%')", [raagaAntiAgingSteps]);
 
-  // Sara Gold Facial Protocol
+  // Sara Gold Facial Protocol (Sara Beauty PETA-Approved Kit)
   const saraGoldSteps = JSON.stringify([
-    'Sara Gold Cleansing Gel',
-    'Sara Gold Scrub',
-    'Sara Gold Massage Cream',
-    'Sara Gold Mask',
-    'Sara Gold Serum',
-    'Sara Gold Radiance Cream'
+    'Gold Cleansing Gel (5ml, 2-3 mins)',
+    'Gold Peel Serum (3ml, 2-3 mins)',
+    'Gold Cream (5g, 10-15 mins)',
+    'Gold Facial Mask (5g, 10-12 mins)',
+    'Gold Gel Serum (5g, 3-4 mins)',
+    'Gold Facial Mould Mask (20g, 15 mins)'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Sara' WHERE id = 'srv-facial-sara-gold' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%sara%' AND LOWER(name) LIKE '%gold%')", [saraGoldSteps]);
 
-  // Vedicline Facial Protocols
-  const vediclineBioWhiteSteps = JSON.stringify([
-    'Bio White Cleanser',
-    'Bio White Scrub',
-    'Bio White Gel',
-    'Bio White Cream',
-    'Bio White Pack',
-    'Bio White Serum',
-    'Bio White Moisture Shield'
+  // Raaga Fairness Facial Protocol (CavinKare 6-Step Kit) - Draft / Unconfirmed Rate ₹150
+  const raagaFairnessSteps = JSON.stringify([
+    'Cleanser (8g, 3-5 mins)',
+    'Exfoliator (8g, 2-3 mins)',
+    'Toner (5ml, moist cotton)',
+    'Serum (5ml, circular massage)',
+    'Massage Cream (10g, 12-15 mins)',
+    'Peel-Off Masque (25g, 15 mins)'
   ]);
-  await db.execute("UPDATE services SET steps_json = ?, steps_count = 7, brand = 'Vedicline' WHERE id = 'srv-facial-vedicline-bio-white' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vedicline%' AND LOWER(name) LIKE '%bio%')", [vediclineBioWhiteSteps]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Raaga' WHERE id = 'srv-facial-raaga-fairness'", [raagaFairnessSteps]);
+
+  // Vedicline Facial Protocols (Bio White Kit: 6-Product Protocol from Packaging)
+  const vediclineBioWhiteSteps = JSON.stringify([
+    'Bio White Cleansing Cream (10ml)',
+    'Bio White De-Tan Pack (10ml)',
+    'Bio White Exfoliating Gel (10ml)',
+    'Bio White Massage Cream (10ml)',
+    'Bio White Gloss Serum (7ml)',
+    'Bio White Cryo Mask (20g)'
+  ]);
+  await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Vedicline' WHERE id = 'srv-facial-vedicline-bio-white' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%vedicline%' AND LOWER(name) LIKE '%bio%')", [vediclineBioWhiteSteps]);
 
   const vediclineArganSteps = JSON.stringify([
     'Argan Cleanser',
@@ -1012,15 +1036,15 @@ async function seedEssentialData() {
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 5 WHERE category_id = 'cat-manicure-pedicure' AND (steps_json = '[]' OR steps_json IS NULL)", [maniPediSteps]);
 
-  // --- OWNER-APPROVED AUTHORITATIVE CATALOGUE OVERRIDES (November 9, 2026) ---
-  // 1. Moonstar Korean Facial: exactly 6 steps, brand Moonstar (Official Milk Shake Skincare FAQ)
+  // --- OWNER-APPROVED AUTHORITATIVE CATALOGUE OVERRIDES (November 9-18, 2026) ---
+  // 1. Moonstar Korean Facial: exactly 6 steps, brand Moonstar / IZUK IMPEX (Official single-use kit packaging)
   const moonstar6Steps = JSON.stringify([
-    'Cleanser',
-    'Scrub',
-    'Gel',
-    'Cream',
-    'Face Pack',
-    'Serum'
+    'Korean Glass Cleanser (2-3 mins)',
+    'Power Glow Pack (10 mins)',
+    'Face Scrub (5 mins)',
+    'Korean Glass Massage Cream (10-15 mins)',
+    'Hydro Boosting Pack (10 mins)',
+    'SPF 50+ PA++++ Skin Shield'
   ]);
   await db.execute("UPDATE services SET steps_json = ?, steps_count = 6, brand = 'Moonstar' WHERE id = 'srv-facial-moonstar-korean' OR (category_id = 'cat-facials' AND LOWER(name) LIKE '%moonstar%')", [moonstar6Steps]);
 
@@ -1029,12 +1053,14 @@ async function seedEssentialData() {
     'Botanical Body Scrub Exfoliation (Gentle full-body sloughing of dead skin cells and surface impurities)',
     'Nourishing Mineral Body Pack (Deeply soothing Kaolin clay hydration wrap leaving skin soft and renewed)'
   ]);
+  // Free up slug 'body-scrub-body-pack' from legacy/duplicate rows first to satisfy UNIQUE constraint in PostgreSQL
+  await db.execute("UPDATE services SET slug = 'body-scrub-body-pack-legacy', is_published = 0, name = 'Body Scrub + Body Pack (Duplicate Option)' WHERE id = 'srv-body-scrub-body-pack' OR (slug = 'body-scrub-body-pack' AND id != 'srv-body-scrub-pack-499')");
   await db.execute("UPDATE services SET name = 'Body Scrub + Body Pack', slug = 'body-scrub-body-pack', steps_json = ?, steps_count = 2, selling_price = 499, original_price = 699, duration_mins = 30, is_published = 1 WHERE id = 'srv-body-scrub-pack-499'", [bodyScrubPack2Steps]);
-  await db.execute("UPDATE services SET is_published = 0, name = 'Body Scrub + Body Pack (Duplicate Option)' WHERE id = 'srv-body-scrub-body-pack'");
 
   // 3. Body Massage: single option, ₹1,299, 45 mins, 5 steps
+  // Free up slug 'body-massage' from legacy rows first to satisfy UNIQUE constraint in PostgreSQL
+  await db.execute("UPDATE services SET slug = 'full-body-massage-legacy', is_published = 0, name = 'Full Body Massage (Legacy ₹750 Option)' WHERE id = 'srv-full-body-massage-750' OR (slug = 'body-massage' AND id != 'srv-massage-full-body-olive-oil')");
   await db.execute("UPDATE services SET name = 'Body Massage', slug = 'body-massage', selling_price = 1299, original_price = 1799, duration_mins = 45, steps_count = 5, is_published = 1 WHERE id = 'srv-massage-full-body-olive-oil'");
-  await db.execute("UPDATE services SET is_published = 0, name = 'Full Body Massage (Legacy ₹750 Option)' WHERE id = 'srv-full-body-massage-750'");
 
   // 4. FYC Classic Manicure & Pedicure: exactly 3 steps, brand FYC Classic
   const fycClassic3Steps = JSON.stringify([

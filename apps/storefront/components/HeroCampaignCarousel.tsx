@@ -47,7 +47,7 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
 
   const activeCampaign = campaigns[currentIdx] || {
     banner_title: 'Luxury Salon Rituals, Curated at Your Doorstep.',
-    banner_subtitle: 'Hospital-grade sanitized single-use kits, verified female estheticians, and pay after service across Delhi NCR.',
+    banner_subtitle: 'Salon-grade single-use sealed kits, verified female beauticians, and pay after service across Delhi NCR.',
     cta_label: 'Explore Services',
     destination_url: '/services',
     badge_text: 'Delhi NCR Premier'
@@ -55,8 +55,8 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
 
   const handlePincodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pincodeInput || pincodeInput.trim().length !== 6) {
-      setCheckResult({ isServiceable: false, message: 'Please enter a valid 6-digit Delhi NCR pincode.' });
+    if (!pincodeInput || pincodeInput.trim().length < 2) {
+      setCheckResult({ isServiceable: false, message: 'Please enter your Delhi NCR area or pincode.' });
       return;
     }
     setCheckLoading(true);
@@ -86,7 +86,7 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417]">
               <span>{activeCampaign.badge_text || 'Delhi NCR Premier At-Home Salon'}</span>
               <span aria-hidden="true">·</span>
-              <span className="text-[#8C5D66]">Hospital-Grade Hygiene</span>
+              <span className="text-[#8C5D66]">Salon-Grade Sanitization</span>
             </div>
 
             {/* Display Headline */}
@@ -113,14 +113,13 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
                 <div className="relative flex-1">
                   <input
                     type="text"
-                    maxLength={6}
                     value={pincodeInput}
                     onChange={(e) => {
-                      setPincodeInput(e.target.value.replace(/\D/g, ''));
+                      setPincodeInput(e.target.value);
                       setCheckResult(null);
                     }}
-                    placeholder="Enter 6-digit Delhi NCR pincode (e.g. 110017)"
-                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] text-[#1F1A1C] placeholder-[#A09395] tabular-nums"
+                    placeholder="Enter Delhi NCR area or pincode (e.g. Indirapuram, Saket, or 110017)"
+                    className="w-full px-3.5 py-2.5 text-sm bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417] text-[#1F1A1C] placeholder-[#A09395]"
                   />
                 </div>
                 <button

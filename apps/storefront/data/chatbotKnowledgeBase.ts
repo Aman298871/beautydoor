@@ -339,11 +339,14 @@ Our verified specialists bring quick-heating digital heaters to ensure smooth, p
     answer: `We provide certified professional skin ceremonies with sealed, single-use derma kits unsealed right at your vanity:
 
 1. **O3+ Shine & Glow Facial (7 Steps)**: D-Tan micro-derma exfoliation, radiance serum, and algae peel-off mask for instant illumination.
-2. **O3+ Bridal Glow / Seaweed Radiance (6 Steps)**: Deep marine oxygenation and rubberizing firming mask for bride-level radiance.
-3. **FYC Korean Glass Skin Facial (7 Steps)**: Double cleanse, gentle rice polish, centella hydrator, and hydrogel glow sheet mask.
-4. **Lotus White Glow & Diamond Facials (6 Steps)**: Micro-crystal diamond polishing for firming and youthful radiance.
-5. **FYC Wine & Gold Facials (6 Steps)**: Antioxidant grape polyphenol and bio-gold micro-dermabrasion.
-6. **Express Cleanups (4 Steps)**: Deep pore extraction and fresh fruit/aloe soothing balance.`,
+2. **O3+ Bridal Glow Vitamin C Facial (10 Steps)**: High-potency Vitamin C antioxidant bridal ceremony with Power Mask 2030.
+3. **O3+ Anti-Aging Facial (4 Steps)**: "Be Your Own Facialist" collagen firming and anti-ageing peel-off mask.
+4. **FYC Korean Glass Skin Rice Water Facial (9 Stages)**: Official 9-stage kit with sub-step 5B Niacin-Rice tonic and alginate rubberizing mask.
+5. **Moonstar Korean Glass Skin Treatment (6 Steps)**: Pure single-use kit with power glow pack, hydro boosting pack, and SPF 50+ finish.
+6. **Lotus White Glow, Diamond, Gold & Pearl Facials (4 Steps)**: Official 4-step professional single-use kits.
+7. **Sara Gold Facial (6 Steps)**: PETA-approved luxury gold peel serum, gold cream, and gold mould mask.
+8. **FYC Wine & De-Tan Facials (6 Steps)**: Single-use pouches with gentle scrub, massage gel, massage cream, pack, and serum.
+9. **Express Cleanups (4 Steps)**: Deep pore extraction and fresh fruit/aloe soothing balance.`,
     followUpQuestionIds: ['faq-o3-difference', 'faq-korean-glass', 'faq-cleanups'],
     actionType: 'services',
     keywords: ['facials', 'facial menu', 'o3 facial', 'korean facial', 'lotus facial', 'which facial', 'facial list', 'facial options']
@@ -356,7 +359,8 @@ Our verified specialists bring quick-heating digital heaters to ensure smooth, p
     answer: `Our O3+ facials are authentic, certified single-use protocols:
 
 • **O3+ Shine & Glow (7 Steps)**: Specially formulated for dull, sun-tanned skin. Features enzymatic micro-dermabrasion, intensive whitening massage cream (15 mins), and cooling peel-off algae mask. Ideal for party readiness.
-• **O3+ Bridal Glow / Seaweed (6 Steps)**: Designed for dehydrated, uneven skin and brides. Infuses active marine minerals and oxygenating ampoules with a firming rubberizing mask for long-lasting deep dermal nourishment.
+• **O3+ Bridal Glow Vitamin C (10 Steps)**: Designed for brides and long-lasting radiance. Features 10 verified packaging steps including Vitamin C Cleanser, Microderma Peel, Vitamin C Tonic, Brightening Mask, Facial Power Mask 2030 Gel & C11 Brightening, Hydrogel Mask, Vitamin C Serum, and SPF 30 Brightening Cream.
+• **O3+ Anti-Aging (4 Steps)**: Targeted firming with Milk Wash, Sugar Scrub, Dermamelan Massage Cream, and Anti-Ageing Peel-Off Mask.
 
 Note: All O3+ kits are 100% genuine single-use sachets opened in front of you.`,
     followUpQuestionIds: ['faq-facial-menu', 'faq-rec-bridal', 'faq-after-facial-care'],
@@ -368,15 +372,28 @@ Note: All O3+ kits are 100% genuine single-use sachets opened in front of you.`,
     category: 'cat-services',
     subcategory: 'sub-facials',
     question: 'What is the Korean Glass Skin Facial?',
-    answer: `The **Korean Glass Skin Facial** is our signature multi-step dermal radiance ceremony formulated to give skin a translucent, luminous, poreless finish:
+    answer: `We offer two authentic, separate Korean Glass Skin options:
 
-• **Step 1**: Double Oil-to-Milk Deep Cleanse (lifts pollution without stripping).
-• **Step 2**: AHA/BHA Mild Enzymatic Rice Polish (gentle buffing of surface keratosis).
-• **Step 3**: Centella Asiatica Balancing Skin Hydrator.
-• **Step 4**: Collagen-boosting Lymphatic Facial Massage.
-• **Step 5**: Hyaluronic Acid & Niacinamide Deep Glow Ampoule.
-• **Step 6**: K-Beauty Hydrogel Cooling Glow Sheet Mask (15 mins).
-• **Step 7**: Ceramide Barrier Sealant & Broad-Spectrum Sun Shield.`,
+1. **FYC Korean Glass Skin Rice Water Facial (9 Stages)**:
+• **Step 1**: Rice Foaming Cleanser (10g, 5-7 mins)
+• **Step 2**: Hyaluron Detox (10g, 10-15 mins)
+• **Step 3**: Exfoliator Cream (10g, 5-7 mins)
+• **Step 4**: Lippy Exfol (3g, 5-7 mins)
+• **Step 5**: Niacin-Rice Collagen Mask & Step 5B Niacin-Rice Tonic (10g spray, 3-5 mins)
+• **Step 6**: Cerate the Rice Cream (10g, 10-15 mins)
+• **Step 7**: Ginseng Alginate Mask (30g powder + 90g gel, 15-20 mins)
+• **Step 8**: AHA BHA Serum (5g)
+• **Step 9**: Lippy Elixir (5g)
+
+2. **Moonstar Korean Glass Skin Treatment (6 Steps by IZUK IMPEX)**:
+• **Step 1**: Korean Glass Cleanser (2-3 mins)
+• **Step 2**: Power Glow Pack (10 mins)
+• **Step 3**: Face Scrub (5 mins)
+• **Step 4**: Korean Glass Massage Cream (10-15 mins)
+• **Step 5**: Hydro Boosting Pack (10 mins)
+• **Step 6**: SPF 50+ PA++++ Skin Shield
+
+Both use 100% genuine single-use sealed kits unsealed at your vanity!`,
     followUpQuestionIds: ['faq-facial-menu', 'faq-after-facial-care'],
     actionType: 'services',
     keywords: ['korean glass skin', 'korean facial', 'glass skin facial', 'korean glass facial kya hai']

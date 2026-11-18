@@ -106,11 +106,11 @@ export const BookingDrawer: React.FC<Props> = ({
     }
   }, [isOpen]);
 
-  // Fetch available slots on date change
+  // Fetch available slots on date change (completely independent of pincode)
   useEffect(() => {
     if (isOpen && selectedDate) {
       setSlotsLoading(true);
-      fetch(`/api/slots?date=${selectedDate}&pincode=${pincode}`)
+      fetch(`/api/slots?date=${selectedDate}`)
         .then(res => res.json())
         .then(data => {
           if (data.availableSlots) {
@@ -123,7 +123,7 @@ export const BookingDrawer: React.FC<Props> = ({
         .catch(err => console.error('Failed to load slots:', err))
         .finally(() => setSlotsLoading(false));
     }
-  }, [isOpen, selectedDate, pincode]);
+  }, [isOpen, selectedDate]);
 
   // Real-time price breakdown
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalItemPrice, 0);
@@ -193,7 +193,8 @@ export const BookingDrawer: React.FC<Props> = ({
             addonIds: i.selectedAddons.map(a => a.id)
           })),
           couponCode: couponCode.trim(),
-          pincode,
+          city,
+          pincode: pincode ? pincode.trim() : undefined,
           appointmentSlot: selectedSlot
         })
       });
@@ -235,7 +236,7 @@ export const BookingDrawer: React.FC<Props> = ({
         landmark,
         area: area || matchedTerritory?.areaName,
         city: city || matchedTerritory?.city || 'Delhi',
-        pincode
+        pincode: pincode ? pincode.trim() : undefined
       },
       items: cartItems.map(i => ({
         serviceId: i.service.id,

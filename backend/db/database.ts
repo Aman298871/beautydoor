@@ -306,7 +306,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       id VARCHAR(255) PRIMARY KEY,
       city VARCHAR(128) NOT NULL,
       area_name VARCHAR(255) NOT NULL,
-      pincode VARCHAR(32) UNIQUE NOT NULL,
+      pincode VARCHAR(32) NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
       delivery_fee INTEGER NOT NULL DEFAULT 0,
       min_order_amount INTEGER NOT NULL DEFAULT 499
@@ -421,6 +421,15 @@ async function initPostgresSchema(pool: pg.Pool) {
       updated_at VARCHAR(64) NOT NULL
     );
   `);
+
+  // Safely remove single-column UNIQUE constraint on pincode to allow multiple localities under one PIN code
+  try {
+    await pool.query('ALTER TABLE territories DROP CONSTRAINT IF EXISTS territories_pincode_key');
+  } catch {}
+  try {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_territories_pincode ON territories(pincode)');
+  } catch {}
+
   schemaInitialized = true;
 }
 
@@ -526,13 +535,18 @@ async function seedEssentialData() {
 
   await db.execute("INSERT INTO settings (key, value) VALUES ('restricted_locations', '[\"TEST_RESTRICTED_ZONE\"]') ON CONFLICT (key) DO NOTHING");
 
-  // 3. Official Service Categories (idempotent)
-  const catCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM categories');
-  if (Number(catCountRow?.count || 0) === 0) {
-    for (const c of MASTER_CATEGORIES) {
+  // 3. Official Service Categories (idempotent upsert ensuring cat-packages and all official categories exist)
+  for (const c of MASTER_CATEGORIES) {
+    const existing = await db.queryRow('SELECT id FROM categories WHERE id = ?', [c.id]);
+    if (!existing) {
       await db.execute(
         'INSERT INTO categories (id, name, slug, description, display_order, is_active) VALUES (?, ?, ?, ?, ?, 1)',
         [c.id, c.name, c.slug, c.description, c.display_order]
+      );
+    } else {
+      await db.execute(
+        'UPDATE categories SET name = ?, slug = ?, description = ?, display_order = ?, is_active = 1 WHERE id = ?',
+        [c.name, c.slug, c.description, c.display_order, c.id]
       );
     }
   }
@@ -581,6 +595,22 @@ async function seedEssentialData() {
   // Delhi: ₹1,000; Gurugram / Noida / Greater Noida / Ghaziabad / Faridabad: ₹1,500
   await db.execute("UPDATE territories SET min_order_amount = 1000 WHERE LOWER(city) LIKE '%delhi%' AND LOWER(city) NOT LIKE '%greater%'");
   await db.execute("UPDATE territories SET min_order_amount = 1500 WHERE LOWER(city) LIKE '%gurugram%' OR LOWER(city) LIKE '%noida%' OR LOWER(city) LIKE '%ghaziabad%' OR LOWER(city) LIKE '%faridabad%'");
+
+  // Ensure individual localities under PIN 110017 (Saket, Malviya Nagar, Sainik Farm) exist
+  const localities110017 = [
+    { id: 'ter-del-saket', area: 'Saket' },
+    { id: 'ter-del-malviya-nagar', area: 'Malviya Nagar' },
+    { id: 'ter-del-sainik-farm', area: 'Sainik Farm' }
+  ];
+  for (const loc of localities110017) {
+    const locExists = await db.queryRow('SELECT id FROM territories WHERE pincode = ? AND area_name = ?', ['110017', loc.area]);
+    if (!locExists) {
+      await db.execute(
+        'INSERT INTO territories (id, city, area_name, pincode, is_active, delivery_fee, min_order_amount) VALUES (?, ?, ?, ?, 1, 0, 1000)',
+        [loc.id, 'Delhi', loc.area, '110017']
+      );
+    }
+  }
 
   // 5. Promotional Coupons (idempotent)
   const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
@@ -1254,7 +1284,7 @@ async function seedEssentialData() {
   `);
   await db.execute(`
     UPDATE packages SET
-      name = 'Beauty Bliss Body Package',
+      name = 'BeautyDoor Beauty Bliss',
       duration_mins = 150,
       duration_display = '2 hours 30 minutes',
       description = 'Complete 2.5-hour self-care package with Lotus White Glow facial, Oxy bleach, Honey waxing, full Body Scrub + Body Pack, and threading.',

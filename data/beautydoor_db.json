@@ -1238,7 +1238,7 @@
     "minOrderAmount": 1000,
     "cancellationWindowHours": 4,
     "cancellationPolicy": "Free cancellation up to 4 hours prior to your scheduled appointment. Rescheduling is complimentary.",
-    "announcementBannerText": "\u2728 Delhi NCR Inaugural Offer: Flat \u20b9200 OFF on your first at-home appointment with code BEAUTYFIRST",
+    "announcementBannerText": "\u2728 Delhi NCR Inaugural Offer: Use BEAUTYFIRST to get \u20b9100 off on orders of \u20b91,100 or more",
     "isAnnouncementActive": true,
     "razorpayEnabled": false,
     "codEnabled": true,

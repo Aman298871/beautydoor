@@ -2152,7 +2152,7 @@ export const MASTER_PACKAGES: MasterPackage[] = [
   },
   {
     id: 'pkg-beauty-bliss',
-    name: 'Beauty Bliss Body Package',
+    name: 'BeautyDoor Beauty Bliss',
     slug: 'beauty-bliss',
     subtitle: 'Lotus Facial + Body Polish + Honey Wax',
     description: 'Complete 2.5-hour self-care package with Lotus White Glow facial, Oxy bleach, Honey waxing, full Body Scrub + Body Pack, and threading.',

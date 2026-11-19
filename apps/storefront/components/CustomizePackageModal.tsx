@@ -329,19 +329,19 @@ export const CustomizePackageModal: React.FC<Props> = ({
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 bg-black/75 overscroll-contain flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 md:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div 
+      <div
         className="relative w-full max-w-4xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-[#E8DDD3] flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden overscroll-contain animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        
+
         {/* Modal Top Header */}
         <div className="bg-[#FAF7F2] p-5 border-b border-[#E8DDD3] flex items-start justify-between gap-4 shrink-0">
           <div>
@@ -392,11 +392,10 @@ export const CustomizePackageModal: React.FC<Props> = ({
                 key={style.id}
                 type="button"
                 onClick={() => handleApplyStyle(style)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 border ${
-                  selectedStyleId === style.id
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 border ${selectedStyleId === style.id
                     ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                     : 'bg-[#FAF7F2] text-[#4A3E3D] hover:bg-[#F2ECE3] border-[#E8DDD3]'
-                }`}
+                  }`}
               >
                 <span>{style.name}</span>
                 <span className="text-[10px] opacity-75 hidden sm:inline">({style.tagline})</span>
@@ -425,7 +424,7 @@ export const CustomizePackageModal: React.FC<Props> = ({
 
         {/* Modal Body: 2 Columns on Desktop */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+
           {/* Column 1: Currently Included Treatments (Removable) */}
           <div className="lg:col-span-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -491,8 +490,8 @@ export const CustomizePackageModal: React.FC<Props> = ({
                 {count >= 5
                   ? '🎉 Maximum 20% package discount unlocked!'
                   : count >= 4
-                  ? 'Add 1 more service to unlock the maximum 20% package discount.'
-                  : `Add ${5 - count} more services to reach up to 20% package discount.`}
+                    ? 'Add 1 more service to unlock the maximum 20% package discount.'
+                    : `Add ${5 - count} more services to reach up to 20% package discount.`}
               </p>
             </div>
           </div>
@@ -531,11 +530,10 @@ export const CustomizePackageModal: React.FC<Props> = ({
                     key={c.id}
                     type="button"
                     onClick={() => setActiveCategory(c.id)}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors shrink-0 cursor-pointer ${
-                      activeCategory === c.id
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors shrink-0 cursor-pointer ${activeCategory === c.id
                         ? 'bg-[#4A0417] text-white'
                         : 'bg-[#FAF7F2] text-[#6B5A5C] hover:bg-[#F2ECE3]'
-                    }`}
+                      }`}
                   >
                     {c.label}
                   </button>

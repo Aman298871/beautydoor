@@ -332,19 +332,29 @@ export const StorefrontNavbar: React.FC<Props> = ({
               </div>
 
               {/* Service Area Badge for Mobile */}
-              <div className="p-3 rounded-xl bg-white border border-[#E8DDD3] text-left flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <MapPin className="w-4 h-4 text-[#4A0417] shrink-0" />
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-[#8C7A7C]">Service Area</p>
-                    <p className="text-xs font-semibold text-[#1F1A1C]">
-                      {currentTerritoryName || 'Delhi NCR (Doorstep Service)'}
-                    </p>
+              <div className="p-3 rounded-xl bg-white border border-[#E8DDD3] text-left space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-[#4A0417] shrink-0" />
+                    <span className="text-[10px] uppercase font-bold text-[#8C7A7C]">Doorstep Service Area</span>
                   </div>
+                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Delhi NCR
+                  </span>
                 </div>
-                <span className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Active
-                </span>
+                <p className="text-xs text-[#2C2426] font-medium leading-relaxed">
+                  Service available in Saket, Malviya Nagar and Sainik Farm, South Delhi (PIN 110017) & across Delhi NCR.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    onOpenPincodeModal();
+                  }}
+                  className="text-[11px] text-[#4A0417] hover:underline font-semibold flex items-center gap-1 cursor-pointer pt-0.5"
+                >
+                  <span>Check whether your exact locality is covered →</span>
+                </button>
               </div>
 
               {/* Direct Mobile Quick Actions: Call & WhatsApp */}

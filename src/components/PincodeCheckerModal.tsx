@@ -63,18 +63,21 @@ export const PincodeCheckerModal: React.FC<Props> = ({
         </div>
 
         {/* Clear Locality Explanation */}
-        <div className="mt-4 p-3.5 bg-[#FAF7F2] border border-[#C5A880]/30 rounded-xl text-xs space-y-1.5">
+        <div className="mt-4 p-3.5 bg-[#FAF7F2] border border-[#C5A880]/40 rounded-xl text-xs space-y-2">
           <div className="flex items-center gap-1.5 font-bold text-[#4A0417]">
-            <Info className="w-4 h-4 shrink-0" />
-            <span>Doorstep Service Area Guide</span>
+            <Info className="w-4 h-4 shrink-0 text-[#C5A880]" />
+            <span>Service Territory & PIN Code Guide</span>
           </div>
-          <p className="text-[#554749] leading-relaxed">
-            These are the neighbourhoods where BeautyDoor currently provides doorstep services. Listed localities (such as Saket, Malviya Nagar, Sainik Farm, DLF, Indirapuram, etc.) are standard residential neighbourhood names mapped to regional hubs, not separate packages or extra charges.
+          <p className="text-[#2C2426] font-medium leading-relaxed">
+            Service available in Saket, Malviya Nagar and Sainik Farm, South Delhi (PIN 110017) & across Delhi NCR. Enter your PIN code below to check whether your exact locality is covered.
           </p>
-          <div className="pt-1 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-[11px] text-[#1F1A1C]">
+          <p className="text-[#554749] text-[11px] leading-relaxed">
+            Listed localities are standard residential neighborhoods serviced from our nearest regional hub — not separate packages or extra charges. Every verified booking enjoys <strong>₹0 Visiting Charge</strong>.
+          </p>
+          <div className="pt-1 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-[11px] text-[#1F1A1C] border-t border-[#E8DDD3]/60">
             <span>Delhi Minimum Order: <strong className="text-[#4A0417]">₹1,000</strong></span>
-            <span>NCR / Haryana / Noida Minimum Order: <strong className="text-[#4A0417]">₹1,500</strong></span>
-            <span>Zero Doorstep Visiting Charge: <strong className="text-emerald-700">₹0 Free</strong></span>
+            <span>NCR (Gurugram / Noida / Ghaziabad / Faridabad) Minimum Order: <strong className="text-[#4A0417]">₹1,500</strong></span>
+            <span>Doorstep Visiting Fee: <strong className="text-emerald-700">₹0</strong></span>
           </div>
         </div>
 

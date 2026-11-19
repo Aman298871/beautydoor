@@ -323,7 +323,7 @@ storefrontRouter.get('/territories', async (_req: Request, res: Response): Promi
 const checkServiceabilityHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const { pincode, address, locality, city } = req.body;
-    
+
     // Check private restricted locations
     const restrictedRow = (await db.queryRow("SELECT value FROM settings WHERE key = 'restricted_locations'")) as { value: string } | undefined;
     let restrictedAreas: string[] = [];
@@ -350,17 +350,26 @@ const checkServiceabilityHandler = async (req: Request, res: Response): Promise<
     const locationQuery = (pincode || locality || address || '').toString().trim();
     if (locationQuery) {
       const cleanInput = locationQuery.toLowerCase();
-      // Try exact pincode or area/city match
-      const territory = (await db.queryRow(
-        'SELECT * FROM territories WHERE (pincode = ? OR LOWER(area_name) LIKE ? OR LOWER(city) LIKE ?) AND is_active = 1',
+      // Return all matching active localities for the requested PIN or area
+      const matchingTerritories = (await db.query(
+        'SELECT * FROM territories WHERE (pincode = ? OR LOWER(area_name) LIKE ? OR LOWER(city) LIKE ?) AND is_active = 1 ORDER BY area_name ASC',
         [locationQuery, `%${cleanInput}%`, `%${cleanInput}%`]
-      )) as any;
+      )) as any[];
 
-      if (territory) {
+      if (matchingTerritories.length > 0) {
+        const primary = matchingTerritories[0];
+        const localityNames = matchingTerritories.map(t => t.area_name).join(', ');
+        const customMsg = locationQuery === '110017' || localityNames.toLowerCase().includes('saket')
+          ? 'Service available in Saket, Malviya Nagar and Sainik Farm, South Delhi. Enter your PIN code to check whether your exact locality is covered.'
+          : (matchingTerritories.length === 1
+            ? `Verified: Doorstep beauty services available in ${primary.area_name}, ${primary.city}.`
+            : `Verified: Doorstep beauty services available in ${localityNames} (${primary.pincode}, ${primary.city}).`);
+
         res.json({
           isServiceable: true,
-          territory,
-          message: `Verified: Doorstep beauty services available in ${territory.area_name}, ${territory.city}.`
+          territory: primary,
+          territories: matchingTerritories,
+          message: customMsg
         });
         return;
       }
@@ -730,8 +739,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     // Determine territory & pincode without blocking customers (pincode is 100% optional)
     const cleanPin = address.pincode && address.pincode.trim() ? address.pincode.trim() : null;
-    const territory = cleanPin 
-      ? (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any 
+    const territory = cleanPin
+      ? (await db.queryRow('SELECT * FROM territories WHERE pincode = ? AND is_active = 1', [cleanPin])) as any
       : (await db.queryRow('SELECT * FROM territories WHERE LOWER(city) LIKE ? AND is_active = 1', [`%${(address.city || 'delhi').toLowerCase()}%`])) as any;
 
     // Calculate pricing strictly from DB
@@ -1412,5 +1421,19 @@ storefrontRouter.get('/faqs', async (_req: Request, res: Response): Promise<void
     res.json({ faqs });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to load FAQs' });
+  }
+});
+
+// Active Customer Coupons for storefront Offers & Cart pages
+storefrontRouter.get('/coupons', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const now = new Date().toISOString();
+    const coupons = await db.query(
+      'SELECT id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, description FROM coupons WHERE is_active = 1 AND expires_at >= ? ORDER BY min_order_amount ASC',
+      [now]
+    );
+    res.json({ coupons });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to load coupons' });
   }
 });

@@ -9,7 +9,7 @@ interface RouterContextType {
 
 const RouterContext = createContext<RouterContextType>({
   path: '/',
-  navigate: () => {},
+  navigate: () => { },
   params: {}
 });
 

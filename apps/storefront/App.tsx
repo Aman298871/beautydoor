@@ -68,8 +68,11 @@ function StorefrontContent() {
       setReviews(revRes.reviews || []);
 
       if (terRes.territories?.length > 0) {
-        const defaultTer = terRes.territories.find((t: any) => t.pincode === '110017') || terRes.territories[0];
-        setSelectedTerritory(defaultTer);
+        setSelectedTerritory({
+          area_name: 'Delhi NCR Doorstep Service',
+          city: 'Delhi NCR',
+          pincode: '110017'
+        });
       }
     } catch (e) {
       console.error('Failed to load storefront data:', e);

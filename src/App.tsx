@@ -251,7 +251,7 @@ export default function App() {
 
       {/* 1. Announcement Bar */}
       <AnnouncementBar
-        text={settings?.announcementBannerText || '✨ Delhi NCR: Flat ₹200 OFF on your first booking with code BEAUTYFIRST | Free cancellation'}
+        text={settings?.announcementBannerText || '✨ Delhi NCR: Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more | Pay after service'}
         isActive={settings?.isAnnouncementActive ?? true}
       />
 

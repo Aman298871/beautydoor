@@ -144,9 +144,24 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
   res.json({ success: true });
 });
 
+function parseAppointmentDateTime(dateStr: string, slotStr: string): number | null {
+  if (!dateStr || !slotStr) return null;
+  const match = slotStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  const cleanDate = dateStr.trim();
+  const iso = `${cleanDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+  const t = new Date(iso).getTime();
+  return isNaN(t) ? null : t;
+}
+
 adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { reason, cancellationFee } = req.body;
+  const { reason, simulateNow } = req.body;
   const adminUser = req.adminUser?.username || 'admin';
 
   const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
@@ -155,18 +170,70 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     return;
   }
 
-  const fee = Number(cancellationFee) || 0;
-  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}]: ${reason || 'Customer request'} (Fee: ₹${fee})`;
+  if (booking.booking_status === 'cancelled') {
+    res.status(400).json({ error: 'This booking has already been cancelled.' });
+    return;
+  }
+
+  if (booking.booking_status === 'completed') {
+    res.status(400).json({ error: 'Completed appointments cannot be cancelled.' });
+    return;
+  }
+
+  // Backend cancellation fee calculation based on strict 2-hour window policy:
+  // At least 2 hours before: ₹0 fee
+  // Less than 2 hours before: ₹200 fee
+  const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
+  const now = simulateNow ? new Date(simulateNow).getTime() : Date.now();
+  const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
+  const windowBreached = diffMinutes < 120;
+  const fee = windowBreached ? 200 : 0;
+
+  const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
+  const refundAmount = isPrepaid ? Math.max(0, booking.total_payable - fee) : 0;
+  const refundStatus = isPrepaid ? (refundAmount > 0 ? 'refund_pending_approval' : 'not_applicable') : 'not_applicable';
+  const cancelTimestamp = new Date(now).toISOString();
+
+  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid' : 'COD'})`;
 
   await db.execute(`
     UPDATE bookings
     SET booking_status = 'cancelled',
+        cancelled_at = ?,
+        cancellation_reason = ?,
+        cancellation_fee = ?,
+        cancellation_window_breached = ?,
+        refund_amount = ?,
+        refund_status = ?,
         internal_notes = ?
     WHERE id = ?
-  `, [updatedNotes, id]);
+  `, [
+    cancelTimestamp,
+    reason || 'Admin cancellation',
+    fee,
+    windowBreached ? 1 : 0,
+    refundAmount,
+    refundStatus,
+    updatedNotes,
+    id
+  ]);
 
-  recordAuditLog(adminUser, 'CANCEL_BOOKING', 'BOOKING', id, { reason, fee }, req.ip);
-  res.json({ success: true, message: `Booking ${id} has been marked as cancelled.` });
+  recordAuditLog(adminUser, 'CANCEL_BOOKING', 'BOOKING', id, {
+    reason,
+    cancellation_fee: fee,
+    window_breached: windowBreached,
+    refund_amount: refundAmount,
+    refund_status: refundStatus
+  }, req.ip);
+
+  res.json({
+    success: true,
+    message: `Booking ${id} has been marked as cancelled.`,
+    cancellationFee: fee,
+    windowBreached,
+    refundAmount,
+    refundStatus
+  });
 });
 
 adminRouter.post('/bookings/:id/notes', async (req: Request, res: Response): Promise<void> => {

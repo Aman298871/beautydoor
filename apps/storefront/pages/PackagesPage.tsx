@@ -107,7 +107,7 @@ export const PackagesPage: React.FC<Props> = ({
   return (
     <div className="pt-6 pb-28 sm:py-16 bg-[#FAF7F2] min-h-[85vh]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Breadcrumb & Header */}
         <div className="mb-8">
           <p className="text-xs text-[#8C7A7C] mb-1">
@@ -232,7 +232,7 @@ export const PackagesPage: React.FC<Props> = ({
                     <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C]">
                       {pkg.name}
                     </h2>
-                    
+
                     {pkg.subtitle && (
                       <p className="text-xs text-[#C5A880] font-semibold tracking-wide uppercase mt-0.5">
                         {pkg.subtitle}
@@ -249,7 +249,7 @@ export const PackagesPage: React.FC<Props> = ({
                         <Tag className="w-3 h-3 text-[#C5A880]" />
                         <span>Included Treatments ({pkg.inclusions.length})</span>
                       </p>
-                      
+
                       <div className="space-y-2">
                         {pkg.inclusions.map((item, idx) => {
                           const isFree = isIncludedFree(item);
@@ -258,19 +258,17 @@ export const PackagesPage: React.FC<Props> = ({
                           return (
                             <div
                               key={idx}
-                              className={`p-2 rounded-lg flex items-start justify-between gap-2 text-xs transition-colors ${
-                                isFree
+                              className={`p-2 rounded-lg flex items-start justify-between gap-2 text-xs transition-colors ${isFree
                                   ? 'bg-emerald-50 border border-emerald-200 text-emerald-950 font-medium'
                                   : 'bg-[#FAF7F2] text-[#2C2426]'
-                              }`}
+                                }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
-                                  isFree ? 'bg-emerald-600 text-white' : 'bg-[#E8DDD3] text-[#4A0417]'
-                                }`}>
+                              <div className="flex items-start gap-2 flex-1">
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isFree ? 'bg-emerald-600 text-white' : 'bg-[#E8DDD3] text-[#4A0417]'
+                                  }`}>
                                   <Check className="w-2.5 h-2.5" />
                                 </span>
-                                <span>{itemName}</span>
+                                <span className="font-medium text-xs text-[#2C2426] leading-snug break-words">{itemName}</span>
                               </div>
 
                               {isFree && (
@@ -294,22 +292,20 @@ export const PackagesPage: React.FC<Props> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'Insta Glow' }))}
-                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${
-                              selectedVariant === 'Insta Glow'
+                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant === 'Insta Glow'
                                 ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                 : 'bg-white text-[#554749] border-[#E8DDD3] hover:border-[#C5A880]'
-                            }`}
+                              }`}
                           >
                             VLCC Insta Glow
                           </button>
                           <button
                             type="button"
                             onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'Anti Tan' }))}
-                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${
-                              selectedVariant === 'Anti Tan'
+                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant === 'Anti Tan'
                                 ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                 : 'bg-white text-[#554749] border-[#E8DDD3] hover:border-[#C5A880]'
-                            }`}
+                              }`}
                           >
                             VLCC Anti-Tan
                           </button>
@@ -364,11 +360,10 @@ export const PackagesPage: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => handleBook(pkg)}
-                        className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          inCart
+                        className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${inCart
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                             : 'bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] shadow-sm active:scale-98'
-                        }`}
+                          }`}
                       >
                         {inCart ? (
                           <>
@@ -441,11 +436,10 @@ export const PackagesPage: React.FC<Props> = ({
                     return (
                       <li
                         key={idx}
-                        className={`p-2.5 rounded-lg flex items-center justify-between text-xs ${
-                          isFree
+                        className={`p-2.5 rounded-lg flex items-center justify-between text-xs ${isFree
                             ? 'bg-emerald-50 border border-emerald-200 text-emerald-950 font-semibold'
                             : 'bg-[#FAF7F2] border border-[#F4EFEA]'
-                        }`}
+                          }`}
                       >
                         <span className="flex items-center gap-2">
                           <Check className="w-3.5 h-3.5 text-emerald-600" />

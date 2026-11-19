@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tag, Sparkles, Copy, Check, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 
@@ -21,12 +21,12 @@ export const OffersPage: React.FC<Props> = ({ campaigns }) => {
   const { navigate } = useRouter();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const coupons = [
+  const defaultCoupons = [
     {
       code: 'BEAUTYFIRST',
-      title: 'Flat ₹200 OFF on Inaugural Order',
-      desc: 'Valid on orders above ₹799 across all Delhi NCR territories.',
-      min: '₹799'
+      title: 'Flat ₹100 OFF on Inaugural Order',
+      desc: 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more across all Delhi NCR territories.',
+      min: '₹1,100'
     },
     {
       code: 'GLOW15',
@@ -41,6 +41,24 @@ export const OffersPage: React.FC<Props> = ({ campaigns }) => {
       min: '₹3,999'
     }
   ];
+
+  const [coupons, setCoupons] = useState<any[]>(defaultCoupons);
+
+  useEffect(() => {
+    fetch('/api/storefront/coupons')
+      .then(r => r.json())
+      .then(data => {
+        if (data.coupons && data.coupons.length > 0) {
+          setCoupons(data.coupons.map((c: any) => ({
+            code: c.code,
+            title: c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `Flat ₹${c.discount_value} OFF`,
+            desc: c.description || `Valid on orders above ₹${c.min_order_amount} across all Delhi NCR territories.`,
+            min: `₹${c.min_order_amount.toLocaleString('en-IN')}`
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);

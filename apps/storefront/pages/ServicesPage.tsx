@@ -130,7 +130,7 @@ export const ServicesPage: React.FC<Props> = ({
   return (
     <div className="pt-6 pb-28 sm:py-12 bg-[#FAF7F2] min-h-[90vh] overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        
+
         {/* Breadcrumb & Header */}
         <div>
           <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-[#8C7A7C] mb-2 flex items-center gap-1.5">
@@ -170,7 +170,7 @@ export const ServicesPage: React.FC<Props> = ({
 
         {/* Phase 2: Unified Top Controls — Search, Sort & Hygiene Promise */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#E8DDD3] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
+
           {/* Search Input */}
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-[#8C7A7C] absolute left-3.5 top-3 pointer-events-none" />
@@ -238,16 +238,14 @@ export const ServicesPage: React.FC<Props> = ({
             {/* All Treatments Chip */}
             <button
               onClick={() => handleSelectCategory('all')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
-                selectedCat === 'all'
+              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shadow-xs flex items-center gap-2 cursor-pointer ${selectedCat === 'all'
                   ? 'bg-[#4A0417] text-white ring-2 ring-[#4A0417]/20 shadow-md'
                   : 'bg-white text-[#3D3335] border border-[#E8DDD3] hover:border-[#C5A880] hover:bg-[#FAF7F2]'
-              }`}
+                }`}
             >
               <span>All Treatments</span>
-              <span className={`text-[11px] tabular-nums px-2 py-0.5 rounded-full font-bold ${
-                selectedCat === 'all' ? 'bg-white/20 text-white' : 'bg-[#FAF7F2] text-[#8C7A7C]'
-              }`}>
+              <span className={`text-[11px] tabular-nums px-2 py-0.5 rounded-full font-bold ${selectedCat === 'all' ? 'bg-white/20 text-white' : 'bg-[#FAF7F2] text-[#8C7A7C]'
+                }`}>
                 {services.length}
               </span>
             </button>
@@ -261,16 +259,14 @@ export const ServicesPage: React.FC<Props> = ({
                 <button
                   key={cat.id}
                   onClick={() => handleSelectCategory(cat.id)}
-                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
-                    isSelected
+                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shadow-xs flex items-center gap-2 cursor-pointer ${isSelected
                       ? 'bg-[#4A0417] text-white ring-2 ring-[#4A0417]/20 shadow-md'
                       : 'bg-white text-[#3D3335] border border-[#E8DDD3] hover:border-[#C5A880] hover:bg-[#FAF7F2]'
-                  }`}
+                    }`}
                 >
                   <span>{cat.name}</span>
-                  <span className={`text-[11px] tabular-nums px-2 py-0.5 rounded-full font-bold ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-[#FAF7F2] text-[#8C7A7C]'
-                  }`}>
+                  <span className={`text-[11px] tabular-nums px-2 py-0.5 rounded-full font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-[#FAF7F2] text-[#8C7A7C]'
+                    }`}>
                     {count}
                   </span>
                 </button>
@@ -376,7 +372,7 @@ export const ServicesPage: React.FC<Props> = ({
                                 ) : (
                                   <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                 )}
-                                <span className={`truncate ${isFree ? 'font-bold text-amber-900' : ''}`}>
+                                <span className={`leading-snug break-words ${isFree ? 'font-bold text-amber-900' : ''}`}>
                                   {name}
                                 </span>
                               </li>
@@ -404,11 +400,10 @@ export const ServicesPage: React.FC<Props> = ({
                                   key={vName}
                                   type="button"
                                   onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: vName }))}
-                                  className={`py-1 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                                    active
+                                  className={`py-1 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${active
                                       ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-2xs'
                                       : 'bg-white text-[#4A3E3D] border-[#E8DDD3] hover:border-[#C5A880]'
-                                  }`}
+                                    }`}
                                 >
                                   {vName}
                                 </button>
@@ -444,11 +439,10 @@ export const ServicesPage: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => handleBookPackage(pkg)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
-                          isAdded
+                        className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${isAdded
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                             : 'bg-[#4A0417] hover:bg-[#36020F] text-white active:scale-95'
-                        }`}
+                          }`}
                       >
                         {isAdded ? (
                           <>
@@ -487,7 +481,7 @@ export const ServicesPage: React.FC<Props> = ({
                 >
                   <div>
                     {/* Card Photo with Hover Zoom & Badges */}
-                    <div 
+                    <div
                       onClick={() => setActiveModalService(srv)}
                       className="relative aspect-16/10 w-full overflow-hidden bg-[#F0EAE1] cursor-pointer"
                     >
@@ -584,11 +578,10 @@ export const ServicesPage: React.FC<Props> = ({
                     <div className="flex items-center gap-1.5 sm:gap-2">
                       <button
                         onClick={() => onQuickAdd(srv)}
-                        className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border ${
-                          inCart
+                        className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border ${inCart
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                             : 'bg-white border-[#E8DDD3] text-[#4A0417] hover:bg-[#FAF7F2]'
-                        }`}
+                          }`}
                         title="Add to cart"
                       >
                         {inCart ? (
@@ -782,11 +775,10 @@ export const ServicesPage: React.FC<Props> = ({
                           key={vName}
                           type="button"
                           onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [activeModalPackage.id]: vName }))}
-                          className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            active
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${active
                               ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                               : 'bg-white text-[#4A3E3D] border-[#E8DDD3] hover:border-[#C5A880]'
-                          }`}
+                            }`}
                         >
                           {vName}
                         </button>

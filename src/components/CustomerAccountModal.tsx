@@ -177,7 +177,7 @@ export const CustomerAccountModal: React.FC<Props> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden border border-[#E8DDD3] my-8 animate-in fade-in zoom-in-95 duration-150">
-        
+
         {/* Header */}
         <div className="bg-[#FAF7F2] p-5 sm:p-6 border-b border-[#E8DDD3] flex items-center justify-between">
           <div>
@@ -201,7 +201,7 @@ export const CustomerAccountModal: React.FC<Props> = ({
 
         {/* Body */}
         <div className="p-5 sm:p-6 space-y-6 max-h-[72vh] overflow-y-auto">
-          
+
           {/* NOT LOGGED IN: MOBILE OTP SCREEN */}
           {!isLoggedIn ? (
             <div className="max-w-md mx-auto py-6 space-y-5">
@@ -312,7 +312,7 @@ export const CustomerAccountModal: React.FC<Props> = ({
           ) : (
             // LOGGED IN: PROFILE & BOOKINGS DASHBOARD
             <div className="space-y-6">
-              
+
               {/* Top Banner: Membership Tier */}
               <div className="p-4 rounded-xl bg-gradient-to-r from-[#FAF7F2] to-[#F4EFEA] border border-[#E8DDD3] flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -380,15 +380,14 @@ export const CustomerAccountModal: React.FC<Props> = ({
                         </div>
 
                         {/* Status Badge (clean text with indicator) */}
-                        <span className={`text-[11px] font-semibold uppercase px-2.5 py-0.5 rounded border ${
-                          b.bookingStatus === 'confirmed' || b.bookingStatus === 'assigned'
+                        <span className={`text-[11px] font-semibold uppercase px-2.5 py-0.5 rounded border ${b.bookingStatus === 'confirmed' || b.bookingStatus === 'assigned'
                             ? 'bg-blue-50 text-blue-800 border-blue-200'
                             : b.bookingStatus === 'completed'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : b.bookingStatus === 'cancelled'
-                            ? 'bg-red-50 text-red-800 border-red-200'
-                            : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}>
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : b.bookingStatus === 'cancelled'
+                                ? 'bg-red-50 text-red-800 border-red-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
                           {b.bookingStatus}
                         </span>
                       </div>

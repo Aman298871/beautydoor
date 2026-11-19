@@ -12,6 +12,11 @@
     color: #1F1A1C;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html {
+    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, .font-serif {

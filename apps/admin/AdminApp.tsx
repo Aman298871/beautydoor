@@ -127,6 +127,29 @@ export default function AdminApp() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
+  // Additional Management Modals & State
+  const [editingCoupon, setEditingCoupon] = useState<any | null>(null);
+  const [isNewCoupon, setIsNewCoupon] = useState(false);
+  const [couponSearchQuery, setCouponSearchQuery] = useState('');
+
+  const [editingTerritory, setEditingTerritory] = useState<any | null>(null);
+  const [isNewTerritory, setIsNewTerritory] = useState(false);
+  const [territorySearchQuery, setTerritorySearchQuery] = useState('');
+
+  const [cancellingBooking, setCancellingBooking] = useState<any | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('Customer requested cancellation');
+  const [cancellationFeeInput, setCancellationFeeInput] = useState('0');
+
+  const [editingBookingNotes, setEditingBookingNotes] = useState<any | null>(null);
+  const [newBookingNoteText, setNewBookingNoteText] = useState('');
+
+  const [editingBeautician, setEditingBeautician] = useState<any | null>(null);
+  const [isNewBeautician, setIsNewBeautician] = useState(false);
+  const [viewingBeauticianAppointments, setViewingBeauticianAppointments] = useState<any | null>(null);
+  const [beauticianAppointmentsList, setBeauticianAppointmentsList] = useState<any[]>([]);
+
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+
   const notify = (msg: string) => {
     setNotificationMsg(msg);
     setTimeout(() => setNotificationMsg(null), 3500);
@@ -371,6 +394,198 @@ export default function AdminApp() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleExportCSV = async (type: 'bookings' | 'customers' | 'services') => {
+    try {
+      const res = await fetch(`/api/admin/export/${type}.csv`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `beautydoor-${type}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      notify(`${type.charAt(0).toUpperCase() + type.slice(1)} CSV exported successfully!`);
+    } catch (err: any) {
+      notify(`Failed to export ${type}: ${err.message}`);
+    }
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const url = isNewCoupon ? '/api/admin/coupons' : `/api/admin/coupons/${editingCoupon.id}`;
+      const method = isNewCoupon ? 'POST' : 'PUT';
+
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(editingCoupon)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save coupon');
+
+      notify(isNewCoupon ? 'Coupon created successfully!' : 'Coupon updated successfully!');
+      setEditingCoupon(null);
+      setIsNewCoupon(false);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this coupon? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/admin/coupons/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to delete coupon');
+      notify('Coupon deleted successfully!');
+      setCoupons(prev => prev.filter(c => c.id !== id));
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleToggleCouponActive = async (id: string, currentStatus: number) => {
+    try {
+      const nextActive = currentStatus === 1 ? 0 : 1;
+      const res = await fetch(`/api/admin/coupons/${id}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isActive: nextActive })
+      });
+      if (!res.ok) throw new Error('Failed to toggle coupon status');
+      notify(`Coupon ${nextActive ? 'activated' : 'deactivated'}`);
+      setCoupons(prev => prev.map(c => c.id === id ? { ...c, is_active: nextActive } : c));
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleSaveTerritory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const url = isNewTerritory ? '/api/admin/territories' : `/api/admin/territories/${editingTerritory.id}`;
+      const method = isNewTerritory ? 'POST' : 'PUT';
+
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(editingTerritory)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save territory');
+
+      notify(isNewTerritory ? 'Territory added successfully!' : 'Territory updated successfully!');
+      setEditingTerritory(null);
+      setIsNewTerritory(false);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleDeleteTerritory = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this locality from serviceable areas?')) return;
+    try {
+      const res = await fetch(`/api/admin/territories/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to delete territory');
+      notify('Territory deleted successfully!');
+      setTerritories(prev => prev.filter(t => t.id !== id));
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleConfirmCancelBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancellingBooking) return;
+    try {
+      const res = await fetch(`/api/admin/bookings/${cancellingBooking.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          reason: cancellationReason,
+          cancellationFee: Number(cancellationFeeInput) || 0
+        })
+      });
+      if (!res.ok) throw new Error('Failed to cancel booking');
+      notify(`Booking ${cancellingBooking.id} cancelled successfully.`);
+      setCancellingBooking(null);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleSaveBookingNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBookingNotes || !newBookingNoteText.trim()) return;
+    try {
+      const res = await fetch(`/api/admin/bookings/${editingBookingNotes.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ note: newBookingNoteText.trim() })
+      });
+      if (!res.ok) throw new Error('Failed to add note');
+      notify('Internal note saved!');
+      setEditingBookingNotes(null);
+      setNewBookingNoteText('');
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleViewBeauticianAppointments = async (b: any) => {
+    try {
+      setViewingBeauticianAppointments(b);
+      const res = await fetch(`/api/admin/beauticians/${b.id}/appointments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setBeauticianAppointmentsList(data.appointments || []);
+    } catch (err: any) {
+      notify('Failed to load appointments: ' + err.message);
+    }
+  };
+
+  const handleSaveBeautician = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const url = isNewBeautician ? '/api/admin/beauticians' : `/api/admin/beauticians/${editingBeautician.id}`;
+      const method = isNewBeautician ? 'POST' : 'PUT';
+
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(editingBeautician)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save beautician');
+
+      notify(isNewBeautician ? 'Beautician onboarded!' : 'Beautician updated!');
+      setEditingBeautician(null);
+      setIsNewBeautician(false);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
     }
   };
 
@@ -1781,39 +1996,124 @@ export default function AdminApp() {
         {/* 6. PINCODES & TERRITORIES */}
         {activeTab === 'territories' && (
           <div className="space-y-6">
-            <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
-              Delhi NCR Active Serviceable Pincodes
-            </h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Delhi NCR Serviceable Territories & Pincodes
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Manage active doorstep delivery zones, city minimum orders, and convenience delivery fees.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingTerritory({
+                    city: 'Delhi',
+                    areaName: '',
+                    pincode: '',
+                    minOrderAmount: 1000,
+                    deliveryFee: 0,
+                    isActive: 1
+                  });
+                  setIsNewTerritory(true);
+                }}
+                className="px-4 py-2 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+              >
+                <Plus className="w-4 h-4 text-[#C5A880]" />
+                <span>Add Locality / Pincode</span>
+              </button>
+            </div>
+
+            {/* Essential Territory Explanation Card for Saket, Malviya Nagar & Sainik Farm */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF7F2] border border-[#C5A880]/60 shadow-xs space-y-2">
+              <div className="flex items-center gap-2 text-[#4A0417] font-semibold text-xs uppercase tracking-wider">
+                <MapPin className="w-4 h-4 text-[#C5A880]" />
+                <span>Doorstep Service Territory Explanation</span>
+              </div>
+              <h4 className="font-serif font-bold text-sm text-[#1F1A1C]">
+                South Delhi Neighborhoods (PIN 110017): Saket, Malviya Nagar, Sainik Farm
+              </h4>
+              <p className="text-xs text-[#554749] leading-relaxed">
+                Saket, Malviya Nagar, and Sainik Farm are premier residential localities within South Delhi sharing postal pincode 110017. They are geographical doorstep service destinations covered with ₹0 Visiting Charge and the standard Delhi ₹1,000 minimum booking threshold — not package names or separate fees.
+              </p>
+            </div>
+
+            {/* Search Filter */}
+            <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#E8DDD3]">
+              <Search className="w-4 h-4 text-[#8C7A7C]" />
+              <input
+                type="text"
+                placeholder="Filter localities by city, area name, or 6-digit pincode..."
+                value={territorySearchQuery}
+                onChange={(e) => setTerritorySearchQuery(e.target.value)}
+                className="w-full text-xs bg-transparent focus:outline-none"
+              />
+            </div>
+
             <div className="bg-white rounded-2xl border border-[#E8DDD3] overflow-hidden shadow-xs">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#FAF7F2] text-[#4A0417] uppercase tracking-wider font-semibold border-b border-[#E8DDD3]">
                   <tr>
                     <th className="py-3 px-4">City</th>
-                    <th className="py-3 px-4">Area</th>
+                    <th className="py-3 px-4">Locality / Area Name</th>
                     <th className="py-3 px-4">Pincode</th>
                     <th className="py-3 px-4">Min Order</th>
-                    <th className="py-3 px-4 text-right">Status</th>
+                    <th className="py-3 px-4">Delivery Fee</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F4EFEA]">
-                  {territories.map((t) => (
-                    <tr key={t.id} className="hover:bg-[#FAF7F2]">
-                      <td className="py-3 px-4 font-bold text-[#1F1A1C]">{t.city}</td>
-                      <td className="py-3 px-4 text-[#554749]">{t.area_name}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-[#4A0417]">{t.pincode}</td>
-                      <td className="py-3 px-4 tabular-nums">₹{t.min_order_amount}</td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => handleToggleTerritory(t.id, t.is_active)}
-                          className={`px-3 py-1 rounded text-[11px] font-semibold ${
-                            t.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-500'
-                          }`}
-                        >
-                          {t.is_active === 1 ? 'Active' : 'Disabled'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {territories
+                    .filter(t => !territorySearchQuery || t.city.toLowerCase().includes(territorySearchQuery.toLowerCase()) || t.area_name.toLowerCase().includes(territorySearchQuery.toLowerCase()) || t.pincode.includes(territorySearchQuery))
+                    .map((t) => (
+                      <tr key={t.id} className="hover:bg-[#FAF7F2]">
+                        <td className="py-3 px-4 font-bold text-[#1F1A1C]">{t.city}</td>
+                        <td className="py-3 px-4 text-[#554749] font-medium">{t.area_name}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-[#4A0417]">{t.pincode}</td>
+                        <td className="py-3 px-4 tabular-nums font-semibold">₹{t.min_order_amount}</td>
+                        <td className="py-3 px-4 tabular-nums">₹{t.delivery_fee}</td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleToggleTerritory(t.id, t.is_active)}
+                            className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              t.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+                            }`}
+                          >
+                            {t.is_active === 1 ? 'Active' : 'Disabled'}
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingTerritory({
+                                  id: t.id,
+                                  city: t.city,
+                                  areaName: t.area_name,
+                                  pincode: t.pincode,
+                                  minOrderAmount: t.min_order_amount,
+                                  deliveryFee: t.delivery_fee,
+                                  isActive: t.is_active
+                                });
+                                setIsNewTerritory(false);
+                              }}
+                              className="p-1.5 text-[#4A0417] hover:bg-[#FAF7F2] rounded border border-[#E8DDD3]"
+                              title="Edit Locality"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTerritory(t.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200"
+                              title="Delete Locality"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -3738,6 +4038,393 @@ export default function AdminApp() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT COUPON MODAL */}
+      {editingCoupon && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2 text-[#4A0417]">
+                <Tag className="w-5 h-5 text-[#C5A880]" />
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  {isNewCoupon ? 'Create New Promo Coupon' : 'Edit Coupon Settings'}
+                </h4>
+              </div>
+              <button 
+                onClick={() => { setEditingCoupon(null); setIsNewCoupon(false); }} 
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold block mb-1">Coupon Code *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCoupon.code}
+                  onChange={(e) => setEditingCoupon({ ...editingCoupon, code: e.target.value.toUpperCase().trim() })}
+                  placeholder="e.g. BEAUTYFIRST"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono font-bold uppercase tracking-wider"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Discount Type</label>
+                  <select
+                    value={editingCoupon.discountType || editingCoupon.discount_type || 'flat'}
+                    onChange={(e) => setEditingCoupon({ ...editingCoupon, discountType: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  >
+                    <option value="flat">Flat Amount (₹)</option>
+                    <option value="percentage">Percentage (%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Discount Value *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingCoupon.discountValue ?? editingCoupon.discount_value ?? 100}
+                    onChange={(e) => setEditingCoupon({ ...editingCoupon, discountValue: Number(e.target.value) })}
+                    placeholder="e.g. 100"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Min Order Amount (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingCoupon.minOrderAmount ?? editingCoupon.min_order_amount ?? 1100}
+                    onChange={(e) => setEditingCoupon({ ...editingCoupon, minOrderAmount: Number(e.target.value) })}
+                    placeholder="e.g. 1100"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Max Discount Cap (₹)</label>
+                  <input
+                    type="number"
+                    value={editingCoupon.maxDiscount ?? editingCoupon.max_discount ?? 100}
+                    onChange={(e) => setEditingCoupon({ ...editingCoupon, maxDiscount: Number(e.target.value) })}
+                    placeholder="e.g. 100"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Expiry Date</label>
+                <input
+                  type="date"
+                  value={editingCoupon.expiresAt ?? (editingCoupon.expires_at ? editingCoupon.expires_at.split('T')[0] : '2028-12-31')}
+                  onChange={(e) => setEditingCoupon({ ...editingCoupon, expiresAt: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Customer Description</label>
+                <textarea
+                  rows={2}
+                  value={editingCoupon.description || ''}
+                  onChange={(e) => setEditingCoupon({ ...editingCoupon, description: e.target.value })}
+                  placeholder="e.g. Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more."
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="coupon_active"
+                  checked={editingCoupon.isActive === 1 || editingCoupon.is_active === 1 || editingCoupon.isActive === true}
+                  onChange={(e) => setEditingCoupon({ ...editingCoupon, isActive: e.target.checked ? 1 : 0 })}
+                  className="accent-[#4A0417]"
+                />
+                <label htmlFor="coupon_active" className="font-semibold cursor-pointer">
+                  Coupon is Active & Redemmable by Customers
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
+                <button
+                  type="button"
+                  onClick={() => { setEditingCoupon(null); setIsNewCoupon(false); }}
+                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
+                >
+                  Save Coupon
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT TERRITORY MODAL */}
+      {editingTerritory && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2 text-[#4A0417]">
+                <MapPin className="w-5 h-5 text-[#C5A880]" />
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  {isNewTerritory ? 'Add New Service Territory' : 'Edit Territory Settings'}
+                </h4>
+              </div>
+              <button 
+                onClick={() => { setEditingTerritory(null); setIsNewTerritory(false); }} 
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTerritory} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">City *</label>
+                  <select
+                    value={editingTerritory.city}
+                    onChange={(e) => setEditingTerritory({ ...editingTerritory, city: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold"
+                  >
+                    <option value="Delhi">Delhi</option>
+                    <option value="Gurugram">Gurugram</option>
+                    <option value="Noida">Noida</option>
+                    <option value="Greater Noida">Greater Noida</option>
+                    <option value="Ghaziabad">Ghaziabad</option>
+                    <option value="Faridabad">Faridabad</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">6-Digit Pincode *</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={editingTerritory.pincode}
+                    onChange={(e) => setEditingTerritory({ ...editingTerritory, pincode: e.target.value.replace(/\D/g, '') })}
+                    placeholder="e.g. 110017"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Locality / Area Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingTerritory.areaName ?? editingTerritory.area_name ?? ''}
+                  onChange={(e) => setEditingTerritory({ ...editingTerritory, areaName: e.target.value })}
+                  placeholder="e.g. Saket / Malviya Nagar / Sainik Farm"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Min Order Amount (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingTerritory.minOrderAmount ?? editingTerritory.min_order_amount ?? 1000}
+                    onChange={(e) => setEditingTerritory({ ...editingTerritory, minOrderAmount: Number(e.target.value) })}
+                    placeholder="1000 for Delhi, 1500 for NCR"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Visiting / Delivery Fee (₹)</label>
+                  <input
+                    type="number"
+                    value={editingTerritory.deliveryFee ?? editingTerritory.delivery_fee ?? 0}
+                    onChange={(e) => setEditingTerritory({ ...editingTerritory, deliveryFee: Number(e.target.value) })}
+                    placeholder="0"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold text-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="ter_active"
+                  checked={editingTerritory.isActive === 1 || editingTerritory.is_active === 1 || editingTerritory.isActive === true}
+                  onChange={(e) => setEditingTerritory({ ...editingTerritory, isActive: e.target.checked ? 1 : 0 })}
+                  className="accent-[#4A0417]"
+                />
+                <label htmlFor="ter_active" className="font-semibold cursor-pointer">
+                  Territory is Active & Serviceable
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
+                <button
+                  type="button"
+                  onClick={() => { setEditingTerritory(null); setIsNewTerritory(false); }}
+                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
+                >
+                  Save Territory
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CANCEL BOOKING MODAL */}
+      {cancellingBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2 text-red-700">
+                <ShieldAlert className="w-5 h-5 text-red-600" />
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  Cancel Appointment {cancellingBooking.id}
+                </h4>
+              </div>
+              <button 
+                onClick={() => setCancellingBooking(null)} 
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] text-xs space-y-1">
+              <p><span className="font-semibold">Customer:</span> {cancellingBooking.customer_name} ({cancellingBooking.customer_phone})</p>
+              <p><span className="font-semibold">Date & Slot:</span> {cancellingBooking.appointment_date} at {cancellingBooking.appointment_slot}</p>
+              <p><span className="font-semibold">Payable:</span> ₹{cancellingBooking.total_payable}</p>
+            </div>
+
+            <form onSubmit={handleConfirmCancelBooking} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold block mb-1">Cancellation Reason *</label>
+                <select
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
+                >
+                  <option value="Customer requested cancellation">Customer requested cancellation</option>
+                  <option value="Customer unreachable on phone">Customer unreachable on phone</option>
+                  <option value="Beautician unavailable in area">Beautician unavailable in area</option>
+                  <option value="Rescheduled to another date">Rescheduled to another date</option>
+                  <option value="Duplicate booking placed">Duplicate booking placed</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Cancellation Fee Charged (₹)</label>
+                <input
+                  type="number"
+                  value={cancellationFeeInput}
+                  onChange={(e) => setCancellationFeeInput(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
+                />
+                <span className="text-[11px] text-[#8C7A7C] block mt-1">
+                  Cancellation within 2 hours of appointment slot incurs standard ₹100 visit preparation charge.
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
+                <button
+                  type="button"
+                  onClick={() => setCancellingBooking(null)}
+                  className="px-4 py-1.5 text-[#6B5A5C] hover:bg-gray-100 rounded"
+                >
+                  Keep Appointment
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded font-semibold"
+                >
+                  Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW BEAUTICIAN APPOINTMENTS MODAL */}
+      {viewingBeauticianAppointments && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div>
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  Appointments: {viewingBeauticianAppointments.name}
+                </h4>
+                <p className="text-xs text-[#7A6B6D]">Phone: {viewingBeauticianAppointments.phone} · Rating: ★ {viewingBeauticianAppointments.rating}</p>
+              </div>
+              <button 
+                onClick={() => setViewingBeauticianAppointments(null)} 
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {beauticianAppointmentsList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#8C7A7C] italic bg-[#FAF7F2] rounded-xl border border-[#E8DDD3]">
+                  No active or historical appointments assigned to this specialist yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-[#F4EFEA] border border-[#E8DDD3] rounded-xl overflow-hidden text-xs">
+                  {beauticianAppointmentsList.map((apt) => (
+                    <div key={apt.id} className="p-3.5 bg-white hover:bg-[#FAF7F2] flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-[#4A0417]">{apt.id}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            apt.booking_status === 'completed' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+                          }`}>
+                            {apt.booking_status}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-[#1F1A1C] mt-1">{apt.customer_name} · {apt.customer_phone}</p>
+                        <p className="text-[#6B5A5C] text-[11px] truncate max-w-md">{apt.service_address}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-[#1F1A1C]">{apt.appointment_date}</p>
+                        <p className="text-[#8C7A7C] font-mono text-[11px]">{apt.appointment_slot}</p>
+                        <p className="font-bold text-[#4A0417] mt-0.5">₹{apt.total_payable}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

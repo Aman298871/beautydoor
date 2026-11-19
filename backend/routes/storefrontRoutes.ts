@@ -555,21 +555,21 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
     const packageDiscount = Math.round((subtotal * packageDiscountPercent) / 100);
     const amountAfterPackage = subtotal - packageDiscount;
 
-    // Coupon Validation
+    // Coupon Validation (Validated strictly against pre-discount cart subtotal)
     let couponDiscount = 0;
     let appliedCoupon: any = null;
     if (couponCode && typeof couponCode === 'string') {
       const cleanCode = couponCode.trim().toUpperCase();
       const now = new Date().toISOString();
       const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [cleanCode, now])) as any;
-      if (cp && amountAfterPackage >= cp.min_order_amount) {
+      if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
-          couponDiscount = Math.min(raw, cp.max_discount);
+          couponDiscount = Math.min(raw, cp.max_discount || raw);
         } else {
-          couponDiscount = Math.min(cp.discount_value, amountAfterPackage);
+          couponDiscount = Math.min(cp.discount_value, cp.max_discount || cp.discount_value, amountAfterPackage);
         }
-        appliedCoupon = { code: cp.code, description: cp.description };
+        appliedCoupon = { code: cp.code, description: cp.description, discountAmount: couponDiscount };
       }
     }
 
@@ -892,17 +892,18 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     const amountAfterPackage = subtotal - packageDiscount;
 
-    // Coupon
+    // Coupon Validation (Validated strictly against pre-discount cart subtotal)
     let couponDiscount = 0;
     let validCoupon: string | null = null;
-    if (couponCode) {
-      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1', [couponCode.trim().toUpperCase()])) as any;
-      if (cp && amountAfterPackage >= cp.min_order_amount) {
+    if (couponCode && typeof couponCode === 'string') {
+      const now = new Date().toISOString();
+      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [couponCode.trim().toUpperCase(), now])) as any;
+      if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
-          couponDiscount = Math.min(raw, cp.max_discount);
+          couponDiscount = Math.min(raw, cp.max_discount || raw);
         } else {
-          couponDiscount = Math.min(cp.discount_value, amountAfterPackage);
+          couponDiscount = Math.min(cp.discount_value, cp.max_discount || cp.discount_value, amountAfterPackage);
         }
         validCoupon = cp.code;
       }
@@ -928,7 +929,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
     const chosenPaymentMethod = paymentMethod === 'RAZORPAY' ? 'RAZORPAY' : 'COD';
-    const paymentStatus = chosenPaymentMethod === 'RAZORPAY' ? 'verified' : 'pending';
+    // Payments start as pending until verified through gateway webhook / signature
+    const paymentStatus = 'pending';
 
     // Insert booking
     await db.execute(`
@@ -1398,5 +1400,17 @@ storefrontRouter.post('/reviews', async (req: Request, res: Response): Promise<v
     res.status(201).json({ success: true, message: 'Thank you for your feedback!' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to submit review' });
+  }
+});
+
+// Active Customer FAQs for storefront FAQ page
+storefrontRouter.get('/faqs', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const faqs = await db.query(
+      "SELECT id, category, question, answer, display_order FROM faqs WHERE audience = 'customer' AND is_active = 1 ORDER BY display_order ASC, id ASC"
+    );
+    res.json({ faqs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to load FAQs' });
   }
 });

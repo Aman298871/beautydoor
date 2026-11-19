@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Clock, Plus, Check, Sparkles, ShieldCheck, Eye, X, ArrowUpDown, Star, Calendar, Gift, Wind, SlidersHorizontal, ChevronRight, Tag } from 'lucide-react';
 import { useRouter } from '../router.tsx';
 import { ServiceDetailModal } from '../../../src/components/ServiceDetailModal.tsx';
+import { lockScroll, unlockScroll } from '../../../src/utils/scrollLock.ts';
 import { formatDuration } from '../../../src/utils/formatters.ts';
 import { getServiceImageUrl } from '../../../src/utils/serviceImageMapper.ts';
 
@@ -39,19 +40,15 @@ export const ServicesPage: React.FC<Props> = ({
     'pkg-glamour-essentials': 'Anti-Tan'
   });
 
-  // Lock background scroll when any modal is active
+  // Lock background scroll when package detail modal is active
   useEffect(() => {
-    if (activeModalService || activeModalPackage) {
-      const originalBodyOverflow = document.body.style.overflow;
-      const originalHtmlOverflow = document.documentElement.style.overflow;
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
+    if (activeModalPackage) {
+      lockScroll();
       return () => {
-        document.body.style.overflow = originalBodyOverflow;
-        document.documentElement.style.overflow = originalHtmlOverflow;
+        unlockScroll();
       };
     }
-  }, [activeModalService, activeModalPackage]);
+  }, [activeModalPackage]);
 
   // Sync category from URL parameter
   useEffect(() => {

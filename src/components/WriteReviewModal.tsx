@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Star, CheckCircle2 } from 'lucide-react';
+import { lockScroll, unlockScroll } from '../utils/scrollLock.ts';
 
 interface Props {
   isOpen: boolean;
@@ -23,13 +24,9 @@ export const WriteReviewModal: React.FC<Props> = ({
   // Lock background scroll when modal is open
   useEffect(() => {
     if (isOpen) {
-      const originalBodyOverflow = document.body.style.overflow;
-      const originalHtmlOverflow = document.documentElement.style.overflow;
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
+      lockScroll();
       return () => {
-        document.body.style.overflow = originalBodyOverflow;
-        document.documentElement.style.overflow = originalHtmlOverflow;
+        unlockScroll();
       };
     }
   }, [isOpen]);

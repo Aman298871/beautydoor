@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
@@ -140,6 +142,52 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
 
   recordAuditLog(adminUser, 'UPDATE_BOOKING_STATUS', 'BOOKING', id, { bookingStatus, paymentStatus }, req.ip);
   res.json({ success: true });
+});
+
+adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { reason, cancellationFee } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  const fee = Number(cancellationFee) || 0;
+  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}]: ${reason || 'Customer request'} (Fee: ₹${fee})`;
+
+  await db.execute(`
+    UPDATE bookings
+    SET booking_status = 'cancelled',
+        internal_notes = ?
+    WHERE id = ?
+  `, [updatedNotes, id]);
+
+  recordAuditLog(adminUser, 'CANCEL_BOOKING', 'BOOKING', id, { reason, fee }, req.ip);
+  res.json({ success: true, message: `Booking ${id} has been marked as cancelled.` });
+});
+
+adminRouter.post('/bookings/:id/notes', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { note } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const booking = (await db.queryRow('SELECT internal_notes FROM bookings WHERE id = ?', [id])) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  const timestamp = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const updatedNotes = booking.internal_notes 
+    ? `${booking.internal_notes}\n[${timestamp} ${adminUser}]: ${note}`
+    : `[${timestamp} ${adminUser}]: ${note}`;
+
+  await db.execute('UPDATE bookings SET internal_notes = ? WHERE id = ?', [updatedNotes, id]);
+  recordAuditLog(adminUser, 'ADD_BOOKING_NOTE', 'BOOKING', id, { note }, req.ip);
+  res.json({ success: true, internal_notes: updatedNotes });
 });
 
 // 3. Services Catalog & Dynamic Pricing CRUD
@@ -491,10 +539,123 @@ adminRouter.patch('/beauticians/:id/status', async (req: Request, res: Response)
   res.json({ success: true });
 });
 
+adminRouter.put('/beauticians/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const b = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute(`
+    UPDATE beauticians
+    SET name = COALESCE(?, name),
+        phone = COALESCE(?, phone),
+        specialties_json = CASE WHEN ? IS NOT NULL THEN ? ELSE specialties_json END,
+        territories_json = CASE WHEN ? IS NOT NULL THEN ? ELSE territories_json END,
+        experience_years = COALESCE(?, experience_years),
+        status = COALESCE(?, status),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `, [
+    b.name || null,
+    b.phone || null,
+    b.specialties ? JSON.stringify(b.specialties) : null,
+    b.specialties ? JSON.stringify(b.specialties) : null,
+    b.territories ? JSON.stringify(b.territories) : null,
+    b.territories ? JSON.stringify(b.territories) : null,
+    b.experienceYears !== undefined ? Number(b.experienceYears) : null,
+    b.status || null,
+    b.isActive !== undefined ? (b.isActive ? 1 : 0) : null,
+    id
+  ]);
+
+  recordAuditLog(adminUser, 'UPDATE_BEAUTICIAN', 'STAFF', id, b, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.get('/beauticians/:id/appointments', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const appointments = await db.query(`
+    SELECT id, customer_name, customer_phone, service_address, appointment_date, appointment_slot, booking_status, payment_status, total_payable
+    FROM bookings
+    WHERE assigned_beautician_id = ?
+    ORDER BY appointment_date DESC, appointment_slot ASC
+    LIMIT 50
+  `, [id]);
+  res.json({ appointments });
+});
+
 // 6. Delhi NCR Territories & Pincodes
 adminRouter.get('/territories', async (_req: Request, res: Response): Promise<void> => {
   const territories = (await db.query('SELECT * FROM territories ORDER BY city, area_name', []));
   res.json({ territories });
+});
+
+adminRouter.post('/territories', async (req: Request, res: Response): Promise<void> => {
+  const { city, areaName, pincode, minOrderAmount, deliveryFee } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  if (!city || !areaName || !pincode) {
+    res.status(400).json({ error: 'City, Area Name, and Pincode are required.' });
+    return;
+  }
+
+  const existing = await db.queryRow('SELECT id FROM territories WHERE pincode = ? AND area_name = ?', [pincode, areaName]);
+  if (existing) {
+    res.status(400).json({ error: `Locality ${areaName} (${pincode}) already exists.` });
+    return;
+  }
+
+  const id = `ter-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO territories (id, city, area_name, pincode, is_active, delivery_fee, min_order_amount)
+    VALUES (?, ?, ?, ?, 1, ?, ?)
+  `, [
+    id,
+    city,
+    areaName,
+    pincode,
+    Number(deliveryFee) || 0,
+    Number(minOrderAmount) || (city.toLowerCase().includes('delhi') ? 1000 : 1500)
+  ]);
+
+  recordAuditLog(adminUser, 'CREATE_TERRITORY', 'LOCATION', id, { city, areaName, pincode }, req.ip);
+  res.status(201).json({ success: true, territoryId: id });
+});
+
+adminRouter.put('/territories/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { city, areaName, pincode, minOrderAmount, deliveryFee, isActive } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute(`
+    UPDATE territories
+    SET city = COALESCE(?, city),
+        area_name = COALESCE(?, area_name),
+        pincode = COALESCE(?, pincode),
+        min_order_amount = COALESCE(?, min_order_amount),
+        delivery_fee = COALESCE(?, delivery_fee),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `, [
+    city || null,
+    areaName || null,
+    pincode || null,
+    minOrderAmount !== undefined ? Number(minOrderAmount) : null,
+    deliveryFee !== undefined ? Number(deliveryFee) : null,
+    isActive !== undefined ? (isActive ? 1 : 0) : null,
+    id
+  ]);
+
+  recordAuditLog(adminUser, 'UPDATE_TERRITORY_FULL', 'LOCATION', id, req.body, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/territories/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute('DELETE FROM territories WHERE id = ?', [id]);
+  recordAuditLog(adminUser, 'DELETE_TERRITORY', 'LOCATION', id, {}, req.ip);
+  res.json({ success: true });
 });
 
 adminRouter.patch('/territories/:id', async (req: Request, res: Response): Promise<void> => {
@@ -526,22 +687,84 @@ adminRouter.get('/coupons', async (_req: Request, res: Response): Promise<void> 
 adminRouter.post('/coupons', async (req: Request, res: Response): Promise<void> => {
   const c = req.body;
   const adminUser = req.adminUser?.username || 'admin';
-  const id = `cp-${Date.now()}`;
+  const code = (c.code || '').trim().toUpperCase();
 
+  if (!code) {
+    res.status(400).json({ error: 'Coupon code is required.' });
+    return;
+  }
+
+  const existing = await db.queryRow('SELECT id FROM coupons WHERE code = ?', [code]);
+  if (existing) {
+    res.status(400).json({ error: `Coupon code '${code}' already exists.` });
+    return;
+  }
+
+  const id = `cp-${Date.now()}`;
   (await db.execute(`
     INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description)
     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
   `, [id,
-    c.code.toUpperCase(),
-    c.discountType,
-    Number(c.discountValue),
+    code,
+    c.discountType || 'flat',
+    Number(c.discountValue) || 0,
     Number(c.minOrderAmount) || 0,
     Number(c.maxDiscount) || 9999,
     c.expiresAt || '2028-12-31',
-    c.description]));
+    c.description || '']));
 
-  recordAuditLog(adminUser, 'CREATE_COUPON', 'MARKETING', id, { code: c.code }, req.ip);
+  recordAuditLog(adminUser, 'CREATE_COUPON', 'MARKETING', id, { code }, req.ip);
   res.status(201).json({ success: true, couponId: id });
+});
+
+adminRouter.put('/coupons/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const c = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+  const code = c.code ? c.code.trim().toUpperCase() : null;
+
+  if (code) {
+    const existing = await db.queryRow('SELECT id FROM coupons WHERE code = ? AND id != ?', [code, id]);
+    if (existing) {
+      res.status(400).json({ error: `Coupon code '${code}' is already used by another coupon.` });
+      return;
+    }
+  }
+
+  (await db.execute(`
+    UPDATE coupons
+    SET code = COALESCE(?, code),
+        discount_type = COALESCE(?, discount_type),
+        discount_value = COALESCE(?, discount_value),
+        min_order_amount = COALESCE(?, min_order_amount),
+        max_discount = COALESCE(?, max_discount),
+        expires_at = COALESCE(?, expires_at),
+        description = COALESCE(?, description),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `, [
+    code,
+    c.discountType || null,
+    c.discountValue !== undefined ? Number(c.discountValue) : null,
+    c.minOrderAmount !== undefined ? Number(c.minOrderAmount) : null,
+    c.maxDiscount !== undefined ? Number(c.maxDiscount) : null,
+    c.expiresAt || null,
+    c.description || null,
+    c.isActive !== undefined ? (c.isActive ? 1 : 0) : null,
+    id
+  ]));
+
+  recordAuditLog(adminUser, 'UPDATE_COUPON', 'MARKETING', id, c, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/coupons/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  (await db.execute('DELETE FROM coupons WHERE id = ?', [id]));
+  recordAuditLog(adminUser, 'DELETE_COUPON', 'MARKETING', id, {}, req.ip);
+  res.json({ success: true });
 });
 
 adminRouter.patch('/coupons/:id/toggle', async (req: Request, res: Response): Promise<void> => {
@@ -865,3 +1088,87 @@ adminRouter.get('/pending-services', async (_req: Request, res: Response): Promi
   res.json({ pending });
 });
 
+
+
+// 17. Image Upload
+adminRouter.post('/upload-image', async (req: Request, res: Response): Promise<void> => {
+  const { imageBase64, filename } = req.body;
+  if (!imageBase64) {
+    res.status(400).json({ error: 'imageBase64 data is required.' });
+    return;
+  }
+
+  try {
+    const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const safeName = (filename || `img_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const targetPath = path.join(uploadsDir, safeName);
+
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    fs.writeFileSync(targetPath, Buffer.from(base64Data, 'base64'));
+
+    const publicUrl = `/uploads/${safeName}`;
+    res.json({ success: true, url: publicUrl });
+  } catch (err: any) {
+    res.status(500).json({ error: `Image upload failed: ${err.message}` });
+  }
+});
+
+// 18. CSV Exports
+adminRouter.get('/export/bookings.csv', async (_req: Request, res: Response): Promise<void> => {
+  const bookings = await db.query<any>(`
+    SELECT id, customer_name, customer_phone, service_address, appointment_date, appointment_slot, booking_status, payment_status, total_payable, payment_method, created_at
+    FROM bookings
+    ORDER BY created_at DESC
+  `);
+
+  let csv = 'Booking ID,Customer Name,Phone,Address,Date,Slot,Status,Payment Status,Total Payable,Method,Created At\n';
+  for (const b of bookings) {
+    csv += `"${b.id}","${(b.customer_name || '').replace(/"/g, '""')}","${b.customer_phone || ''}","${(b.service_address || '').replace(/"/g, '""')}","${b.appointment_date || ''}","${b.appointment_slot || ''}","${b.booking_status || ''}","${b.payment_status || ''}","₹${b.total_payable || 0}","${b.payment_method || ''}","${b.created_at || ''}"\n`;
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=beautydoor-bookings-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});
+
+adminRouter.get('/export/customers.csv', async (_req: Request, res: Response): Promise<void> => {
+  const customers = await db.query<any>(`
+    SELECT c.id, c.name, c.phone, c.email, c.created_at,
+           COUNT(b.id) as booking_count,
+           COALESCE(SUM(CASE WHEN b.booking_status != 'cancelled' THEN b.total_payable ELSE 0 END), 0) as total_spent
+    FROM customers c
+    LEFT JOIN bookings b ON b.customer_phone = c.phone
+    GROUP BY c.id, c.name, c.phone, c.email, c.created_at
+    ORDER BY booking_count DESC
+  `);
+
+  let csv = 'Customer ID,Name,Phone,Email,Bookings Count,Total Spent,Created At\n';
+  for (const c of customers) {
+    csv += `"${c.id}","${(c.name || '').replace(/"/g, '""')}","${c.phone || ''}","${c.email || ''}","${c.booking_count || 0}","₹${c.total_spent || 0}","${c.created_at || ''}"\n`;
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=beautydoor-customers-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});
+
+adminRouter.get('/export/services.csv', async (_req: Request, res: Response): Promise<void> => {
+  const services = await db.query<any>(`
+    SELECT id, category_id, name, slug, brand, duration_mins, original_price, selling_price, steps_count, is_published, is_active
+    FROM services
+    ORDER BY category_id, name
+  `);
+
+  let csv = 'Service ID,Category,Name,Slug,Brand,Duration (mins),Original Price,Selling Price,Steps,Published,Active\n';
+  for (const s of services) {
+    csv += `"${s.id}","${s.category_id}","${(s.name || '').replace(/"/g, '""')}","${s.slug || ''}","${s.brand || ''}","${s.duration_mins || 0}","₹${s.original_price || ''}","₹${s.selling_price || 0}","${s.steps_count || 0}","${s.is_published ? 'Yes' : 'No'}","${s.is_active ? 'Yes' : 'No'}"\n`;
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=beautydoor-services-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});

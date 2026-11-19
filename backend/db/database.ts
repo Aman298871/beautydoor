@@ -586,7 +586,7 @@ async function seedEssentialData() {
   const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
   if (Number(cpCountRow?.count || 0) === 0) {
     const coupons = [
-      { id: 'cp-1', code: 'BEAUTYFIRST', type: 'flat', val: 200, min: 799, max: 200, exp: '2028-12-31', desc: 'Flat ₹200 savings on your inaugural at-home beauty ritual.' },
+      { id: 'cp-1', code: 'BEAUTYFIRST', type: 'flat', val: 100, min: 1100, max: 100, exp: '2028-12-31', desc: 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.' },
       { id: 'cp-2', code: 'GLOW15', type: 'percentage', val: 15, min: 1499, max: 500, exp: '2028-12-31', desc: '15% extra savings on premium facials and cleanups.' },
       { id: 'cp-3', code: 'NCRBRIDE', type: 'flat', val: 800, min: 3999, max: 800, exp: '2028-12-31', desc: '₹800 savings on royal bridal packages.' }
     ];
@@ -596,6 +596,26 @@ async function seedEssentialData() {
         [c.id, c.code, c.type, c.val, c.min, c.max, c.exp, c.desc]
       );
     }
+  }
+
+  // Targeted idempotent migration for BEAUTYFIRST coupon (Owner approved: ₹100 flat off, ₹1,100 min order)
+  const existingBeautyFirst = await db.queryRow('SELECT id FROM coupons WHERE code = ?', ['BEAUTYFIRST']);
+  if (existingBeautyFirst) {
+    await db.execute(`
+      UPDATE coupons SET
+        discount_type = 'flat',
+        discount_value = 100,
+        min_order_amount = 1100,
+        max_discount = 100,
+        is_active = 1,
+        description = 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.'
+      WHERE code = 'BEAUTYFIRST'
+    `);
+  } else {
+    await db.execute(`
+      INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `, ['cp-beautyfirst', 'BEAUTYFIRST', 'flat', 100, 1100, 100, '2028-12-31', 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.']);
   }
 
   // 6. OFFICIAL SERVICES (Master Catalogue - idempotent, preserves admin updates)
@@ -1291,7 +1311,7 @@ async function seedEssentialData() {
         JSON.stringify(p.benefits),
         p.badge || null,
         JSON.stringify(p.category_ids || []),
-        1,
+        p.is_published !== undefined ? p.is_published : 1,
         11,
         now,
         now
@@ -1299,7 +1319,7 @@ async function seedEssentialData() {
     }
   }
 
-  // Ensure owner-approved Glow & Groom Combo (₹999, 70 mins) is actively synced
+  // Ensure owner-approved Glow & Groom Combo (₹999, 70 mins) is synced in DRAFT awaiting owner audio confirmation
   await db.execute(`
     UPDATE packages SET
       name = 'Glow & Groom Combo',
@@ -1310,8 +1330,8 @@ async function seedEssentialData() {
       selling_price = 999,
       original_price = 1399,
       discount_percent = 29,
-      badge = 'Owner Special',
-      is_published = 1,
+      badge = 'Awaiting Owner Confirmation',
+      is_published = 0,
       category_ids_json = '["cat-facials", "cat-threading"]'
     WHERE id = 'pkg-glow-and-groom-combo'
   `);

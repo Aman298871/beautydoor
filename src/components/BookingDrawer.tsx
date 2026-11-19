@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BUSINESS_CONFIG } from '../config/businessConfig.ts';
+import { lockScroll, unlockScroll } from '../utils/scrollLock.ts';
 import {
   X,
   Trash2,
@@ -84,18 +85,9 @@ export const BookingDrawer: React.FC<Props> = ({
   // Lock background scroll on mobile and desktop while booking drawer is open
   useEffect(() => {
     if (!isOpen) return;
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
-    const originalTouchAction = document.body.style.touchAction;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
+    lockScroll();
     return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalHtmlOverflow;
-      document.body.style.touchAction = originalTouchAction;
+      unlockScroll();
     };
   }, [isOpen]);
 
@@ -208,7 +200,11 @@ export const BookingDrawer: React.FC<Props> = ({
         setCouponError(null);
       } else {
         setAppliedCoupon(null);
-        setCouponError('Coupon code is invalid or minimum booking value was not met.');
+        if (couponCode.trim().toUpperCase() === 'BEAUTYFIRST' && subtotal < 1100) {
+          setCouponError(`BEAUTYFIRST requires a minimum qualifying cart order of ₹1,100. Current cart subtotal is ₹${subtotal.toLocaleString('en-IN')}.`);
+        } else {
+          setCouponError('Coupon code is invalid, expired, or minimum qualifying order was not met.');
+        }
       }
     } catch {
       setCouponError('Could not validate coupon.');
@@ -878,12 +874,38 @@ export const BookingDrawer: React.FC<Props> = ({
                     </div>
 
                     {/* Coupon input */}
-                    <div className="pt-2">
-                      <label className="text-xs font-semibold text-[#1F1A1C] flex items-center gap-1 mb-1">
-                        <Tag className="w-3.5 h-3.5 text-[#4A0417]" />
-                        Have a Promo Code? (Try BEAUTYFIRST)
-                      </label>
-                      <div className="flex gap-2">
+                    <div className="pt-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#1F1A1C] flex items-center gap-1">
+                          <Tag className="w-3.5 h-3.5 text-[#4A0417]" />
+                          Have a Promo Code?
+                        </label>
+                        <span className="text-[10px] text-[#4A0417] font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                          Official Offer
+                        </span>
+                      </div>
+
+                      {/* Prominent BEAUTYFIRST Banner */}
+                      <div
+                        onClick={() => {
+                          setCouponCode('BEAUTYFIRST');
+                        }}
+                        className="p-2.5 bg-gradient-to-r from-[#FAF7F2] to-amber-50/50 border border-[#C5A880]/40 rounded-lg text-xs flex items-center justify-between cursor-pointer hover:border-[#4A0417] transition-all"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-[#4A0417] bg-white px-2 py-0.5 rounded border border-[#C5A880]/30 shrink-0">
+                            BEAUTYFIRST
+                          </span>
+                          <span className="text-[#554749] text-[11px] leading-tight">
+                            Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#4A0417] shrink-0 underline ml-2">
+                          Use Code
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 pt-0.5">
                         <input
                           type="text"
                           value={couponCode}

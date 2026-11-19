@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { forceResetScroll } from '../../src/utils/scrollLock.ts';
 
 interface RouterContextType {
   path: string;
@@ -24,6 +25,7 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     const handlePopState = () => {
+      forceResetScroll();
       setPath(getFullLocation());
     };
     window.addEventListener('popstate', handlePopState);
@@ -31,14 +33,15 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const navigate = (to: string) => {
+    forceResetScroll();
     const current = getFullLocation();
     if (to !== current) {
       window.history.pushState({}, '', to);
       setPath(to);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     } else {
       // If clicking same path with different query or re-triggering
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
   };
 

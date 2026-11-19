@@ -298,7 +298,7 @@
       "addons": [
         {
           "id": "add-neck-decollete",
-          "name": "Neck & Décolleté Extension",
+          "name": "Neck & D\u00e9collet\u00e9 Extension",
           "price": 499,
           "durationMins": 15
         }
@@ -503,7 +503,7 @@
     {
       "id": "srv-hair-loreal-spa",
       "categoryId": "hair-care",
-      "name": "L'Oréal Professionnel Mythic Oil Hair Spa",
+      "name": "L'Or\u00e9al Professionnel Mythic Oil Hair Spa",
       "description": "Intense nourishment for dry, frizzy, or chemically treated hair. Infused with argan and avocado oils with ozone scalp steam.",
       "benefits": [
         "Silky manageable hair",
@@ -1148,12 +1148,15 @@
       "id": "coup-1",
       "code": "BEAUTYFIRST",
       "discountType": "flat",
-      "discountValue": 200,
-      "minOrderAmount": 799,
-      "maxDiscount": 200,
+      "discountValue": 100,
+      "minOrderAmount": 1100,
+      "maxDiscount": 100,
       "expiresAt": "2027-12-31",
       "isActive": true,
-      "description": "₹200 flat savings on your first booking above ₹799"
+      "description": "Use BEAUTYFIRST to get \u20b9100 off on orders of \u20b91,100 or more.",
+      "discount_value": 100,
+      "min_order_amount": 1100,
+      "max_discount": 100
     },
     {
       "id": "coup-2",
@@ -1164,7 +1167,7 @@
       "maxDiscount": 450,
       "expiresAt": "2027-12-31",
       "isActive": true,
-      "description": "15% extra discount (up to ₹450) on facial and skincare orders"
+      "description": "15% extra discount (up to \u20b9450) on facial and skincare orders"
     },
     {
       "id": "coup-3",
@@ -1175,7 +1178,7 @@
       "maxDiscount": 800,
       "expiresAt": "2027-12-31",
       "isActive": true,
-      "description": "₹800 exclusive savings on royal bridal and pre-bridal packages"
+      "description": "\u20b9800 exclusive savings on royal bridal and pre-bridal packages"
     }
   ],
   "reviews": [
@@ -1184,7 +1187,7 @@
       "customerName": "Dr. Radhika Mathur",
       "city": "Vasant Vihar, South Delhi",
       "rating": 5,
-      "comment": "The hygiene standard is completely unmatched! Priya arrived with a sealed, salon-grade single-use kit and sanitized each instrument in front of me. The O3+ glow facial left my skin glass-like for my brother’s engagement.",
+      "comment": "The hygiene standard is completely unmatched! Priya arrived with a sealed, salon-grade single-use kit and sanitized each instrument in front of me. The O3+ glow facial left my skin glass-like for my brother\u2019s engagement.",
       "serviceName": "O3+ Bridal Radiance & Oxygen Glow Facial",
       "date": "14 Oct 2026",
       "source": "google_places",
@@ -1217,7 +1220,7 @@
       "customerName": "Deepika Malhotra",
       "city": "Greater Kailash II, Delhi",
       "rating": 5,
-      "comment": "Booked the royal pre-bridal journey before my court wedding. Every detail—from the gentle fruit scrubs to the deep conditioning hair spa—was executed with 5-star precision. Pay after service gave great peace of mind.",
+      "comment": "Booked the royal pre-bridal journey before my court wedding. Every detail\u2014from the gentle fruit scrubs to the deep conditioning hair spa\u2014was executed with 5-star precision. Pay after service gave great peace of mind.",
       "serviceName": "The Royal Pre-Bridal Radiance Journey",
       "date": "30 Oct 2026",
       "source": "verified_customer",
@@ -1235,13 +1238,13 @@
     "minOrderAmount": 1000,
     "cancellationWindowHours": 4,
     "cancellationPolicy": "Free cancellation up to 4 hours prior to your scheduled appointment. Rescheduling is complimentary.",
-    "announcementBannerText": "✨ Delhi NCR Inaugural Offer: Flat ₹200 OFF on your first at-home appointment with code BEAUTYFIRST",
+    "announcementBannerText": "\u2728 Delhi NCR Inaugural Offer: Flat \u20b9200 OFF on your first at-home appointment with code BEAUTYFIRST",
     "isAnnouncementActive": true,
     "razorpayEnabled": false,
     "codEnabled": true,
     "minOrderDelhi": 1000,
     "minOrderHaryana": 1500,
     "minOrderNoida": 1500,
-    "minOrderPolicy": "Minimum booking amount: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500. Your cart must meet the minimum order amount for your selected service location before you can confirm your booking."
+    "minOrderPolicy": "Minimum booking amount: Delhi \u2013 \u20b91,000 | Haryana \u2013 \u20b91,500 | Noida \u2013 \u20b91,500. Your cart must meet the minimum order amount for your selected service location before you can confirm your booking."
   }
 }

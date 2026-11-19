@@ -3,6 +3,7 @@ import { Sparkles, Clock, Check, Gift, ShieldCheck, ChevronRight, X, Wind, Info,
 import { useRouter } from '../router.tsx';
 import { formatDuration } from '../../../src/utils/formatters.ts';
 import { CustomizePackageModal } from '../components/CustomizePackageModal.tsx';
+import { lockScroll, unlockScroll } from '../../../src/utils/scrollLock.ts';
 
 interface PackageInclusion {
   name: string;
@@ -50,19 +51,15 @@ export const PackagesPage: React.FC<Props> = ({
   const [activeModalPackage, setActiveModalPackage] = useState<PackageItem | null>(null);
   const [customizingPackage, setCustomizingPackage] = useState<PackageItem | null>(null);
 
-  // Lock background scroll when modal is active
+  // Lock background scroll when package detail modal is active
   useEffect(() => {
-    if (activeModalPackage || customizingPackage) {
-      const originalBodyOverflow = document.body.style.overflow;
-      const originalHtmlOverflow = document.documentElement.style.overflow;
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
+    if (activeModalPackage) {
+      lockScroll();
       return () => {
-        document.body.style.overflow = originalBodyOverflow;
-        document.documentElement.style.overflow = originalHtmlOverflow;
+        unlockScroll();
       };
     }
-  }, [activeModalPackage, customizingPackage]);
+  }, [activeModalPackage]);
 
   useEffect(() => {
     fetch('/api/storefront/packages')

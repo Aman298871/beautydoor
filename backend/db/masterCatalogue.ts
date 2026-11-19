@@ -56,6 +56,7 @@ export interface MasterPackage {
   category_ids: string[];
   inclusions: { name: string; is_free?: boolean }[];
   benefits: string[];
+  is_published?: number;
 }
 
 // 1. ALL 12 OFFICIAL CATEGORIES
@@ -2256,7 +2257,8 @@ export const MASTER_PACKAGES: MasterPackage[] = [
     original_price: 1399,
     selling_price: 999,
     discount_percent: 29,
-    badge: 'Owner Special',
+    badge: 'Awaiting Owner Confirmation',
+    is_published: 0,
     category_ids: ['cat-facials', 'cat-threading'],
     inclusions: [
       { name: 'Facial Radiance Ceremony (Owner-approved 70m protocol)', is_free: false },

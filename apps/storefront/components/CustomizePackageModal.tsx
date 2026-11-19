@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { lockScroll, unlockScroll } from '../../../src/utils/scrollLock.ts';
 import {
   X,
   Plus,
@@ -145,18 +146,9 @@ export const CustomizePackageModal: React.FC<Props> = ({
   // Lock background scroll on mobile and desktop while customize modal is open
   useEffect(() => {
     if (!isOpen) return;
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
-    const originalTouchAction = document.body.style.touchAction;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
+    lockScroll();
     return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalHtmlOverflow;
-      document.body.style.touchAction = originalTouchAction;
+      unlockScroll();
     };
   }, [isOpen]);
 

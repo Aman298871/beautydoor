@@ -588,12 +588,12 @@ const initialCoupons: Coupon[] = [
     id: 'coup-1',
     code: 'BEAUTYFIRST',
     discountType: 'flat',
-    discountValue: 200,
-    minOrderAmount: 799,
-    maxDiscount: 200,
-    expiresAt: '2027-12-31',
+    discountValue: 100,
+    minOrderAmount: 1100,
+    maxDiscount: 100,
+    expiresAt: '2028-12-31',
     isActive: true,
-    description: '₹200 flat savings on your first booking above ₹799'
+    description: 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.'
   },
   {
     id: 'coup-2',
@@ -768,10 +768,10 @@ const initialSettings: BusinessSettings = {
   supportWhatsApp: '+91 78277 22522',
   workingHoursStart: '08:00 AM',
   workingHoursEnd: '06:00 PM',
-  minOrderAmount: 499,
-  cancellationWindowHours: 4,
-  cancellationPolicy: 'Free cancellation up to 4 hours prior to your scheduled appointment. Rescheduling is complimentary.',
-  announcementBannerText: '✨ Delhi NCR Inaugural Offer: Flat ₹200 OFF on your first at-home appointment with code BEAUTYFIRST',
+  minOrderAmount: 1000,
+  cancellationWindowHours: 2,
+  cancellationPolicy: 'Free cancellation up to 2 hours prior to your scheduled appointment. Rescheduling is complimentary.',
+  announcementBannerText: '✨ Delhi NCR Inaugural Offer: Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.',
   isAnnouncementActive: true,
   razorpayEnabled: false,
   codEnabled: true

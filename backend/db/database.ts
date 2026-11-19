@@ -425,10 +425,10 @@ async function initPostgresSchema(pool: pg.Pool) {
   // Safely remove single-column UNIQUE constraint on pincode to allow multiple localities under one PIN code
   try {
     await pool.query('ALTER TABLE territories DROP CONSTRAINT IF EXISTS territories_pincode_key');
-  } catch {}
+  } catch { }
   try {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_territories_pincode ON territories(pincode)');
-  } catch {}
+  } catch { }
 
   schemaInitialized = true;
 }
@@ -465,8 +465,9 @@ async function seedEssentialData() {
     working_hours_end: '06:00 PM',
     slot_charge_8am: '100',
     slot_charge_6pm: '100',
-    cancellation_window_hours: '4',
-    cancellation_policy: 'Complimentary cancellation up to 4 hours prior to appointment.',
+    cancellation_window_hours: '2',
+    cancellation_fee_late: '200',
+    cancellation_policy: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
     announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
     razorpay_enabled: 'false',
@@ -499,8 +500,9 @@ async function seedEssentialData() {
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_delhi', '1000') ON CONFLICT (key) DO NOTHING");
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_haryana', '1500') ON CONFLICT (key) DO NOTHING");
   await db.execute("INSERT INTO settings (key, value) VALUES ('min_order_noida', '1500') ON CONFLICT (key) DO NOTHING");
-  await db.execute("INSERT INTO settings (key, value) VALUES ('cancellation_fee_late', '200') ON CONFLICT (key) DO NOTHING");
-  await db.execute("INSERT INTO settings (key, value) VALUES ('cancellation_window_hours', '2') ON CONFLICT (key) DO NOTHING");
+  await db.execute("UPDATE settings SET value = '2' WHERE key = 'cancellation_window_hours' AND (value = '4' OR value = '' OR value IS NULL)");
+  await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
+  await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
 
   // Idempotent migration for cancellation tracking columns in bookings
   const newBookingCols = [
@@ -612,6 +614,9 @@ async function seedEssentialData() {
     }
   }
 
+  // Clean up legacy composite record 'Saket, Malviya Nagar & Sainik Farm' so customers only see the three individual localities
+  await db.execute("DELETE FROM territories WHERE (id = 'ter-del-3' OR area_name LIKE '%Saket, Malviya Nagar%') AND area_name LIKE '%&%'");
+
   // 5. Promotional Coupons (idempotent)
   const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
   if (Number(cpCountRow?.count || 0) === 0) {
@@ -637,6 +642,7 @@ async function seedEssentialData() {
         discount_value = 100,
         min_order_amount = 1100,
         max_discount = 100,
+        expires_at = COALESCE(expires_at, '2028-12-31'),
         is_active = 1,
         description = 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.'
       WHERE code = 'BEAUTYFIRST'

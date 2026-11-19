@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
@@ -9,7 +10,7 @@ export const adminRouter = Router();
 // Apply requireAdminAuth to all administrative endpoints
 adminRouter.use(requireAdminAuth);
 
-// 1. Executive Dashboard KPIs
+// 1. Executive Dashboard KPIs (Grounded in Genuine DB Data)
 adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> => {
   const totalBookings = ((await db.queryRow('SELECT COUNT(*) as count FROM bookings', [])) as any).count;
   const today = new Date().toISOString().split('T')[0];
@@ -18,7 +19,8 @@ adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> 
   const revenueRow = (await db.queryRow(`
     SELECT 
       SUM(CASE WHEN booking_status != 'cancelled' THEN total_payable ELSE 0 END) as total_revenue,
-      SUM(CASE WHEN payment_status IN ('collected', 'verified') THEN total_payable ELSE 0 END) as collected_revenue
+      SUM(CASE WHEN payment_status IN ('collected', 'verified') THEN total_payable ELSE 0 END) as collected_revenue,
+      SUM(CASE WHEN booking_status != 'cancelled' AND payment_status NOT IN ('collected', 'verified') THEN total_payable ELSE 0 END) as pending_revenue
     FROM bookings
   `, [])) as any;
 
@@ -41,6 +43,10 @@ adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> 
   const activeServices = ((await db.queryRow('SELECT COUNT(*) as count FROM services WHERE is_active = 1', [])) as any).count;
   const activeSpecialists = ((await db.queryRow("SELECT COUNT(*) as count FROM beauticians WHERE is_active = 1 AND status = 'available'", [])) as any).count;
   const activeTerritories = ((await db.queryRow('SELECT COUNT(*) as count FROM territories WHERE is_active = 1', [])) as any).count;
+  const activePackages = ((await db.queryRow('SELECT COUNT(*) as count FROM packages WHERE is_published = 1', [])) as any).count;
+  const activeCoupons = ((await db.queryRow('SELECT COUNT(*) as count FROM coupons WHERE is_active = 1', [])) as any).count;
+  const totalCustomers = ((await db.queryRow('SELECT COUNT(*) as count FROM customers', [])) as any).count;
+
   const now = new Date().toISOString();
   const activeCampaigns = ((await db.queryRow(`
     SELECT COUNT(*) as count FROM campaigns 
@@ -52,10 +58,14 @@ adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> 
     todayBookings,
     totalRevenue: revenueRow.total_revenue || 0,
     collectedRevenue: revenueRow.collected_revenue || 0,
+    pendingRevenue: revenueRow.pending_revenue || 0,
     statusCounts,
     activeServices,
     activeSpecialists,
     activeTerritories,
+    activePackages,
+    activeCoupons,
+    totalCustomers,
     activeCampaigns
   });
 });
@@ -180,21 +190,39 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     return;
   }
 
-  // Backend cancellation fee calculation based on strict 2-hour window policy:
-  // At least 2 hours before: ₹0 fee
-  // Less than 2 hours before: ₹200 fee
+  // Authoritative server-side calculation of cancellation fee based on strict 2-hour window policy:
+  // At least 2 hours before (diffMinutes >= 120): ₹0 fee
+  // Less than 2 hours before or past appointment (diffMinutes < 120): ₹200 fee
   const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
-  const now = simulateNow ? new Date(simulateNow).getTime() : Date.now();
-  const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
-  const windowBreached = diffMinutes < 120;
+  const now = (process.env.NODE_ENV === 'test' && simulateNow)
+    ? new Date(simulateNow).getTime()
+    : Date.now();
+
+  const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : -1;
+  const windowBreached = diffMinutes < 120; // Exactly 120 min is complimentary (>= 2h)
   const fee = windowBreached ? 200 : 0;
 
   const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
   const refundAmount = isPrepaid ? Math.max(0, booking.total_payable - fee) : 0;
-  const refundStatus = isPrepaid ? (refundAmount > 0 ? 'refund_pending_approval' : 'not_applicable') : 'not_applicable';
-  const cancelTimestamp = new Date(now).toISOString();
+  
+  let refundStatus = 'not_applicable';
+  let paymentStatus = booking.payment_status;
 
-  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid' : 'COD'})`;
+  if (isPrepaid) {
+    if (refundAmount > 0) {
+      refundStatus = 'refund_pending_approval';
+      paymentStatus = 'refund_pending';
+    } else {
+      refundStatus = 'not_applicable';
+      paymentStatus = 'retained_as_cancellation_fee';
+    }
+  } else {
+    refundStatus = 'not_applicable';
+    paymentStatus = fee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
+  }
+
+  const cancelTimestamp = new Date(now).toISOString();
+  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid/Collected' : 'COD'})`;
 
   await db.execute(`
     UPDATE bookings
@@ -205,6 +233,7 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
         cancellation_window_breached = ?,
         refund_amount = ?,
         refund_status = ?,
+        payment_status = ?,
         internal_notes = ?
     WHERE id = ?
   `, [
@@ -214,6 +243,7 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     windowBreached ? 1 : 0,
     refundAmount,
     refundStatus,
+    paymentStatus,
     updatedNotes,
     id
   ]);
@@ -223,7 +253,8 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     cancellation_fee: fee,
     window_breached: windowBreached,
     refund_amount: refundAmount,
-    refund_status: refundStatus
+    refund_status: refundStatus,
+    payment_status: paymentStatus
   }, req.ip);
 
   res.json({
@@ -232,7 +263,49 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     cancellationFee: fee,
     windowBreached,
     refundAmount,
-    refundStatus
+    refundStatus,
+    paymentStatus
+  });
+});
+
+// Explicit Payment Collection Recording
+adminRouter.post('/bookings/:id/collect-payment', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { paymentMethod, amountPaid, notes } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  if (booking.booking_status === 'cancelled') {
+    res.status(400).json({ error: 'Cannot collect payment on a cancelled booking.' });
+    return;
+  }
+
+  const method = paymentMethod || 'Cash';
+  const collectedAmount = amountPaid !== undefined ? Number(amountPaid) : booking.total_payable;
+  const timestamp = new Date().toISOString();
+  const updatedNotes = `${booking.internal_notes || ''} | Payment of ₹${collectedAmount} collected via ${method} by [${adminUser}] at ${timestamp}${notes ? `: ${notes}` : ''}`;
+
+  await db.execute(`
+    UPDATE bookings
+    SET payment_status = 'collected',
+        internal_notes = ?
+    WHERE id = ?
+  `, [updatedNotes, id]);
+
+  recordAuditLog(adminUser, 'COLLECT_PAYMENT', 'BOOKING', id, {
+    method,
+    amount: collectedAmount
+  }, req.ip);
+
+  res.json({
+    success: true,
+    message: `Payment of ₹${collectedAmount} successfully recorded via ${method}.`,
+    paymentStatus: 'collected'
   });
 });
 
@@ -304,8 +377,8 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
         id, category_id, name, slug, description, benefits_json, duration_mins,
         original_price, selling_price, discount_percent, whats_included_json,
         steps_json, steps_count, brand,
-        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_active, is_popular, is_bestseller, is_featured_deal, deal_badge, image_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [serviceId,
       s.categoryId || 'cat-facials',
       s.name,
@@ -325,6 +398,7 @@ adminRouter.post('/services', async (req: Request, res: Response): Promise<void>
       s.isBestseller ? 1 : 0,
       s.isFeaturedDeal ? 1 : 0,
       s.dealBadge || null,
+      s.imageUrl || s.image_url || '/images/service_facial_treatment.jpg',
       now,
       now]));
 
@@ -380,6 +454,7 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
           steps_json = CASE WHEN ? IS NOT NULL THEN ? ELSE steps_json END,
           steps_count = CASE WHEN ? IS NOT NULL THEN ? ELSE steps_count END,
           brand = COALESCE(?, brand),
+          image_url = CASE WHEN ? IS NOT NULL AND ? != '' THEN ? ELSE image_url END,
           before_instructions = ?, after_instructions = ?, room_conditions = ?,
           equipment_requirements = ?, hygiene_precautions = ?, updated_at = ?
       WHERE id = ?
@@ -405,6 +480,9 @@ adminRouter.put('/services/:id', async (req: Request, res: Response): Promise<vo
       cleanSteps !== null ? cleanSteps.length : null,
       cleanSteps !== null ? cleanSteps.length : 0,
       s.brand || null,
+      s.imageUrl || s.image_url || null,
+      s.imageUrl || s.image_url || null,
+      s.imageUrl || s.image_url || null,
       s.beforeInstructions || null,
       s.afterInstructions || null,
       s.roomConditions || null,
@@ -515,6 +593,20 @@ adminRouter.get('/campaigns', async (_req: Request, res: Response): Promise<void
 adminRouter.post('/campaigns', async (req: Request, res: Response): Promise<void> => {
   const c = req.body;
   const adminUser = req.adminUser?.username || 'admin';
+
+  if (!c.title || typeof c.title !== 'string' || !c.title.trim()) {
+    res.status(400).json({ error: 'Campaign title is required' });
+    return;
+  }
+  if (c.start_time && c.end_time && new Date(c.start_time) > new Date(c.end_time)) {
+    res.status(400).json({ error: 'Campaign start_time cannot be after end_time' });
+    return;
+  }
+  if (c.discount_val !== undefined && Number(c.discount_val) < 0) {
+    res.status(400).json({ error: 'Discount value cannot be negative' });
+    return;
+  }
+
   const campId = c.id || `camp-${Date.now()}`;
   const slug = c.slug || c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
@@ -526,9 +618,9 @@ adminRouter.post('/campaigns', async (req: Request, res: Response): Promise<void
       display_order, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [campId,
-    c.title,
+    c.title.trim(),
     slug,
-    c.banner_title || c.title,
+    c.banner_title || c.title.trim(),
     c.banner_subtitle || '',
     c.banner_image_url || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
     c.cta_label || 'Shop Now',
@@ -547,6 +639,82 @@ adminRouter.post('/campaigns', async (req: Request, res: Response): Promise<void
 
   recordAuditLog(adminUser, 'CREATE_CAMPAIGN', 'CAMPAIGN', campId, { title: c.title }, req.ip);
   res.status(201).json({ success: true, campaignId: campId });
+});
+
+adminRouter.put('/campaigns/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const c = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  if (!c.title || typeof c.title !== 'string' || !c.title.trim()) {
+    res.status(400).json({ error: 'Campaign title is required' });
+    return;
+  }
+  if (c.start_time && c.end_time && new Date(c.start_time) > new Date(c.end_time)) {
+    res.status(400).json({ error: 'Campaign start_time cannot be after end_time' });
+    return;
+  }
+  if (c.discount_val !== undefined && Number(c.discount_val) < 0) {
+    res.status(400).json({ error: 'Discount value cannot be negative' });
+    return;
+  }
+
+  const existing = await db.queryRow('SELECT id FROM campaigns WHERE id = ?', [id]);
+  if (!existing) {
+    res.status(404).json({ error: 'Campaign not found' });
+    return;
+  }
+
+  await db.execute(`
+    UPDATE campaigns SET
+      title = ?,
+      banner_title = ?,
+      banner_subtitle = ?,
+      banner_image_url = ?,
+      cta_label = ?,
+      destination_url = ?,
+      start_time = ?,
+      end_time = ?,
+      is_flash_deal = ?,
+      is_published = ?,
+      discount_type = ?,
+      discount_val = ?,
+      badge_text = ?,
+      target_category_ids_json = ?,
+      target_service_ids_json = ?,
+      display_order = ?
+    WHERE id = ?
+  `, [
+    c.title.trim(),
+    c.banner_title || c.title.trim(),
+    c.banner_subtitle || '',
+    c.banner_image_url || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
+    c.cta_label || 'Shop Now',
+    c.destination_url || '/offers',
+    c.start_time || new Date().toISOString(),
+    c.end_time || new Date(Date.now() + 7 * 86400000).toISOString(),
+    c.is_flash_deal ? 1 : 0,
+    c.is_published ? 1 : 0,
+    c.discount_type || 'percentage',
+    Number(c.discount_val) || 0,
+    c.badge_text || null,
+    JSON.stringify(c.targetCategoryIds || []),
+    JSON.stringify(c.targetServiceIds || []),
+    Number(c.display_order) || 0,
+    id
+  ]);
+
+  recordAuditLog(adminUser, 'UPDATE_CAMPAIGN', 'CAMPAIGN', id, { title: c.title }, req.ip);
+  res.json({ success: true });
+});
+
+adminRouter.delete('/campaigns/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute('DELETE FROM campaigns WHERE id = ?', [id]);
+  recordAuditLog(adminUser, 'DELETE_CAMPAIGN', 'CAMPAIGN', id, {}, req.ip);
+  res.json({ success: true });
 });
 
 adminRouter.patch('/campaigns/:id/publish', async (req: Request, res: Response): Promise<void> => {
@@ -665,9 +833,12 @@ adminRouter.post('/territories', async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  const existing = await db.queryRow('SELECT id FROM territories WHERE pincode = ? AND area_name = ?', [pincode, areaName]);
+  const existing = await db.queryRow(
+    'SELECT id FROM territories WHERE LOWER(TRIM(pincode)) = LOWER(TRIM(?)) AND LOWER(TRIM(area_name)) = LOWER(TRIM(?)) AND LOWER(TRIM(city)) = LOWER(TRIM(?))',
+    [pincode, areaName, city]
+  );
   if (existing) {
-    res.status(400).json({ error: `Locality ${areaName} (${pincode}) already exists.` });
+    res.status(400).json({ error: `Locality ${areaName} in ${city} (${pincode}) already exists.` });
     return;
   }
 
@@ -720,9 +891,22 @@ adminRouter.delete('/territories/:id', async (req: Request, res: Response): Prom
   const { id } = req.params;
   const adminUser = req.adminUser?.username || 'admin';
 
+  // Check if historical bookings reference this territory
+  const refCount = await db.queryRow<{ count: string | number }>(
+    'SELECT COUNT(*) as count FROM bookings WHERE territory_id = ?',
+    [id]
+  );
+  if (Number(refCount?.count || 0) > 0) {
+    // Soft-archive to preserve historical booking data integrity
+    await db.execute('UPDATE territories SET is_active = 0 WHERE id = ?', [id]);
+    recordAuditLog(adminUser, 'ARCHIVE_TERRITORY', 'LOCATION', id, { reason: 'Referenced in bookings' }, req.ip);
+    res.json({ success: true, archived: true, message: 'Territory is referenced in historical bookings and was archived (deactivated) to preserve booking records.' });
+    return;
+  }
+
   await db.execute('DELETE FROM territories WHERE id = ?', [id]);
   recordAuditLog(adminUser, 'DELETE_TERRITORY', 'LOCATION', id, {}, req.ip);
-  res.json({ success: true });
+  res.json({ success: true, deleted: true });
 });
 
 adminRouter.patch('/territories/:id', async (req: Request, res: Response): Promise<void> => {
@@ -1157,30 +1341,92 @@ adminRouter.get('/pending-services', async (_req: Request, res: Response): Promi
 
 
 
-// 17. Image Upload
+// 17. Image Upload & Media Management
 adminRouter.post('/upload-image', async (req: Request, res: Response): Promise<void> => {
-  const { imageBase64, filename } = req.body;
-  if (!imageBase64) {
-    res.status(400).json({ error: 'imageBase64 data is required.' });
+  const { imageBase64 } = req.body;
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    res.status(400).json({ error: 'imageBase64 string is required.' });
+    return;
+  }
+
+  // Validate MIME type (JPEG, PNG, WEBP)
+  const mimeMatch = imageBase64.match(/^data:(image\/(jpeg|jpg|png|webp));base64,/i);
+  if (!mimeMatch) {
+    res.status(400).json({ error: 'Invalid image format. Allowed formats: JPEG, PNG, WEBP.' });
+    return;
+  }
+  const mimeType = mimeMatch[1].toLowerCase();
+  const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+
+  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Validate file size (max 5MB)
+  if (buffer.length > 5 * 1024 * 1024) {
+    res.status(400).json({ error: 'Image size exceeds maximum limit of 5MB.' });
     return;
   }
 
   try {
-    const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+    const uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'public', 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const safeName = (filename || `img_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const uniqueSuffix = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const safeName = `img_${uniqueSuffix}.${ext}`;
     const targetPath = path.join(uploadsDir, safeName);
 
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    fs.writeFileSync(targetPath, Buffer.from(base64Data, 'base64'));
+    fs.writeFileSync(targetPath, buffer);
 
     const publicUrl = `/uploads/${safeName}`;
-    res.json({ success: true, url: publicUrl });
+    res.json({ success: true, url: publicUrl, filename: safeName, size: buffer.length });
   } catch (err: any) {
     res.status(500).json({ error: `Image upload failed: ${err.message}` });
+  }
+});
+
+adminRouter.get('/images', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      res.json({ images: [] });
+      return;
+    }
+    const files = fs.readdirSync(uploadsDir);
+    const images = files
+      .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
+      .map(filename => {
+        const filePath = path.join(uploadsDir, filename);
+        const stat = fs.statSync(filePath);
+        return {
+          filename,
+          url: `/uploads/${filename}`,
+          size: stat.size,
+          created_at: stat.birthtime.toISOString()
+        };
+      });
+    res.json({ images });
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to list images: ${err.message}` });
+  }
+});
+
+adminRouter.delete('/images/:filename', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { filename } = req.params;
+    const sanitized = path.basename(filename);
+    const uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'public', 'uploads');
+    const targetPath = path.join(uploadsDir, sanitized);
+
+    if (fs.existsSync(targetPath)) {
+      fs.unlinkSync(targetPath);
+      res.json({ success: true, message: `Image ${sanitized} deleted.` });
+    } else {
+      res.status(404).json({ error: 'Image not found.' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to delete image: ${err.message}` });
   }
 });
 

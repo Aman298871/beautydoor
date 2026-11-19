@@ -44,6 +44,21 @@ async function startServer() {
     });
   });
 
+  // Ensure persistent uploads directory exists and is statically served
+  const uploadsDir = process.env.UPLOADS_DIR
+    ? path.resolve(process.env.UPLOADS_DIR)
+    : path.resolve(process.cwd(), 'public', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+
+  // Serve static assets from public folder (photography, banners, icons)
+  const publicDir = path.resolve(__dirname, 'public');
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
+
   // Request logger for security monitoring
   app.use((req, _res, next) => {
     if (req.path.startsWith('/api/')) {

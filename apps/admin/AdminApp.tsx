@@ -117,10 +117,16 @@ export default function AdminApp() {
 
   // Campaign Edit modal
   const [isNewCampaignModal, setIsNewCampaignModal] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<any | null>(null);
   const [campaignTitle, setCampaignTitle] = useState('');
   const [campaignSubtitle, setCampaignSubtitle] = useState('');
+  const [campaignBannerUrl, setCampaignBannerUrl] = useState('');
+  const [campaignDiscountType, setCampaignDiscountType] = useState('percentage');
   const [campaignDiscount, setCampaignDiscount] = useState('25');
+  const [campaignStartDate, setCampaignStartDate] = useState('');
+  const [campaignEndDate, setCampaignEndDate] = useState('');
   const [campaignIsFlash, setCampaignIsFlash] = useState(false);
+  const [campaignIsPublished, setCampaignIsPublished] = useState(true);
 
   // Search & Filters in Dispatch
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +144,6 @@ export default function AdminApp() {
 
   const [cancellingBooking, setCancellingBooking] = useState<any | null>(null);
   const [cancellationReason, setCancellationReason] = useState('Customer requested cancellation');
-  const [cancellationFeeInput, setCancellationFeeInput] = useState('0');
 
   const [editingBookingNotes, setEditingBookingNotes] = useState<any | null>(null);
   const [newBookingNoteText, setNewBookingNoteText] = useState('');
@@ -520,13 +525,32 @@ export default function AdminApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          reason: cancellationReason,
-          cancellationFee: Number(cancellationFeeInput) || 0
+          reason: cancellationReason
         })
       });
-      if (!res.ok) throw new Error('Failed to cancel booking');
-      notify(`Booking ${cancellingBooking.id} cancelled successfully.`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel booking');
+      notify(`Booking ${cancellingBooking.id} cancelled. ${data.fee ? `Fee ₹${data.fee} applied.` : 'Free cancellation applied.'}`);
       setCancellingBooking(null);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleRecordPaymentCollection = async (bookingId: string) => {
+    const method = window.prompt('Enter collection method (cash, upi, card):', 'cash');
+    if (!method) return;
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/collect-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ paymentMethod: method.toLowerCase() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to record payment');
+      notify(`Payment collection recorded for booking ${bookingId}.`);
+      setSelectedBookingForDispatch(null);
       fetchAdminData();
     } catch (err: any) {
       notify(err.message);
@@ -633,36 +657,102 @@ export default function AdminApp() {
     }
   };
 
-  // Create Campaign
-  const handleCreateCampaign = async (e: React.FormEvent) => {
+  // Campaign Handlers
+  const handleOpenCreateCampaign = () => {
+    setEditingCampaign(null);
+    setCampaignTitle('');
+    setCampaignSubtitle('');
+    setCampaignBannerUrl('/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg');
+    setCampaignDiscountType('percentage');
+    setCampaignDiscount('25');
+    setCampaignStartDate(new Date().toISOString().split('T')[0]);
+    setCampaignEndDate(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+    setCampaignIsFlash(false);
+    setCampaignIsPublished(true);
+    setIsNewCampaignModal(true);
+  };
+
+  const handleOpenEditCampaign = (c: any) => {
+    setEditingCampaign(c);
+    setCampaignTitle(c.title || c.banner_title || '');
+    setCampaignSubtitle(c.banner_subtitle || '');
+    setCampaignBannerUrl(c.banner_image_url || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg');
+    setCampaignDiscountType(c.discount_type || 'percentage');
+    setCampaignDiscount(String(c.discount_val || 0));
+    setCampaignStartDate(c.start_time ? c.start_time.split('T')[0] : '');
+    setCampaignEndDate(c.end_time ? c.end_time.split('T')[0] : '');
+    setCampaignIsFlash(c.is_flash_deal === 1);
+    setCampaignIsPublished(c.is_published === 1);
+    setIsNewCampaignModal(true);
+  };
+
+  const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!campaignTitle.trim()) {
+      notify('Campaign title is required');
+      return;
+    }
+    const payload = {
+      title: campaignTitle.trim(),
+      banner_title: campaignTitle.trim(),
+      banner_subtitle: campaignSubtitle.trim(),
+      banner_image_url: campaignBannerUrl || '/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg',
+      discount_type: campaignDiscountType,
+      discount_val: Number(campaignDiscount) || 0,
+      start_time: campaignStartDate ? new Date(campaignStartDate).toISOString() : new Date().toISOString(),
+      end_time: campaignEndDate ? new Date(campaignEndDate).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString(),
+      is_flash_deal: campaignIsFlash ? 1 : 0,
+      is_published: campaignIsPublished ? 1 : 0,
+      badge_text: campaignIsFlash ? 'Flash Deal' : 'Special Offer',
+      destination_url: '/offers'
+    };
+
     try {
-      const res = await fetch('/api/admin/campaigns', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title: campaignTitle,
-          banner_title: campaignTitle,
-          banner_subtitle: campaignSubtitle,
-          discount_val: Number(campaignDiscount),
-          is_flash_deal: campaignIsFlash ? 1 : 0,
-          is_published: 1,
-          badge_text: campaignIsFlash ? 'Flash Deal' : 'Special Offer',
-          destination_url: '/offers'
-        })
+      const url = editingCampaign ? `/api/admin/campaigns/${editingCampaign.id}` : '/api/admin/campaigns';
+      const method = editingCampaign ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        notify('Promotional campaign created & published.');
-        setIsNewCampaignModal(false);
-        setCampaignTitle('');
-        setCampaignSubtitle('');
-        fetchAdminData();
-      }
-    } catch (err) {
-      console.error(err);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save campaign');
+      notify(editingCampaign ? 'Campaign updated successfully.' : 'Campaign created successfully.');
+      setIsNewCampaignModal(false);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleDeleteCampaign = async (id: string, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete campaign "${title}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/campaigns/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete campaign');
+      notify('Campaign deleted successfully.');
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
+    }
+  };
+
+  const handleToggleCampaignPublish = async (id: string, currentPublished: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/campaigns/${id}/publish`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isPublished: !currentPublished })
+      });
+      if (!res.ok) throw new Error('Failed to toggle publish');
+      notify(`Campaign ${!currentPublished ? 'published' : 'unpublished'}.`);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message);
     }
   };
 
@@ -1932,8 +2022,8 @@ export default function AdminApp() {
               </div>
 
               <button
-                onClick={() => setIsNewCampaignModal(true)}
-                className="px-4 py-2 bg-[#4A0417] text-white rounded text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+                onClick={handleOpenCreateCampaign}
+                className="px-4 py-2 bg-[#4A0417] text-white rounded text-xs font-semibold flex items-center gap-1.5 shadow-xs hover:bg-[#36020F]"
               >
                 <Plus className="w-4 h-4 text-[#C5A880]" />
                 <span>Create Campaign</span>
@@ -1943,16 +2033,33 @@ export default function AdminApp() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {campaigns.map((c) => (
                 <div key={c.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-[#4A0417] bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#E8DDD3]">
-                        {c.badge_text || 'Active Campaign'}
-                      </span>
-                      <h4 className="text-base font-serif font-bold text-[#1F1A1C] mt-1">{c.banner_title}</h4>
-                      <p className="text-xs text-[#6B5A5C] mt-0.5">{c.banner_subtitle}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex gap-3">
+                      {c.banner_image_url && (
+                        <img
+                          src={c.banner_image_url}
+                          alt={c.banner_title}
+                          className="w-16 h-16 rounded-xl object-cover border border-[#E8DDD3] shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase text-[#4A0417] bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#E8DDD3]">
+                            {c.badge_text || 'Active Campaign'}
+                          </span>
+                          {c.discount_val > 0 && (
+                            <span className="text-[10px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              {c.discount_type === 'flat' ? `₹${c.discount_val} OFF` : `${c.discount_val}% OFF`}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-base font-serif font-bold text-[#1F1A1C] mt-1">{c.banner_title}</h4>
+                        <p className="text-xs text-[#6B5A5C] mt-0.5">{c.banner_subtitle}</p>
+                      </div>
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
                       c.is_published === 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
                     }`}>
                       {c.is_published === 1 ? 'Published' : 'Draft'}
@@ -1960,8 +2067,33 @@ export default function AdminApp() {
                   </div>
 
                   <div className="text-xs text-[#7A6B6D] space-y-1 pt-2 border-t border-[#F4EFEA]">
-                    <p>Schedule: <span className="text-[#1F1A1C] font-medium">{c.start_time.split('T')[0]} to {c.end_time.split('T')[0]}</span></p>
+                    <p>Schedule: <span className="text-[#1F1A1C] font-medium">{c.start_time ? c.start_time.split('T')[0] : 'Immediate'} to {c.end_time ? c.end_time.split('T')[0] : 'Ongoing'}</span></p>
                     <p>Flash Deal: <span className="text-[#1F1A1C] font-medium">{c.is_flash_deal === 1 ? 'YES (Countdown Active)' : 'NO'}</span></p>
+                  </div>
+
+                  <div className="pt-2 border-t border-[#F4EFEA] flex justify-end gap-2 text-xs">
+                    <button
+                      onClick={() => handleToggleCampaignPublish(c.id, c.is_published === 1)}
+                      className={`px-3 py-1 rounded font-semibold border ${
+                        c.is_published === 1
+                          ? 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {c.is_published === 1 ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditCampaign(c)}
+                      className="px-3 py-1 bg-[#FAF7F2] text-[#4A0417] border border-[#E8DDD3] rounded font-semibold hover:border-[#4A0417]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCampaign(c.id, c.title || c.banner_title)}
+                      className="px-3 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-semibold hover:bg-red-100"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -3089,13 +3221,34 @@ export default function AdminApp() {
               />
             </div>
 
-            <div className="pt-2 border-t border-[#F4EFEA] flex justify-between items-center">
-              <button
-                onClick={() => handleUpdateBookingStatus(selectedBookingForDispatch.id, 'completed')}
-                className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs font-semibold"
-              >
-                Mark Completed
-              </button>
+            <div className="pt-2 border-t border-[#F4EFEA] flex flex-wrap gap-2 justify-between items-center">
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleUpdateBookingStatus(selectedBookingForDispatch.id, 'completed')}
+                  className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs font-semibold hover:bg-emerald-100"
+                >
+                  Mark Completed
+                </button>
+                {selectedBookingForDispatch.payment_status !== 'collected' && selectedBookingForDispatch.booking_status !== 'cancelled' && (
+                  <button
+                    onClick={() => handleRecordPaymentCollection(selectedBookingForDispatch.id)}
+                    className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded text-xs font-semibold hover:bg-purple-100"
+                  >
+                    Record Payment (₹{selectedBookingForDispatch.total_payable})
+                  </button>
+                )}
+                {selectedBookingForDispatch.booking_status !== 'cancelled' && (
+                  <button
+                    onClick={() => {
+                      setCancellingBooking(selectedBookingForDispatch);
+                      setSelectedBookingForDispatch(null);
+                    }}
+                    className="px-3 py-1 bg-red-50 text-red-800 border border-red-200 rounded text-xs font-semibold hover:bg-red-100"
+                  >
+                    Cancel Booking
+                  </button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedBookingForDispatch(null)}
@@ -3204,6 +3357,64 @@ export default function AdminApp() {
                   onChange={(e) => setEditingService({ ...editingService, description: e.target.value })}
                   className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
                 />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Service Image URL / Upload</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editingService.imageUrl || editingService.image_url || ''}
+                    onChange={(e) => setEditingService({ ...editingService, imageUrl: e.target.value, image_url: e.target.value })}
+                    placeholder="/images/service_facial_treatment.jpg or /uploads/..."
+                    className="flex-1 px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md text-xs font-mono"
+                  />
+                  <label className="px-3 py-2 bg-[#FAF7F2] hover:bg-[#E8DDD3] border border-[#E8DDD3] rounded-md cursor-pointer text-xs font-semibold text-[#4A0417] shrink-0">
+                    Upload Image
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async () => {
+                          try {
+                            const res = await fetch('/api/admin/upload-image', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ imageBase64: reader.result, filename: file.name })
+                            });
+                            const data = await res.json();
+                            if (res.ok && data.url) {
+                              setEditingService({ ...editingService, imageUrl: data.url, image_url: data.url });
+                              notify('Image uploaded successfully.');
+                            } else {
+                              notify(data.error || 'Upload failed');
+                            }
+                          } catch (err: any) {
+                            notify(err.message);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                {(editingService.imageUrl || editingService.image_url) && (
+                  <div className="mt-2 flex items-center gap-3 p-2 bg-[#FAF7F2] rounded-lg border border-[#E8DDD3]">
+                    <img
+                      src={editingService.imageUrl || editingService.image_url}
+                      alt="Service Preview"
+                      className="w-16 h-12 object-cover rounded border border-[#E8DDD3]"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                    <span className="text-[11px] text-[#6B5A5C] truncate">
+                      {editingService.imageUrl || editingService.image_url}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -3349,18 +3560,20 @@ export default function AdminApp() {
         </div>
       )}
 
-      {/* NEW CAMPAIGN MODAL */}
+      {/* CAMPAIGN CREATE / EDIT MODAL */}
       {isNewCampaignModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
-              <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">New Promotional Campaign</h4>
+              <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                {editingCampaign ? 'Edit Promotional Campaign' : 'New Promotional Campaign'}
+              </h4>
               <button onClick={() => setIsNewCampaignModal(false)} className="p-1 text-[#6B5A5C]">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCampaign} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveCampaign} className="space-y-3.5 text-xs">
               <div>
                 <label className="font-semibold block mb-1">Campaign Headline *</label>
                 <input
@@ -3369,7 +3582,7 @@ export default function AdminApp() {
                   value={campaignTitle}
                   onChange={(e) => setCampaignTitle(e.target.value)}
                   placeholder="e.g. Summer Glow Fest: 30% OFF"
-                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
                 />
               </div>
 
@@ -3384,27 +3597,127 @@ export default function AdminApp() {
                 />
               </div>
 
+              <div>
+                <label className="font-semibold block mb-1">Banner Image URL / Upload</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={campaignBannerUrl}
+                    onChange={(e) => setCampaignBannerUrl(e.target.value)}
+                    placeholder="/assets/aistudio/... or /uploads/img_..."
+                    className="flex-1 px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-[11px]"
+                  />
+                  <label className="px-3 py-2 bg-[#FAF7F2] hover:bg-[#E8DDD3] border border-[#E8DDD3] rounded-md cursor-pointer font-semibold text-[#4A0417] shrink-0">
+                    Upload Banner
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async () => {
+                          try {
+                            const res = await fetch('/api/admin/upload-image', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ imageBase64: reader.result, filename: file.name })
+                            });
+                            const data = await res.json();
+                            if (res.ok && data.url) {
+                              setCampaignBannerUrl(data.url);
+                              notify('Banner image uploaded successfully.');
+                            } else {
+                              notify(data.error || 'Upload failed');
+                            }
+                          } catch (err: any) {
+                            notify(err.message);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                {campaignBannerUrl && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-[#E8DDD3] bg-[#FAF7F2]">
+                    <img
+                      src={campaignBannerUrl}
+                      alt="Banner Preview"
+                      className="w-full h-24 object-cover"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold block mb-1">Discount %</label>
+                  <label className="font-semibold block mb-1">Discount Type</label>
+                  <select
+                    value={campaignDiscountType}
+                    onChange={(e) => setCampaignDiscountType(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="flat">Flat Amount (₹)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Discount Value</label>
                   <input
                     type="number"
                     value={campaignDiscount}
                     onChange={(e) => setCampaignDiscount(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={campaignStartDate}
+                    onChange={(e) => setCampaignStartDate(e.target.value)}
                     className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
                   />
                 </div>
 
-                <div className="flex items-center gap-2 pt-5">
+                <div>
+                  <label className="font-semibold block mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={campaignEndDate}
+                    onChange={(e) => setCampaignEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer font-semibold">
                   <input
                     type="checkbox"
-                    id="flash"
                     checked={campaignIsFlash}
                     onChange={(e) => setCampaignIsFlash(e.target.checked)}
                     className="accent-[#4A0417]"
                   />
-                  <label htmlFor="flash" className="font-semibold cursor-pointer">Flash Deal (Countdown)</label>
-                </div>
+                  <span>Flash Deal (Live Countdown)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={campaignIsPublished}
+                    onChange={(e) => setCampaignIsPublished(e.target.checked)}
+                    className="accent-[#4A0417]"
+                  />
+                  <span>Published Immediately</span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
@@ -3419,7 +3732,7 @@ export default function AdminApp() {
                   type="submit"
                   className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
                 >
-                  Publish Campaign
+                  {editingCampaign ? 'Update Campaign' : 'Publish Campaign'}
                 </button>
               </div>
             </form>
@@ -4341,18 +4654,18 @@ export default function AdminApp() {
                 </select>
               </div>
 
-              <div>
-                <label className="font-semibold block mb-1">Cancellation Fee Charged (₹)</label>
-                <input
-                  type="number"
-                  value={cancellationFeeInput}
-                  onChange={(e) => setCancellationFeeInput(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-bold"
-                />
-                <span className="text-[11px] text-[#8C7A7C] block mt-1">
-                  Cancellation within 2 hours of appointment slot incurs standard ₹100 visit preparation charge.
-                </span>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs space-y-1 text-amber-900">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-700" />
+                  Authoritative Server Cancellation Policy
+                </p>
+                <p>• <strong>Free cancellation</strong>: If cancelled 2+ hours prior to slot ({cancellingBooking.appointment_date} {cancellingBooking.appointment_slot}).</p>
+                <p>• <strong>₹200 convenience fee</strong>: If cancelled under 2 hours or missed.</p>
+                <p>• <strong>Prepaid orders</strong>: Fee is deducted from online payment; balance is recorded for customer refund.</p>
+                <p>• <strong>COD orders</strong>: Fee is recorded as cancellation_fee_due_cod on customer record.</p>
+                <p className="text-[11px] text-amber-800 pt-1 border-t border-amber-200">
+                  Fee is strictly calculated on the backend based on slot timestamp.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">

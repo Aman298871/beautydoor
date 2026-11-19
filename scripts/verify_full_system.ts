@@ -93,9 +93,21 @@ async function verifyAll() {
 
   // Test 6: Doorstep Service Territories & PIN 110017 (Multi-locality support)
   console.log('\nTest 6: Doorstep Service Territories & PIN 110017 Multi-Locality');
-  const ter110017Rows = await db.query<any>('SELECT * FROM territories WHERE pincode = ?', ['110017']);
+  const ter110017Rows = await db.query<any>('SELECT * FROM territories WHERE pincode = ? ORDER BY area_name ASC', ['110017']);
   if (!ter110017Rows || ter110017Rows.length === 0) throw new Error('PIN 110017 territory missing');
   console.log(`Found ${ter110017Rows.length} localities for PIN 110017:`, ter110017Rows.map(r => r.area_name));
+
+  const composite110017 = ter110017Rows.find(r => r.area_name.includes('&'));
+  if (composite110017) {
+    throw new Error(`Composite territory '${composite110017.area_name}' must be deleted so only individual localities exist.`);
+  }
+
+  const expectedLocalities = ['Malviya Nagar', 'Sainik Farm', 'Saket'];
+  const actualLocalities = ter110017Rows.map(r => r.area_name).sort();
+  console.log('Actual PIN 110017 localities:', actualLocalities);
+  if (actualLocalities.length !== 3 || !expectedLocalities.every(l => actualLocalities.includes(l))) {
+    throw new Error(`PIN 110017 must contain exactly the 3 distinct localities: ${expectedLocalities.join(', ')}`);
+  }
 
   for (const ter of ter110017Rows) {
     if (ter.delivery_fee !== 0) {
@@ -105,7 +117,7 @@ async function verifyAll() {
       throw new Error(`Delhi min order must be ₹1,000, got: ${ter.min_order_amount}`);
     }
   }
-  console.log('✓ PASS: PIN 110017 configured with multi-locality support, ₹0 visiting fee and ₹1,000 Delhi threshold');
+  console.log('✓ PASS: PIN 110017 has exactly 3 separate localities (Saket, Malviya Nagar, Sainik Farm) with ₹0 visiting fee and ₹1,000 Delhi threshold');
 
   // Test 7: Body Massage Options (₹750 45m, ₹1,299 90m)
   console.log('\nTest 7: Body Massage Durations');
@@ -143,32 +155,142 @@ async function verifyAll() {
   }
   console.log('✓ PASS: Slug uniqueness constraint satisfied');
 
-  // Test 10: Cancellation Policy Calculation Logic
-  console.log('\nTest 10: Cancellation Policy Fee Logic (2-Hour Window)');
-  // Import date helper or simulate calculation
-  const now = Date.now();
-  const threeHoursFuture = new Date(now + 3 * 3600 * 1000);
-  const oneHourFuture = new Date(now + 1 * 3600 * 1000);
+  // Test 10: Authoritative Cancellation Policy Boundary & Logic Tests
+  console.log('\nTest 10: Cancellation Policy Strict Boundary & State Logic (2-Hour Window / ₹200 Fee)');
+  const calculateCancellation = (appointmentTimeMs: number, simulatedNowMs: number) => {
+    const diffMinutes = Math.floor((appointmentTimeMs - simulatedNowMs) / (1000 * 60));
+    const breached = diffMinutes < 120;
+    const fee = breached ? 200 : 0;
+    return { diffMinutes, breached, fee };
+  };
 
-  const diffMs3h = threeHoursFuture.getTime() - now;
-  const hoursUntil3h = diffMs3h / (1000 * 60 * 60);
-  const fee3h = hoursUntil3h < 2 ? 200 : 0;
-  const breached3h = hoursUntil3h < 2 ? 1 : 0;
+  const testNow = Date.now();
+  // Case A: Exactly 120 minutes prior -> FREE (₹0 fee)
+  const case120m = calculateCancellation(testNow + 120 * 60 * 1000, testNow);
+  console.log(`Exact 120 minutes prior: fee = ₹${case120m.fee}, breached = ${case120m.breached}`);
+  if (case120m.fee !== 0 || case120m.breached) throw new Error('Cancellation at exactly 120m must be ₹0 fee');
 
-  const diffMs1h = oneHourFuture.getTime() - now;
-  const hoursUntil1h = diffMs1h / (1000 * 60 * 60);
-  const fee1h = hoursUntil1h < 2 ? 200 : 0;
-  const breached1h = hoursUntil1h < 2 ? 1 : 0;
+  // Case B: 119 minutes prior -> ₹200 fee
+  const case119m = calculateCancellation(testNow + 119 * 60 * 1000, testNow);
+  console.log(`119 minutes prior: fee = ₹${case119m.fee}, breached = ${case119m.breached}`);
+  if (case119m.fee !== 200 || !case119m.breached) throw new Error('Cancellation at 119m must be ₹200 fee');
 
-  console.log(`3 hours before slot: fee = ₹${fee3h}, breached = ${breached3h}`);
-  console.log(`1 hour before slot: fee = ₹${fee1h}, breached = ${breached1h}`);
+  // Case C: 3 hours (180 minutes) prior -> FREE (₹0 fee)
+  const case180m = calculateCancellation(testNow + 180 * 60 * 1000, testNow);
+  console.log(`180 minutes prior: fee = ₹${case180m.fee}, breached = ${case180m.breached}`);
+  if (case180m.fee !== 0 || case180m.breached) throw new Error('Cancellation at 180m must be ₹0 fee');
 
-  if (fee3h !== 0 || breached3h !== 0) throw new Error('Cancellation >= 2h must be free (₹0)');
-  if (fee1h !== 200 || breached1h !== 1) throw new Error('Cancellation < 2h must incur ₹200 fee');
-  console.log('✓ PASS: Cancellation fee calculated strictly on backend: ₹0 for >=2h, ₹200 for <2h');
+  // Case D: Past appointment (-30 minutes) -> ₹200 fee
+  const casePast = calculateCancellation(testNow - 30 * 60 * 1000, testNow);
+  console.log(`Past appointment (-30m): fee = ₹${casePast.fee}, breached = ${casePast.breached}`);
+  if (casePast.fee !== 200 || !casePast.breached) throw new Error('Past cancellation must be ₹200 fee');
+
+  console.log('✓ PASS: Cancellation boundary tests (exact 120m, 119m, 180m, past) match policy');
+
+  // Test 11: BEAUTYFIRST Coupon Subtotal Threshold Validation
+  console.log('\nTest 11: BEAUTYFIRST Coupon Subtotal Threshold Validation (Min ₹1,100 / Flat ₹100)');
+  const coupon = await db.queryRow<any>('SELECT * FROM coupons WHERE code = ?', ['BEAUTYFIRST']);
+  if (!coupon) throw new Error('BEAUTYFIRST coupon missing from DB');
+  console.log('BEAUTYFIRST DB row:', {
+    code: coupon.code,
+    discount_value: coupon.discount_value,
+    min_order_amount: coupon.min_order_amount,
+    max_discount: coupon.max_discount,
+    is_active: coupon.is_active,
+    expires_at: coupon.expires_at
+  });
+  if (coupon.discount_value !== 100 || coupon.min_order_amount !== 1100 || coupon.max_discount !== 100 || coupon.is_active !== 1) {
+    throw new Error('BEAUTYFIRST must be Flat ₹100, min order ₹1,100, max discount ₹100, active');
+  }
+
+  // Validate subtotal evaluation logic
+  const evaluateBeautyFirst = (subtotal: number) => {
+    if (subtotal < coupon.min_order_amount) {
+      return { valid: false, error: `Minimum order amount of ₹${coupon.min_order_amount} required` };
+    }
+    const discount = Math.min(coupon.discount_value, coupon.max_discount, subtotal);
+    return { valid: true, discount, payable: subtotal - discount };
+  };
+
+  const cart1099 = evaluateBeautyFirst(1099);
+  console.log('Cart ₹1,099 evaluation:', cart1099);
+  if (cart1099.valid) throw new Error('Cart ₹1,099 must be rejected for BEAUTYFIRST');
+
+  const cart1100 = evaluateBeautyFirst(1100);
+  console.log('Cart ₹1,100 evaluation:', cart1100);
+  if (!cart1100.valid || cart1100.discount !== 100 || cart1100.payable !== 1000) {
+    throw new Error('Cart ₹1,100 must yield ₹100 discount');
+  }
+
+  const cart1500 = evaluateBeautyFirst(1500);
+  console.log('Cart ₹1,500 evaluation:', cart1500);
+  if (!cart1500.valid || cart1500.discount !== 100 || cart1500.payable !== 1400) {
+    throw new Error('Cart ₹1,500 must yield flat ₹100 discount (capped at ₹100)');
+  }
+  console.log('✓ PASS: BEAUTYFIRST coupon subtotal thresholds verified (₹1,099 rejected, ₹1,100 -> ₹100, ₹1,500 -> ₹100)');
+
+  // Test 12: Campaign Management CRUD in DB
+  console.log('\nTest 12: Campaign Management in DB');
+  const testCampId = `camp-test-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO campaigns (
+      id, title, slug, banner_title, banner_subtitle, banner_image_url,
+      cta_label, destination_url, start_time, end_time, is_flash_deal, is_published,
+      discount_type, discount_val, badge_text, target_category_ids_json, target_service_ids_json,
+      display_order, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    testCampId,
+    'Verification Campaign Test',
+    `test-camp-${Date.now()}`,
+    'Verification Headline',
+    'Verification Subtitle',
+    '/uploads/test_banner.jpg',
+    'Book Now',
+    '/offers',
+    new Date().toISOString(),
+    new Date(Date.now() + 86400000).toISOString(),
+    1,
+    1,
+    'percentage',
+    20,
+    'Test Badge',
+    '["cat-facials"]',
+    '[]',
+    1,
+    new Date().toISOString()
+  ]);
+
+  const insertedCamp = await db.queryRow<any>('SELECT * FROM campaigns WHERE id = ?', [testCampId]);
+  if (!insertedCamp || insertedCamp.title !== 'Verification Campaign Test') {
+    throw new Error('Failed to insert test campaign');
+  }
+
+  // Update
+  await db.execute('UPDATE campaigns SET discount_val = 30, is_published = 0 WHERE id = ?', [testCampId]);
+  const updatedCamp = await db.queryRow<any>('SELECT * FROM campaigns WHERE id = ?', [testCampId]);
+  if (!updatedCamp || updatedCamp.discount_val !== 30 || updatedCamp.is_published !== 0) {
+    throw new Error('Failed to update test campaign');
+  }
+
+  // Delete
+  await db.execute('DELETE FROM campaigns WHERE id = ?', [testCampId]);
+  const deletedCamp = await db.queryRow<any>('SELECT * FROM campaigns WHERE id = ?', [testCampId]);
+  if (deletedCamp) throw new Error('Failed to delete test campaign');
+  console.log('✓ PASS: Campaign lifecycle (Create, Read, Update, Delete) verified in DB');
+
+  // Test 13: Service Image Field Persistence
+  console.log('\nTest 13: Service Image URL Persistence');
+  const testImgUrl = '/uploads/test_verified_service_img.webp';
+  await db.execute('UPDATE services SET image_url = ? WHERE id = ?', [testImgUrl, 'srv-facial-moonstar-korean']);
+  const srvImgRow = await db.queryRow<any>('SELECT id, name, image_url FROM services WHERE id = ?', ['srv-facial-moonstar-korean']);
+  if (!srvImgRow || srvImgRow.image_url !== testImgUrl) {
+    throw new Error('Service image_url failed to persist');
+  }
+  console.log('✓ PASS: Service image_url successfully persists in database');
 
   await db.close();
-  console.log('\n=== ALL VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 13 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

@@ -569,8 +569,8 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
     let appliedCoupon: any = null;
     if (couponCode && typeof couponCode === 'string') {
       const cleanCode = couponCode.trim().toUpperCase();
-      const now = new Date().toISOString();
-      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [cleanCode, now])) as any;
+      const todayDateStr = new Date().toISOString().split('T')[0];
+      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [cleanCode, todayDateStr])) as any;
       if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
@@ -905,8 +905,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     let couponDiscount = 0;
     let validCoupon: string | null = null;
     if (couponCode && typeof couponCode === 'string') {
-      const now = new Date().toISOString();
-      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [couponCode.trim().toUpperCase(), now])) as any;
+      const todayDateStr = new Date().toISOString().split('T')[0];
+      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [couponCode.trim().toUpperCase(), todayDateStr])) as any;
       if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
@@ -1191,11 +1191,13 @@ const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> 
     }
 
     const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
-    const now = req.body.simulateNow ? new Date(req.body.simulateNow).getTime() : Date.now();
-    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
+    const now = (process.env.NODE_ENV === 'test' && req.body.simulateNow)
+      ? new Date(req.body.simulateNow).getTime()
+      : Date.now();
+    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : -1;
     const isWithin2Hours = diffMinutes < 120;
     const cancellationFee = isWithin2Hours ? 200 : 0;
-    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid';
+    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
 
     let refundableAmount = 0;
     if (isPrepaid) {
@@ -1260,12 +1262,14 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
 
     // Trusted server-side time calculation (IST +05:30)
     const scheduledTime = parseAppointmentDateTime(booking.appointment_date, booking.appointment_slot);
-    const now = req.body.simulateNow ? new Date(req.body.simulateNow).getTime() : Date.now();
-    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : 0;
+    const now = (process.env.NODE_ENV === 'test' && req.body.simulateNow)
+      ? new Date(req.body.simulateNow).getTime()
+      : Date.now();
+    const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : -1;
     const isWithin2Hours = diffMinutes < 120;
     const cancellationFee = isWithin2Hours ? 200 : 0;
     const windowBreached = isWithin2Hours ? 1 : 0;
-    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid';
+    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
 
     let refundAmount = 0;
     let refundStatus = 'not_applicable_cod';

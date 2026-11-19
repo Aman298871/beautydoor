@@ -385,7 +385,7 @@ export default function App() {
         onAddPackageToCart={handleAddPackageToCart}
       />
 
-      {/* 6. Hospital-Grade Hygiene Promise */}
+      {/* 6. Salon-Grade Hygiene Promise */}
       <HygienePromiseSection />
 
       {/* 7. Delhi NCR Active Hubs Section */}

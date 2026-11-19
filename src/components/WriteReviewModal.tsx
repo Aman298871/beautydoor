@@ -82,7 +82,7 @@ export const WriteReviewModal: React.FC<Props> = ({
           <div className="py-10 text-center space-y-2">
             <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
             <h4 className="text-base font-bold text-[#1F1A1C]">Thank you for your review!</h4>
-            <p className="text-xs text-[#6B5A5C]">Your feedback helps us maintain hospital-grade standards.</p>
+            <p className="text-xs text-[#6B5A5C]">Your feedback helps us maintain salon-grade standards.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 pt-4">

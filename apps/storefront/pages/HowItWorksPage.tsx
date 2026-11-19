@@ -14,7 +14,7 @@ export const HowItWorksPage: React.FC = () => {
     {
       num: '02',
       title: 'Punctual Doorstep Arrival',
-      desc: 'Your certified female specialist arrives 10 minutes prior with sanitized equipment, hospital-grade single-use disposables, and sterile products.'
+      desc: 'Your trained female specialist arrives 10 minutes prior with sanitized equipment, fresh single-use disposables, and sealed products.'
     },
     {
       num: '03',

@@ -34,7 +34,7 @@ export const GoogleReviewsSection: React.FC<Props> = ({
               Loved by discerning clients across <span className="italic font-medium text-[#4A0417]">Delhi NCR.</span>
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#5C4D4F] font-light">
-              Read authentic feedback from working women, homemakers, and brides who trust BeautyDoor for hospital-grade hygiene and five-star salon care at home.
+              Read authentic feedback from working women, homemakers, and brides who trust BeautyDoor for salon-grade sanitization and five-star care at home.
             </p>
           </div>
 

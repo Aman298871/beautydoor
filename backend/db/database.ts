@@ -1057,10 +1057,32 @@ async function seedEssentialData() {
   await db.execute("UPDATE services SET slug = 'body-scrub-body-pack-legacy', is_published = 0, name = 'Body Scrub + Body Pack (Duplicate Option)' WHERE id = 'srv-body-scrub-body-pack' OR (slug = 'body-scrub-body-pack' AND id != 'srv-body-scrub-pack-499')");
   await db.execute("UPDATE services SET name = 'Body Scrub + Body Pack', slug = 'body-scrub-body-pack', steps_json = ?, steps_count = 2, selling_price = 499, original_price = 699, duration_mins = 30, is_published = 1 WHERE id = 'srv-body-scrub-pack-499'", [bodyScrubPack2Steps]);
 
-  // 3. Body Massage: single option, ₹1,299, 45 mins, 5 steps
-  // Free up slug 'body-massage' from legacy rows first to satisfy UNIQUE constraint in PostgreSQL
-  await db.execute("UPDATE services SET slug = 'full-body-massage-legacy', is_published = 0, name = 'Full Body Massage (Legacy ₹750 Option)' WHERE id = 'srv-full-body-massage-750' OR (slug = 'body-massage' AND id != 'srv-massage-full-body-olive-oil')");
-  await db.execute("UPDATE services SET name = 'Body Massage', slug = 'body-massage', selling_price = 1299, original_price = 1799, duration_mins = 45, steps_count = 5, is_published = 1 WHERE id = 'srv-massage-full-body-olive-oil'");
+  // 3. Approved Body Massage Options (Owner-approved timings November 2026):
+  // Option 1: Full Body Massage (45 mins) - ₹750, 45 minutes, published
+  // Option 2: Full Body Massage (90 mins) - ₹1,299, 90 minutes (1 hr 30 mins), published
+  await db.execute(`
+    UPDATE services SET
+      name = 'Full Body Massage (45 mins)',
+      slug = 'body-massage-45-mins',
+      selling_price = 750,
+      original_price = 999,
+      duration_mins = 45,
+      is_published = 1,
+      is_active = 1
+    WHERE id = 'srv-full-body-massage-750'
+  `);
+  await db.execute(`
+    UPDATE services SET
+      name = 'Full Body Massage (90 mins)',
+      slug = 'body-massage-90-mins',
+      selling_price = 1299,
+      original_price = 1799,
+      duration_mins = 90,
+      steps_count = 5,
+      is_published = 1,
+      is_active = 1
+    WHERE id = 'srv-massage-full-body-olive-oil'
+  `);
 
   // 4. FYC Classic Manicure & Pedicure: exactly 3 steps, brand FYC Classic
   const fycClassic3Steps = JSON.stringify([
@@ -1242,6 +1264,56 @@ async function seedEssentialData() {
       duration_display = '2 hours 30 minutes',
       category_ids_json = '["cat-facials", "cat-rica-waxing", "cat-brazilian-peel-off", "cat-manicure-pedicure", "cat-threading"]'
     WHERE id = 'pkg-glamour-essentials'
+  `);
+
+  // Ensure all MASTER_PACKAGES exist in the database (idempotent insertion)
+  for (const p of MASTER_PACKAGES) {
+    const existingPkg = await db.queryRow('SELECT id FROM packages WHERE id = ?', [p.id]);
+    if (!existingPkg) {
+      await db.execute(`
+        INSERT INTO packages (
+          id, name, slug, subtitle, description, duration_mins, duration_display,
+          original_price, selling_price, discount_percent, inclusions_json, benefits_json,
+          badge, category_ids_json, is_published, display_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        p.id,
+        p.name,
+        p.slug,
+        p.subtitle,
+        p.description,
+        p.duration_mins,
+        p.duration_display,
+        p.original_price,
+        p.selling_price,
+        p.discount_percent,
+        JSON.stringify(p.inclusions),
+        JSON.stringify(p.benefits),
+        p.badge || null,
+        JSON.stringify(p.category_ids || []),
+        1,
+        11,
+        now,
+        now
+      ]);
+    }
+  }
+
+  // Ensure owner-approved Glow & Groom Combo (₹999, 70 mins) is actively synced
+  await db.execute(`
+    UPDATE packages SET
+      name = 'Glow & Groom Combo',
+      slug = 'glow-and-groom-combo',
+      subtitle = 'Doorstep Radiance & Essential Grooming',
+      duration_mins = 70,
+      duration_display = '1 hour 10 mins',
+      selling_price = 999,
+      original_price = 1399,
+      discount_percent = 29,
+      badge = 'Owner Special',
+      is_published = 1,
+      category_ids_json = '["cat-facials", "cat-threading"]'
+    WHERE id = 'pkg-glow-and-groom-combo'
   `);
 
   // 8. HYGIENE & SAFETY COMMITMENTS (idempotent)

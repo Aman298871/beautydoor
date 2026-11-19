@@ -26,11 +26,11 @@ export const Footer: React.FC<Props> = ({
               referrerPolicy="no-referrer"
             />
             <p className="text-xs sm:text-sm text-[#BDB0B2] leading-relaxed max-w-sm font-light">
-              BeautyDoor delivers certified master beauticians, hospital-grade single-use kits, and bespoke salon services straight to your doorstep across Delhi NCR.
+              BeautyDoor delivers trained beauticians, salon-grade sanitized kits, and bespoke salon services straight to your doorstep across Delhi NCR.
             </p>
             <div className="flex items-center gap-2 text-xs text-[#C5A880] font-semibold">
               <ShieldCheck className="w-4 h-4" />
-              <span>Certified & Background-Verified Female Specialists</span>
+              <span>Trained & Experienced Female Specialists</span>
             </div>
           </div>
 

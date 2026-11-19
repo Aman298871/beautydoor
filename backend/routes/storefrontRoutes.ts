@@ -678,9 +678,9 @@ storefrontRouter.get('/rate-card', async (_req: Request, res: Response): Promise
       hygieneCommitments: [
         'Single-use disposable wooden spatulas (Zero double-dipping)',
         'Fresh disposable bedsheet & headband sealed for each client',
-        'Hospital-grade sanitized and autoclaved metal tools',
+        'Salon-grade sanitized and sterilized metal tools',
         'Single-use sealed skincare packs opened right in front of you',
-        'Strictly verified female professionals'
+        'Experienced female professionals'
       ],
       generatedAt: new Date().toISOString()
     });

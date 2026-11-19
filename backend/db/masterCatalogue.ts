@@ -1890,18 +1890,18 @@ export const MASTER_SERVICES: MasterService[] = [
   {
     id: 'srv-full-body-massage-750',
     category_id: 'cat-massage',
-    name: 'Full Body Massage (Legacy ₹750 Option)',
-    slug: 'full-body-massage-legacy',
-    description: 'Full body relaxation massage targeting muscle fatigue and tension with warm natural botanical oil.',
-    detailed_description: 'A calming head-to-toe Swedish relaxation massage administered by verified female therapists in the comfort and privacy of your home.',
-    duration_mins: 60,
-    duration_display: '1 hour',
+    name: 'Full Body Massage (45 mins)',
+    slug: 'body-massage-45-mins',
+    description: 'Calming 45-minute Swedish relaxation body therapy targeting muscle fatigue and tension with warm botanical oil.',
+    detailed_description: 'A soothing 45-minute head-to-toe relaxation massage administered by verified female therapists in the comfort and privacy of your home.',
+    duration_mins: 45,
+    duration_display: '45 mins',
     original_price: 999,
     selling_price: 750,
     service_type: 'single',
     is_combo: 0,
-    is_published: 0,
-    is_popular: 0,
+    is_published: 1,
+    is_popular: 1,
     is_bestseller: 0,
     before_instructions: 'Ensure a quiet, comfortable private room with a clean bed or floor mattress.',
     after_instructions: 'Drink warm water and relax for at least 30 minutes before taking a warm shower.',
@@ -1992,12 +1992,12 @@ export const MASTER_SERVICES: MasterService[] = [
   {
     id: 'srv-massage-full-body-olive-oil',
     category_id: 'cat-massage',
-    name: 'Body Massage',
-    slug: 'body-massage',
-    description: 'Calming 45-minute Swedish relaxation body therapy with warm cold-pressed herbal and olive oil.',
-    detailed_description: 'An authoritative 45-minute head-to-toe relaxation massage designed by verified female therapists in the comfort of your home. Loosens muscular knots, relieves accumulated back tension, and restores tranquility using warm nourishing oils.',
-    duration_mins: 45,
-    duration_display: '45 mins',
+    name: 'Full Body Massage (90 mins)',
+    slug: 'body-massage-90-mins',
+    description: 'Deep therapeutic 90-minute Swedish body rejuvenation with warm herbal and olive oil.',
+    detailed_description: 'An intensive 90-minute head-to-toe relaxation massage designed by verified female therapists in the comfort of your home. Loosens muscular knots, relieves deep fatigue, and restores tranquility using warm nourishing oils.',
+    duration_mins: 90,
+    duration_display: '1 hour 30 mins',
     original_price: 1799,
     selling_price: 1299,
     service_type: 'single',
@@ -2244,6 +2244,29 @@ export const MASTER_PACKAGES: MasterPackage[] = [
       { name: 'Threading — Eyebrows + Upper Lip + Forehead', is_free: false }
     ],
     benefits: ['Complete 8-part grooming ritual for parties and weddings', 'Painless Brazilian stripless bikini waxing', 'Classic hands and feet grooming ceremony']
+  },
+  {
+    id: 'pkg-glow-and-groom-combo',
+    name: 'Glow & Groom Combo',
+    slug: 'glow-and-groom-combo',
+    subtitle: 'Doorstep Radiance & Essential Grooming',
+    description: 'Special 70-minute glow and grooming ritual requested by owner. Features facial radiance treatment paired with essential grooming care.',
+    duration_mins: 70,
+    duration_display: '1 hour 10 mins',
+    original_price: 1399,
+    selling_price: 999,
+    discount_percent: 29,
+    badge: 'Owner Special',
+    category_ids: ['cat-facials', 'cat-threading'],
+    inclusions: [
+      { name: 'Facial Radiance Ceremony (Owner-approved 70m protocol)', is_free: false },
+      { name: 'Essential Grooming Care (Inclusions per owner confirmation)', is_free: false }
+    ],
+    benefits: [
+      'Authentic 70-minute (1 hour 10 mins) express radiance and grooming care',
+      'Doorstep convenience across Delhi NCR with zero visiting fee',
+      'Transparent flat rate of ₹999 with genuine salon-grade products'
+    ]
   }
 ];
 

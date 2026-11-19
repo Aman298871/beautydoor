@@ -139,8 +139,8 @@ export const FAQPage: React.FC = () => {
       a: 'Minimum booking amount:\n• Delhi – ₹1,000\n• Haryana – ₹1,500\n• Noida – ₹1,500\n\nYour cart must meet the minimum order amount for your selected service location before you can confirm your booking.'
     },
     {
-      q: 'How does BeautyDoor maintain hospital-grade hygiene?',
-      a: 'We use 100% single-use disposable bed sheets, towels, aprons, and spatulas. Cuticle pushers and metallic tools undergo hospital-grade autoclave sterilization sealed in pouches that are cut open in your sight.'
+      q: 'How does BeautyDoor maintain salon-grade sanitization?',
+      a: 'We use fresh single-use disposable bed sheets, towels, aprons, and spatulas. Cuticle pushers and metallic tools undergo strict sterilization sealed in indicator pouches that are opened in your sight.'
     },
     {
       q: 'Do I need to arrange hot water, chairs, or sheets?',

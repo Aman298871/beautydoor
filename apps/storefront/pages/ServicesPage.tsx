@@ -162,18 +162,10 @@ export const ServicesPage: React.FC<Props> = ({
 
             <div className="flex items-center gap-3 shrink-0">
               <button
-                onClick={() => navigate('/packages')}
-                className="px-4 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs sm:text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-[#C5A880]" />
-                <span>Ready-Made Packages (Save 20%)</span>
-              </button>
-
-              <button
                 onClick={() => navigate('/rate-card')}
                 className="px-4 py-2.5 bg-white text-[#4A0417] hover:bg-[#F4EFEA] border border-[#C5A880] text-xs sm:text-sm font-semibold rounded-lg shadow-2xs flex items-center gap-2 transition-all cursor-pointer"
               >
-                <span>Rate Card</span>
+                <span>View Rate Card</span>
               </button>
             </div>
           </div>
@@ -295,14 +287,14 @@ export const ServicesPage: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-[#4A0417] shrink-0" />
             <span className="font-medium">
-              Delhi NCR Hygiene Protocol: 100% single-use sealed kits, sanitized instruments & certified female professionals.
+              Delhi NCR Hygiene Protocol: Sanitized instruments, single-use disposables & trained female professionals.
             </span>
           </div>
           <span className="font-semibold text-[#4A0417]">Zero Doorstep Visiting Charge</span>
         </div>
 
-        {/* Category-Wise Value Packages Section */}
-        {categoryPackages.length > 0 && (
+        {/* Packages Grid Section (ONLY visible when 'Packages' category is explicitly selected) */}
+        {selectedCat === 'cat-packages' && categoryPackages.length > 0 && (
           <section className="bg-gradient-to-br from-[#FFFBF7] to-white rounded-2xl border-2 border-[#C5A880]/40 p-5 sm:p-7 shadow-sm space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E8DDD3]">
               <div>
@@ -311,10 +303,10 @@ export const ServicesPage: React.FC<Props> = ({
                   <span>Curated Package Bundles</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C] mt-0.5">
-                  Ready-Made Packages with {currentCategoryObj ? currentCategoryObj.name : 'this Category'}
+                  Official BeautyDoor Ready-Made Packages
                 </h2>
                 <p className="text-xs sm:text-sm text-[#7A6B6D] font-light mt-0.5">
-                  Save up to 30% by bundling your {currentCategoryObj?.name || 'services'} with waxing, manicure, bleach or body polishing.
+                  Save up to 30% by bundling your treatments with waxing, manicure, bleach or body polishing.
                 </p>
               </div>
               <button
@@ -561,11 +553,11 @@ export const ServicesPage: React.FC<Props> = ({
                       <div className="pt-1 space-y-1 text-xs text-[#5C4D4F]">
                         <div className="flex items-center gap-1.5">
                           <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>100% Single-use sealed disposables</span>
+                          <span>Sanitized disposables & sterile tools</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>Certified background-verified specialist</span>
+                          <span>Trained female beauty specialists</span>
                         </div>
                       </div>
                     </div>

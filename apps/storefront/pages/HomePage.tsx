@@ -589,7 +589,7 @@ export const HomePage: React.FC<Props> = ({
               The BeautyDoor Difference
             </span>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-[#1F1A1C] mt-1 tracking-tight">
-              Hospital-Grade Hygiene in Your Sanctuary
+              Salon-Grade Sanitization in Your Sanctuary
             </h2>
             <p className="text-base sm:text-lg text-[#554749] mt-3 font-light leading-relaxed">
               We never compromise on safety, comfort, or genuine product authenticity.

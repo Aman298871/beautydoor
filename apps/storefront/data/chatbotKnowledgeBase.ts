@@ -306,7 +306,7 @@ You can also use our **"Make Your Own Package"** builder to bundle waxing with f
     answer: `Our **Brazilian Peel-Off Waxing** is a discreet, hygienic, and highly professional intimate hair removal service performed exclusively by certified female specialists in the privacy of your home:
 
 • **Strictly Stripless Formulation**: We apply warm, flexible peel-off wax that grips only the hair roots and not the delicate skin tissue, ensuring minimal discomfort.
-• **Zero Double-Dipping**: Every dip uses a fresh disposable wooden spatula to maintain hospital-grade sterile hygiene.
+• **Zero Double-Dipping**: Every dip uses a fresh disposable wooden spatula to maintain salon-grade sterile hygiene.
 • **Disposable Hygiene Drape**: A fresh sterile protective sheet is laid on your bed or recliner.
 • **Soothing Chamomile Aftercare**: Soothing aloe and chamomile emulsion is applied post-wax to eliminate redness.`,
     followUpQuestionIds: ['faq-before-wax-ac', 'faq-single-use-kits', 'faq-specialist-verification'],
@@ -866,7 +866,7 @@ All slot fees are clearly highlighted when selecting your time and itemized in y
     category: 'cat-hygiene',
     subcategory: 'sub-hygiene-tools',
     question: 'What hygiene practices does BeautyDoor follow?',
-    answer: `We hold ourselves to hospital-grade at-home hygiene:
+    answer: `We hold ourselves to strict salon-grade at-home hygiene:
 • **Single-Use Sealed Kits**: Mono-dose facial kits, wax cartridges, and creams are unsealed in front of you.
 • **100% Disposable Sheets**: Fresh disposable bedsheets, headbands, and gowns for every client.
 • **Zero Double-Dipping**: A fresh wooden spatula is used for every single wax application.

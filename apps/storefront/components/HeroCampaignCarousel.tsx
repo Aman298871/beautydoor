@@ -197,9 +197,9 @@ export const HeroCampaignCarousel: React.FC<Props> = ({
                       Doorstep Ritual · Delhi NCR
                     </span>
                     <p className="font-serif text-2xl text-white font-normal">
-                      “Hospital-grade hygiene meets five-star salon indulgence.”
+                      “Salon-grade sanitization meets five-star salon indulgence.”
                     </p>
-                    <span className="text-xs text-[#FAF7F2]/80">100% Single-use sealed kits</span>
+                    <span className="text-xs text-[#FAF7F2]/80">Sealed single-use kits & disposables</span>
                   </div>
                 )}
 

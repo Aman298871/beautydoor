@@ -362,7 +362,7 @@ function StorefrontContent() {
       />
 
       {/* 3. Main Multi-Page Content */}
-      <main className="flex-1 pb-16 sm:pb-0">
+      <main className="flex-1 pb-20 sm:pb-0">
         {pageContent}
       </main>
 
@@ -378,12 +378,12 @@ function StorefrontContent() {
         }}
       />
 
-      {/* Mobile Sticky Quick Action Bar (when cart is empty) */}
-      {cartItems.length === 0 && !isCartOpen && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md text-[#1F1A1C] p-2.5 sm:hidden border-t border-[#E8DDD3] flex items-center justify-between gap-2 shadow-2xl">
+      {/* Unified Single Sticky Mobile Action Bar: Exactly 1 Call, 1 WhatsApp, 1 Book Action */}
+      {!isCartOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md text-[#1F1A1C] p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:hidden border-t border-[#E8DDD3] flex items-center justify-between gap-2 shadow-2xl">
           <a
             href="tel:+917827722522"
-            className="flex-1 py-2.5 bg-white border border-[#E8DDD3] rounded-xl text-xs font-semibold text-[#4A0417] flex items-center justify-center gap-1.5 shadow-xs"
+            className="flex-1 py-2.5 bg-white border border-[#E8DDD3] rounded-xl text-xs font-semibold text-[#4A0417] flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-transform"
             title="Call Helpline (+91 78277 22522)"
           >
             <Phone className="w-4 h-4 text-[#4A0417]" />
@@ -393,39 +393,35 @@ function StorefrontContent() {
             href="https://wa.me/917827722522?text=Hi%20BeautyDoor%2C%20I%20would%20like%20to%20enquire%20about%20your%20doorstep%20services."
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5 shadow-xs"
+            className="flex-1 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-transform"
             title="WhatsApp Support (+91 78277 22522)"
           >
             <MessageCircle className="w-4 h-4 text-emerald-600" />
             <span>WhatsApp</span>
           </a>
           <button
-            onClick={() => navigate('/services')}
-            className="flex-1.5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+            onClick={() => {
+              if (cartItems.length > 0) {
+                setIsCartOpen(true);
+              } else if (path !== '/services') {
+                navigate('/services');
+              } else {
+                setIsCartOpen(true);
+              }
+            }}
+            className="flex-1.5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition-transform"
           >
-            <Calendar className="w-4 h-4 text-[#C5A880]" />
-            <span>Book Now</span>
-          </button>
-        </div>
-      )}
-
-      {/* Floating Mobile Cart Bar */}
-      {cartItems.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#1F1A1C] text-[#FAF7F2] p-4 sm:hidden border-t border-[#382F32] flex items-center justify-between shadow-2xl">
-          <div>
-            <div className="text-xs text-[#C5A880] font-semibold">
-              {cartItems.length} {cartItems.length === 1 ? 'Service' : 'Services'} Selected
-            </div>
-            <div className="text-base font-bold tabular-nums">
-              ₹{cartItems.reduce((sum, i) => sum + i.totalItemPrice, 0).toLocaleString('en-IN')}
-            </div>
-          </div>
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="px-5 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md flex items-center gap-1.5 shadow-xs"
-          >
-            <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-            <span>Book Now ({cartItems.length})</span>
+            {cartItems.length > 0 ? (
+              <>
+                <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
+                <span className="truncate">Book ({cartItems.length} · ₹{cartItems.reduce((sum, i) => sum + i.totalItemPrice, 0).toLocaleString('en-IN')})</span>
+              </>
+            ) : (
+              <>
+                <Calendar className="w-4 h-4 text-[#C5A880]" />
+                <span>Book Now</span>
+              </>
+            )}
           </button>
         </div>
       )}

@@ -229,7 +229,7 @@ export const ServiceDetailPage: React.FC<Props> = ({
             {/* Hygiene Promise Badge */}
             <div className="flex items-center gap-2.5 p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] text-xs text-[#554749]">
               <ShieldCheck className="w-5 h-5 text-[#4A0417] shrink-0" />
-              <span>Hospital-Grade Sanitization: Tools sterilized in autoclave indicator pouches, opened right in front of you.</span>
+              <span>Salon-Grade Sanitization: Tools sterilized in individual indicator pouches, opened right in front of you.</span>
             </div>
           </div>
 

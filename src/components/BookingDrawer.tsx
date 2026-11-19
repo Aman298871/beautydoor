@@ -742,8 +742,9 @@ export const BookingDrawer: React.FC<Props> = ({
                       </label>
                       <div className="grid grid-cols-4 gap-2">
                         {[0, 1, 2, 3, 4, 5, 6].map((dayOffset) => {
-                          const d = new Date(Date.now() + (dayOffset + 1) * 86400000);
-                          const dateStr = d.toISOString().split('T')[0];
+                          const d = new Date();
+                          d.setDate(d.getDate() + dayOffset + 1);
+                          const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                           const isSelected = selectedDate === dateStr;
                           return (
                             <button

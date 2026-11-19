@@ -228,7 +228,7 @@ export const PackagesPage: React.FC<Props> = ({
                       <span className="text-[#C5A880]">•</span>
                       <span className="text-emerald-700 font-semibold flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        100% Single-Use Sealed Kits
+                        Salon-Grade Sealed Kits
                       </span>
                     </div>
 

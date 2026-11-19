@@ -254,14 +254,14 @@ export const StorefrontNavbar: React.FC<Props> = ({
 
           {/* Zone 3: Primary Action + Direct Contact + Customer Account + Bag */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Direct Action: Call */}
+            {/* Direct Action: Call - Visible on desktop/tablet; on mobile it's in the unified bottom bar */}
             <a
               href="tel:+917827722522"
-              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold text-[#4A0417] bg-[#F4EFEA] hover:bg-[#E8DDD3] border border-[#E8DDD3] rounded-md transition-colors shadow-xs"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold text-[#4A0417] bg-[#F4EFEA] hover:bg-[#E8DDD3] border border-[#E8DDD3] rounded-md transition-colors shadow-xs"
               title="Call Helpline (+91 78277 22522)"
             >
               <Phone className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Call</span>
+              <span>Call</span>
             </a>
 
             {/* Direct Action: WhatsApp */}
@@ -285,13 +285,13 @@ export const StorefrontNavbar: React.FC<Props> = ({
               <span className="hidden sm:inline">My Account</span>
             </button>
 
+            {/* Book Appointment - Visible on desktop/tablet; on mobile it's in the unified bottom bar */}
             <button
               onClick={onOpenCart}
-              className="relative flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md shadow-xs hover:shadow transition-all whitespace-nowrap active:scale-[0.98]"
+              className="hidden sm:flex relative items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md shadow-xs hover:shadow transition-all whitespace-nowrap active:scale-[0.98]"
             >
               <ShoppingBag className="w-4 h-4 text-[#C5A880]" />
-              <span className="hidden xs:inline">Book Appointment</span>
-              <span className="xs:hidden">Book</span>
+              <span>Book Appointment</span>
               {cartItemCount > 0 && (
                 <span className="ml-1 w-5 h-5 rounded-full bg-[#C5A880] text-[#1F1A1C] font-bold text-xs flex items-center justify-center">
                   {cartItemCount}
@@ -478,64 +478,6 @@ export const StorefrontNavbar: React.FC<Props> = ({
           </div>
         </div>
       )}
-
-      {/* Sticky Mobile Bottom Navigation Bar (App-like ergonomics) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-t border-[#E8DDD3] flex items-center justify-around py-2 px-2 shadow-lg">
-        <button
-          onClick={() => navigate('/')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded text-[10px] font-medium transition-colors ${
-            path === '/' ? 'text-[#4A0417] font-bold' : 'text-[#7A6B6D]'
-          }`}
-        >
-          <Sparkle className="w-4 h-4" />
-          <span>Home</span>
-        </button>
-
-        <button
-          onClick={() => navigate('/services')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded text-[10px] font-medium transition-colors ${
-            path.startsWith('/services') ? 'text-[#4A0417] font-bold' : 'text-[#7A6B6D]'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Services</span>
-        </button>
-
-        <button
-          onClick={() => navigate('/packages')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded text-[10px] font-medium transition-colors ${
-            path === '/packages' ? 'text-[#4A0417] font-bold' : 'text-[#7A6B6D]'
-          }`}
-        >
-          <Heart className="w-4 h-4" />
-          <span>Packages</span>
-        </button>
-
-        <button
-          onClick={() => navigate('/offers')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded text-[10px] font-medium transition-colors ${
-            path === '/offers' ? 'text-[#4A0417] font-bold' : 'text-[#7A6B6D]'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-[#C5A880]" />
-          <span>Deals</span>
-        </button>
-
-        <button
-          onClick={onOpenCart}
-          className="relative flex flex-col items-center gap-1 py-1 px-3 rounded text-[10px] font-medium text-[#4A0417]"
-        >
-          <div className="relative">
-            <ShoppingBag className="w-4 h-4" />
-            {cartItemCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-[#4A0417] text-white text-[9px] font-bold flex items-center justify-center">
-                {cartItemCount}
-              </span>
-            )}
-          </div>
-          <span>Bag</span>
-        </button>
-      </div>
     </>
   );
 };

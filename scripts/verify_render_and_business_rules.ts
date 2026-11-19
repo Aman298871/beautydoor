@@ -229,11 +229,12 @@ async function runComprehensiveVerification() {
     }
   });
 
-  // --- 8. PACKAGE DURATIONS & PARITY ---
-  console.log('\n--- TEST 8: PACKAGE DURATIONS AUDIT ---');
-  const packages = await db.query<any>('SELECT id, name, duration_mins, duration_display, selling_price FROM packages');
+  // --- 8. PACKAGE & MASSAGE DURATIONS & PARITY ---
+  console.log('\n--- TEST 8: PACKAGE & MASSAGE DURATIONS AUDIT ---');
+  const packages = await db.query<any>('SELECT id, name, duration_mins, duration_display, selling_price, is_published FROM packages');
   const pkgGlow = packages.find(p => p.id === 'pkg-glow-and-smooth');
   const pkgBliss = packages.find(p => p.id === 'pkg-beauty-bliss');
+  const pkgGroom = packages.find(p => p.id === 'pkg-glow-and-groom-combo');
 
   if (pkgGlow?.duration_mins === 120 && pkgGlow?.duration_display === '2 hours') {
     console.log(`  ✓ Facial & Waxing Package: ${pkgGlow.duration_mins} mins ("${pkgGlow.duration_display}") => PASS`);
@@ -246,6 +247,32 @@ async function runComprehensiveVerification() {
     console.log(`  ✓ BeautyDoor Beauty Bliss: ${pkgBliss.duration_mins} mins ("${pkgBliss.duration_display}") => PASS`);
   } else {
     console.error('  ✗ Beauty Bliss Package duration mismatch:', pkgBliss);
+    process.exit(1);
+  }
+
+  if (pkgGroom?.duration_mins === 70 && pkgGroom?.selling_price === 999 && pkgGroom?.is_published === 1) {
+    console.log(`  ✓ Glow & Groom Combo: ${pkgGroom.duration_mins} mins (₹${pkgGroom.selling_price}) is_published=1 => PASS`);
+  } else {
+    console.error('  ✗ Glow & Groom Combo mismatch:', pkgGroom);
+    process.exit(1);
+  }
+
+  // Massage Services Audit
+  const massageServices = await db.query<any>("SELECT id, name, selling_price, duration_mins, is_published FROM services WHERE category_id = 'cat-massage'");
+  const m750 = massageServices.find(s => s.id === 'srv-full-body-massage-750');
+  const m1299 = massageServices.find(s => s.id === 'srv-massage-full-body-olive-oil');
+
+  if (m750?.selling_price === 750 && m750?.duration_mins === 45 && m750?.is_published === 1) {
+    console.log(`  ✓ Full Body Massage Option 1: ₹${m750.selling_price}, ${m750.duration_mins} mins ("${m750.name}") is_published=1 => PASS`);
+  } else {
+    console.error('  ✗ Full Body Massage ₹750 mismatch:', m750);
+    process.exit(1);
+  }
+
+  if (m1299?.selling_price === 1299 && m1299?.duration_mins === 90 && m1299?.is_published === 1) {
+    console.log(`  ✓ Full Body Massage Option 2: ₹${m1299.selling_price}, ${m1299.duration_mins} mins ("${m1299.name}") is_published=1 => PASS`);
+  } else {
+    console.error('  ✗ Full Body Massage ₹1299 mismatch:', m1299);
     process.exit(1);
   }
 

@@ -80,7 +80,7 @@ export const DealsSection: React.FC<Props> = ({
               Today's Best Deals & <span className="italic font-medium text-[#4A0417]">Doorstep Specials.</span>
             </h2>
             <p className="mt-1 text-sm text-[#5C4D4F] font-light">
-              Limited-availability discounted treatments with verified backend pricing and hospital-grade disposables.
+              Limited-availability discounted treatments with verified backend pricing and sanitized salon disposables.
             </p>
           </div>
 

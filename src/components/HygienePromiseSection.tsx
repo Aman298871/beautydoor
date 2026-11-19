@@ -5,7 +5,7 @@ export const HygienePromiseSection: React.FC = () => {
   const protocols = [
     {
       title: '100% Single-Use Disposables',
-      desc: 'Hospital-grade bed sheets, towels, spatulas, wax strips, and aprons are unsealed from sterile packs right in front of you.'
+      desc: 'Salon-grade sanitized bed sheets, towels, spatulas, wax strips, and aprons are unsealed from protective packs right in front of you.'
     },
     {
       title: 'Mono-Dose Sealed Sachets',
@@ -39,7 +39,7 @@ export const HygienePromiseSection: React.FC = () => {
             <span>The BeautyDoor White-Glove Guarantee</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-serif font-normal text-[#1F1A1C] tracking-tight">
-            Hospital-grade hygiene standards, never compromised.
+            Salon-grade sanitization standards, never compromised.
           </h2>
           <p className="mt-2 text-sm sm:text-base text-[#5C4D4F] font-light">
             We hold ourselves to higher clinical and aesthetic benchmarks than brick-and-mortar salons. Here is our 6-point promise to every Delhi NCR resident.

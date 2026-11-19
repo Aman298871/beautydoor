@@ -367,7 +367,7 @@ async function runAudit() {
 
     // Check for the 7 new approved services
     const approvedServices = [
-      { id: 'srv-full-body-massage-750', name: 'Full Body Massage', price: 750, duration: 60 },
+      { id: 'srv-full-body-massage-750', name: 'Full Body Massage (45 mins)', price: 750, duration: 45 },
       { id: 'srv-head-massage-199', name: 'Head Massage', price: 199, duration: 15 },
       { id: 'srv-back-massage-350', name: 'Back Massage', price: 350, duration: 25 },
       { id: 'srv-foot-massage-399', name: 'Foot Massage', price: 399, duration: 30 },

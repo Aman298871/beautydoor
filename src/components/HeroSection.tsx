@@ -52,7 +52,7 @@ export const HeroSection: React.FC<Props> = ({
             <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-[#4A0417] uppercase">
               <span>Delhi NCR Premier At-Home Salon</span>
               <span aria-hidden="true">·</span>
-              <span className="text-[#8C5D66]">Hospital-Grade Hygiene</span>
+              <span className="text-[#8C5D66]">Salon-Grade Sanitization</span>
             </div>
 
             {/* Display Headline */}

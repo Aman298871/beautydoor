@@ -287,7 +287,7 @@ export const ServiceDetailModal: React.FC<Props> = ({
                       {service.brand ? `${service.brand} Facial Protocol` : 'At-Home Facial Service'}
                     </h4>
                     <p className="text-xs text-[#554749] mt-0.5 leading-relaxed font-light">
-                      {service.stepsCount ? `Certified ${service.stepsCount}-step professional salon protocol` : 'Certified salon-grade single-use protocol'}, unsealed and tailored to your skin type at your vanity table with hospital-grade sanitization.
+                      {service.stepsCount ? `Official ${service.stepsCount}-step professional salon protocol` : 'Official salon-grade single-use protocol'}, unsealed and tailored to your skin type at your vanity table with salon-grade sanitization.
                     </p>
                   </div>
                 </div>

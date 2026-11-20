@@ -131,8 +131,16 @@ export const CustomerAccountModal: React.FC<Props> = ({
       const data = await res.json();
 
       if (res.ok) {
-        // Fetch customer bookings
-        const bookingsRes = await fetch(`/api/customer/bookings?phone=${phoneNumber}`);
+        if (data.token) {
+          sessionStorage.setItem('beautydoor_customer_token', data.token);
+        }
+        // Fetch customer bookings with Bearer auth token
+        const token = data.token || sessionStorage.getItem('beautydoor_customer_token') || '';
+        const bookingsRes = await fetch(`/api/customer/bookings?phone=${phoneNumber}`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
         const bookingsData = await bookingsRes.json();
         setCustomerBookings(bookingsData.bookings || []);
         setIsLoggedIn(true);
@@ -150,8 +158,13 @@ export const CustomerAccountModal: React.FC<Props> = ({
     try {
       await onCancelBooking(bookingId, phoneNumber, cancelReason);
       setCancelBookingId(null);
-      // Refresh list
-      const res = await fetch(`/api/customer/bookings?phone=${phoneNumber}`);
+      // Refresh list with auth token
+      const token = sessionStorage.getItem('beautydoor_customer_token') || '';
+      const res = await fetch(`/api/customer/bookings?phone=${phoneNumber}`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       setCustomerBookings(data.bookings || []);
     } catch (err) {
@@ -165,8 +178,13 @@ export const CustomerAccountModal: React.FC<Props> = ({
       await onRescheduleBooking(rescheduleBookingId, phoneNumber, rescheduleDate, rescheduleSlot);
       setRescheduleMessage('Appointment successfully rescheduled.');
       setRescheduleBookingId(null);
-      // Refresh list
-      const res = await fetch(`/api/customer/bookings?phone=${phoneNumber}`);
+      // Refresh list with auth token
+      const token = sessionStorage.getItem('beautydoor_customer_token') || '';
+      const res = await fetch(`/api/customer/bookings?phone=${phoneNumber}`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       setCustomerBookings(data.bookings || []);
     } catch (err) {

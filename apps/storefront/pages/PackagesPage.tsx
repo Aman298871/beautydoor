@@ -46,8 +46,9 @@ export const PackagesPage: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [catalogueServices, setCatalogueServices] = useState<any[]>(services);
   const [selectedFacialVariant, setSelectedFacialVariant] = useState<Record<string, string>>({
-    'pkg-total-care': 'Insta Glow',
-    'pkg-just-relax': 'Insta Glow'
+    'pkg-total-care': 'VLCC Facial — Glow',
+    'pkg-just-relax': 'VLCC Facial — Glow',
+    'pkg-vlcc-facial-waxing-special-999': 'VLCC Facial — Glow'
   });
   const [activeModalPackage, setActiveModalPackage] = useState<PackageItem | null>(null);
   const [customizingPackage, setCustomizingPackage] = useState<PackageItem | null>(null);
@@ -86,7 +87,8 @@ export const PackagesPage: React.FC<Props> = ({
   }, []);
 
   const handleBook = (pkg: PackageItem) => {
-    const chosenVariant = selectedFacialVariant[pkg.id] || (pkg.slug.includes('total-care') || pkg.slug.includes('just-relax') ? 'Insta Glow' : undefined);
+    const isVlcc = pkg.slug?.includes('total-care') || pkg.slug?.includes('just-relax') || pkg.slug?.includes('vlcc') || pkg.id?.includes('vlcc') || pkg.inclusions?.some((inc) => (typeof inc === 'string' ? inc.includes('VLCC') : inc.name.includes('VLCC')));
+    const chosenVariant = selectedFacialVariant[pkg.id] || (isVlcc ? 'VLCC Facial — Glow' : undefined);
     onAddPackageToCart(pkg, chosenVariant);
   };
 
@@ -201,8 +203,8 @@ export const PackagesPage: React.FC<Props> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {packages.map((pkg) => {
               const inCart = cartItemIds.includes(pkg.id);
-              const requiresFacialChoice = pkg.slug.includes('total-care') || pkg.slug.includes('just-relax') || pkg.inclusions.some((inc) => (typeof inc === 'string' ? inc.includes('VLCC') : inc.name.includes('VLCC')));
-              const selectedVariant = selectedFacialVariant[pkg.id] || 'Insta Glow';
+              const requiresFacialChoice = pkg.slug?.includes('total-care') || pkg.slug?.includes('just-relax') || pkg.slug?.includes('vlcc') || pkg.id?.includes('vlcc') || pkg.inclusions.some((inc) => (typeof inc === 'string' ? inc.includes('VLCC') : inc.name.includes('VLCC')));
+              const selectedVariant = selectedFacialVariant[pkg.id] || 'VLCC Facial — Glow';
 
               return (
                 <div
@@ -305,23 +307,23 @@ export const PackagesPage: React.FC<Props> = ({
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'Insta Glow' }))}
-                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant === 'Insta Glow'
+                            onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'VLCC Facial — Glow' }))}
+                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant.includes('Glow')
                                 ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                 : 'bg-white text-[#554749] border-[#E8DDD3] hover:border-[#C5A880]'
                               }`}
                           >
-                            VLCC Insta Glow
+                            VLCC Facial — Glow
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'Anti Tan' }))}
-                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant === 'Anti Tan'
+                            onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [pkg.id]: 'VLCC Facial — Anti-Tan' }))}
+                            className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${selectedVariant.includes('Anti-Tan') || selectedVariant.includes('Anti Tan')
                                 ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                 : 'bg-white text-[#554749] border-[#E8DDD3] hover:border-[#C5A880]'
                               }`}
                           >
-                            VLCC Anti-Tan
+                            VLCC Facial — Anti-Tan
                           </button>
                         </div>
                       </div>
@@ -469,6 +471,38 @@ export const PackagesPage: React.FC<Props> = ({
                   })}
                 </ul>
               </div>
+
+              {/* Facial Variant Selector in Modal */}
+              {(activeModalPackage.slug?.includes('total-care') || activeModalPackage.slug?.includes('just-relax') || activeModalPackage.slug?.includes('vlcc') || activeModalPackage.id?.includes('vlcc') || activeModalPackage.inclusions.some((inc) => (typeof inc === 'string' ? inc.includes('VLCC') : inc.name.includes('VLCC')))) && (
+                <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#4A0417] block">
+                    Select Facial Variant:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'VLCC Facial — Glow', label: 'VLCC Facial — Glow' },
+                      { id: 'VLCC Facial — Anti-Tan', label: 'VLCC Facial — Anti-Tan' }
+                    ].map((v) => {
+                      const currentVal = selectedFacialVariant[activeModalPackage.id] || 'VLCC Facial — Glow';
+                      const active = currentVal.includes('Glow') ? v.id.includes('Glow') : v.id.includes('Anti-Tan');
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => setSelectedFacialVariant(prev => ({ ...prev, [activeModalPackage.id]: v.id }))}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            active
+                              ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
+                              : 'bg-white text-[#4A3E3D] border-[#E8DDD3] hover:border-[#C5A880]'
+                          }`}
+                        >
+                          {v.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-[#FFFBF0] border border-[#F3E5AB] space-y-1 text-xs text-[#7A5A1E]">
                 <p className="font-bold text-[#4A0417] flex items-center gap-1.5">

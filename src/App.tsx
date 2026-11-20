@@ -164,11 +164,15 @@ export default function App() {
     showToast(`Package containing ${packageServices.length} services added to bag with bundle discount!`);
   };
 
-  // Customer cancellations & reschedules
+  // Customer cancellations & reschedules (Authenticated with customer token)
   const handleCancelBooking = async (bookingId: string, phone: string, reason: string) => {
+    const token = sessionStorage.getItem('beautydoor_customer_token') || '';
     const res = await fetch('/api/customer/cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ bookingId, phone, reason })
     });
     const data = await res.json();
@@ -180,9 +184,13 @@ export default function App() {
   };
 
   const handleRescheduleBooking = async (bookingId: string, phone: string, newDate: string, newSlot: string) => {
+    const token = sessionStorage.getItem('beautydoor_customer_token') || '';
     const res = await fetch('/api/customer/reschedule', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ bookingId, phone, newDate, newSlot })
     });
     const data = await res.json();
@@ -240,7 +248,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#1F1A1C] flex flex-col selection:bg-[#4A0417] selection:text-white">
-      
+
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1F1A1C] text-[#FAF7F2] px-4 py-3 rounded-xl shadow-lg border border-[#C5A880]/40 text-xs sm:text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-bottom duration-200">
@@ -280,7 +288,7 @@ export default function App() {
 
       {/* 4. Service Catalog Section */}
       <section id="services" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        
+
         {/* Section Title */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div>
@@ -313,11 +321,10 @@ export default function App() {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-4 scrollbar-none border-b border-[#E8DDD3] mb-8 text-xs font-semibold">
           <button
             onClick={() => setActiveCategoryId('all')}
-            className={`px-4 py-2 rounded-md whitespace-nowrap transition-colors ${
-              activeCategoryId === 'all'
-                ? 'bg-[#4A0417] text-white shadow-xs'
-                : 'bg-white text-[#554749] hover:bg-[#F4EFEA] border border-[#E8DDD3]'
-            }`}
+            className={`px-4 py-2 rounded-md whitespace-nowrap transition-colors ${activeCategoryId === 'all'
+              ? 'bg-[#4A0417] text-white shadow-xs'
+              : 'bg-white text-[#554749] hover:bg-[#F4EFEA] border border-[#E8DDD3]'
+              }`}
           >
             All Services ({services.length})
           </button>
@@ -326,11 +333,10 @@ export default function App() {
             <button
               key={cat.id}
               onClick={() => setActiveCategoryId(cat.id)}
-              className={`px-4 py-2 rounded-md whitespace-nowrap transition-colors ${
-                activeCategoryId === cat.id
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#F4EFEA] border border-[#E8DDD3]'
-              }`}
+              className={`px-4 py-2 rounded-md whitespace-nowrap transition-colors ${activeCategoryId === cat.id
+                ? 'bg-[#4A0417] text-white shadow-xs'
+                : 'bg-white text-[#554749] hover:bg-[#F4EFEA] border border-[#E8DDD3]'
+                }`}
             >
               {cat.name}
             </button>

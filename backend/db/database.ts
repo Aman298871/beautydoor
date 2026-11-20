@@ -377,6 +377,8 @@ async function initPostgresSchema(pool: pg.Pool) {
       payment_status VARCHAR(64) NOT NULL DEFAULT 'pending',
       razorpay_order_id VARCHAR(255),
       razorpay_payment_id VARCHAR(255),
+      razorpay_signature VARCHAR(255),
+      razorpay_refund_id VARCHAR(255),
       booking_status VARCHAR(64) NOT NULL DEFAULT 'pending',
       assigned_beautician_id VARCHAR(255),
       internal_notes TEXT,
@@ -592,6 +594,14 @@ async function seedEssentialData() {
   } catch {
     // Column already exists
   }
+
+  // Idempotent migration for razorpay columns in bookings
+  try {
+    await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_signature VARCHAR(255)");
+  } catch {}
+  try {
+    await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_refund_id VARCHAR(255)");
+  } catch {}
 
   // Idempotent creation of booking_notifications audit table for email notifications
   try {

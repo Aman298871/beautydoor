@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { emailService } from '../services/emailService.ts';
+import { razorpayService } from '../services/razorpayService.ts';
+import { requireCustomerAuth } from '../middleware/customerAuthMiddleware.ts';
 
 export const storefrontRouter = Router();
 
@@ -499,11 +501,12 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
       const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
+        const chosenVariantName = it.variantName || it.variantId || null;
         validatedItems.push({
           serviceId: pkg.id,
-          serviceName: it.variantId ? `${pkg.name} (${it.variantId})` : pkg.name,
+          serviceName: chosenVariantName ? `${pkg.name} (${chosenVariantName})` : pkg.name,
           variantId: it.variantId || null,
-          variantName: it.variantId || null,
+          variantName: chosenVariantName,
           addonIds: [],
           addonNames: [],
           unitPrice: pkg.selling_price,
@@ -800,11 +803,12 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
+        const chosenVariantName = it.variantName || it.variantId || null;
         validatedItems.push({
           serviceId: pkg.id,
-          serviceName: it.variantId ? `${pkg.name} (${it.variantId})` : pkg.name,
+          serviceName: chosenVariantName ? `${pkg.name} (${chosenVariantName})` : pkg.name,
           variantId: it.variantId || null,
-          variantName: it.variantId || null,
+          variantName: chosenVariantName,
           addonIds: [],
           addonNames: [],
           unitPrice: pkg.selling_price,
@@ -943,8 +947,9 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     const bookingId = `BD-NCR-${randomSuffix}`;
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
-    const chosenPaymentMethod = paymentMethod === 'RAZORPAY' ? 'RAZORPAY' : 'COD';
-    // Payments start as pending until verified through gateway webhook / signature
+    const isRazorpayEnabled = process.env.ENABLE_RAZORPAY === 'true';
+    const chosenPaymentMethod = (isRazorpayEnabled && paymentMethod === 'RAZORPAY') ? 'RAZORPAY' : 'COD';
+    // Payments start as pending until verified through gateway webhook / signature or collected on doorstep
     const paymentStatus = 'pending';
 
     // Insert booking
@@ -1064,33 +1069,70 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
   }
 });
 
-// 12. Razorpay Online Payment Integration (Compliant with real gateway or test mode)
+// 12. Real Razorpay Online Payment Integration (Compliant with real gateway or test mode)
 const createRazorpayOrderHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { amount, bookingId } = req.body;
-    if (!amount || Number(amount) <= 0) {
-      res.status(400).json({ error: 'Valid payment amount required.' });
+    if (process.env.ENABLE_RAZORPAY !== 'true') {
+      res.status(403).json({
+        error: 'Online payments are temporarily disabled. Please book using Pay After Service (Cash / UPI) at doorstep.',
+        code: 'RAZORPAY_DISABLED'
+      });
       return;
     }
 
-    const keyIdSetting = (await db.queryRow("SELECT value FROM settings WHERE key = 'razorpay_key_id'", [])) as any;
-    const keyId = keyIdSetting?.value || process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder';
-    const amountInPaise = Math.round(Number(amount) * 100);
-    const orderId = `order_BD_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-
-    if (bookingId) {
-      await db.execute('UPDATE bookings SET razorpay_order_id = ? WHERE id = ?', [orderId, bookingId]);
+    const { bookingId } = req.body;
+    if (!bookingId) {
+      res.status(400).json({ error: 'bookingId is required to initialize payment.' });
+      return;
     }
+
+    // Authoritative check: Fetch booking directly from database
+    const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [bookingId])) as any;
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found for payment initialization.' });
+      return;
+    }
+
+    if (booking.booking_status === 'cancelled') {
+      res.status(400).json({ error: 'Cannot create payment order for a cancelled appointment.' });
+      return;
+    }
+
+    if (booking.payment_status === 'verified' || booking.payment_status === 'paid') {
+      res.status(400).json({ error: 'This appointment has already been paid and verified.' });
+      return;
+    }
+
+    // Amount strictly calculated from authoritative booking record (in paise)
+    const amountInPaise = Math.round(Number(booking.total_payable) * 100);
+    if (isNaN(amountInPaise) || amountInPaise <= 0) {
+      res.status(400).json({ error: 'Authoritative booking payable amount must be greater than zero.' });
+      return;
+    }
+
+    const order = await razorpayService.createOrder({
+      bookingId,
+      amountInPaise,
+      currency: 'INR',
+      notes: {
+        bookingId,
+        customerName: booking.customer_name,
+        customerPhone: booking.customer_phone
+      }
+    });
+
+    await db.execute('UPDATE bookings SET razorpay_order_id = ? WHERE id = ?', [order.id, bookingId]);
 
     res.json({
       success: true,
-      orderId,
+      orderId: order.id,
       amount: amountInPaise,
       currency: 'INR',
-      keyId
+      keyId: razorpayService.getKeyId(),
+      bookingId
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to create payment order' });
+    res.status(500).json({ error: err.message || 'Failed to create Razorpay payment order' });
   }
 };
 
@@ -1099,36 +1141,110 @@ storefrontRouter.post('/payment/razorpay/order', createRazorpayOrderHandler);
 
 const verifyRazorpayHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { razorpayOrderId, razorpayPaymentId, bookingId } = req.body;
-
-    if (!razorpayOrderId || !razorpayPaymentId) {
-      res.status(400).json({ error: 'Missing required Razorpay payment verification parameters.' });
+    if (process.env.ENABLE_RAZORPAY !== 'true') {
+      res.status(403).json({
+        error: 'Online payments are temporarily disabled. Please book using Pay After Service (Cash / UPI) at doorstep.',
+        code: 'RAZORPAY_DISABLED'
+      });
       return;
     }
 
-    if (bookingId) {
-      const booking = (await db.queryRow('SELECT id, payment_status FROM bookings WHERE id = ?', [bookingId])) as any;
-      if (!booking) {
-        res.status(404).json({ error: 'Booking not found for payment verification.' });
-        return;
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId } = req.body;
+
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !bookingId) {
+      res.status(400).json({
+        error: 'Missing required payment verification parameters: bookingId, razorpayOrderId, razorpayPaymentId, and razorpaySignature are required.'
+      });
+      return;
+    }
+
+    const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [bookingId])) as any;
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found for payment verification.' });
+      return;
+    }
+
+    // Security Check: Verify that the order ID matches the booking being verified
+    if (booking.razorpay_order_id && booking.razorpay_order_id !== razorpayOrderId) {
+      res.status(400).json({ error: 'Security validation failed: Razorpay Order ID does not match the registered booking order.' });
+      return;
+    }
+
+    // Authoritative Server-Side HMAC-SHA256 Signature Verification
+    const sigCheck = razorpayService.verifyPaymentSignature({
+      orderId: razorpayOrderId,
+      paymentId: razorpayPaymentId,
+      signature: razorpaySignature
+    });
+
+    if (!sigCheck.valid) {
+      res.status(400).json({ error: sigCheck.error || 'Payment signature verification failed. Authentication mismatch.' });
+      return;
+    }
+
+    // Idempotent and Transactional Ledger Update
+    await db.withTransaction(async (client) => {
+      const lockClause = db.isPostgres ? 'FOR UPDATE' : '';
+      const current = (await client.queryRow(`SELECT * FROM bookings WHERE id = ? ${lockClause}`, [bookingId])) as any;
+      if (!current) throw new Error('BOOKING_NOT_FOUND');
+
+      // Prevent duplicate verification & replay attacks
+      if (current.payment_status === 'verified' || current.payment_status === 'paid') {
+        return; // Already verified safely
       }
 
-      await db.execute(`
+      const existingPayment = (await client.queryRow('SELECT id FROM booking_payments WHERE id = ?', [razorpayPaymentId])) as any;
+      if (existingPayment) {
+        return; // Payment already recorded
+      }
+
+      const timestamp = new Date().toISOString();
+      const totalPayable = Number(current.total_payable);
+
+      // Record in booking_payments ledger
+      await client.execute(`
+        INSERT INTO booking_payments (id, booking_id, amount, payment_method, notes, collected_by, created_at)
+        VALUES (?, ?, ?, 'RAZORPAY', ?, 'razorpay_gateway', ?)
+      `, [
+        razorpayPaymentId,
+        bookingId,
+        totalPayable,
+        `Razorpay online payment captured. Order: ${razorpayOrderId}`,
+        timestamp
+      ]);
+
+      const updatedNotes = `${current.internal_notes || ''} | Razorpay online payment of ₹${totalPayable} verified (Payment ID: ${razorpayPaymentId}, Order ID: ${razorpayOrderId}) at ${timestamp}`;
+
+      // Update booking status and balances
+      await client.execute(`
         UPDATE bookings 
         SET payment_status = 'verified', 
             payment_method = 'RAZORPAY',
+            amount_collected = ?,
+            remaining_balance = 0,
             razorpay_order_id = ?,
-            razorpay_payment_id = ?
+            razorpay_payment_id = ?,
+            razorpay_signature = ?,
+            internal_notes = ?
         WHERE id = ?
-      `, [razorpayOrderId, razorpayPaymentId, bookingId]);
+      `, [
+        totalPayable,
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+        updatedNotes,
+        bookingId
+      ]);
+    });
 
-      console.log(`[PAYMENT VERIFIED] Online transaction recorded: Order ${razorpayOrderId}, Payment ${razorpayPaymentId} for Booking ${bookingId}`);
-    }
+    console.log(`[PAYMENT VERIFIED] Real Razorpay signature authenticated: Order ${razorpayOrderId}, Payment ${razorpayPaymentId} for Booking ${bookingId}`);
 
     res.json({
       success: true,
       verified: true,
-      message: 'Online payment successfully verified and recorded.'
+      paymentId: razorpayPaymentId,
+      bookingId,
+      message: 'Razorpay payment successfully verified and recorded in accounting ledger.'
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Payment verification failed' });
@@ -1138,15 +1254,80 @@ const verifyRazorpayHandler = async (req: Request, res: Response): Promise<void>
 storefrontRouter.post('/payments/verify-razorpay', verifyRazorpayHandler);
 storefrontRouter.post('/payment/razorpay/verify', verifyRazorpayHandler);
 
-// 11. Customer Booking Management
-storefrontRouter.get('/bookings/track', async (req: Request, res: Response): Promise<void> => {
+// Razorpay Webhook Endpoint
+const razorpayWebhookHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const phone = req.query.phone as string;
-    if (!phone) {
-      res.status(400).json({ error: 'Customer phone number required.' });
+    if (process.env.ENABLE_RAZORPAY !== 'true') {
+      res.status(403).json({
+        error: 'Online payments are temporarily disabled.',
+        code: 'RAZORPAY_DISABLED'
+      });
       return;
     }
-    const clean = phone.replace(/\D/g, '').slice(-10);
+
+    const signature = req.headers['x-razorpay-signature'] as string;
+    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
+    const sigCheck = razorpayService.verifyWebhookSignature(rawBody, signature);
+    if (!sigCheck.valid) {
+      res.status(400).json({ error: sigCheck.error || 'Invalid webhook signature.' });
+      return;
+    }
+
+    const event = req.body.event;
+    const payload = req.body.payload;
+
+    if (event === 'payment.captured' || event === 'order.paid') {
+      const paymentEntity = payload?.payment?.entity;
+      const orderId = paymentEntity?.order_id || payload?.order?.entity?.id;
+      const paymentId = paymentEntity?.id;
+
+      if (orderId && paymentId) {
+        const booking = (await db.queryRow('SELECT * FROM bookings WHERE razorpay_order_id = ?', [orderId])) as any;
+        if (booking && booking.payment_status !== 'verified' && booking.payment_status !== 'paid') {
+          await db.withTransaction(async (client) => {
+            const timestamp = new Date().toISOString();
+            const total = Number(booking.total_payable);
+
+            await client.execute(`
+              INSERT INTO booking_payments (id, booking_id, amount, payment_method, notes, collected_by, created_at)
+              VALUES (?, ?, ?, 'RAZORPAY', ?, 'razorpay_webhook', ?)
+            `, [paymentId, booking.id, total, `Webhook payment.captured. Order: ${orderId}`, timestamp]);
+
+            await client.execute(`
+              UPDATE bookings 
+              SET payment_status = 'verified', 
+                  payment_method = 'RAZORPAY',
+                  amount_collected = ?,
+                  remaining_balance = 0,
+                  razorpay_payment_id = ?,
+                  internal_notes = internal_notes || ' | Webhook verified ' || ?
+              WHERE id = ?
+            `, [total, paymentId, timestamp, booking.id]);
+          });
+        }
+      }
+    }
+
+    res.json({ status: 'ok' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Webhook processing failed' });
+  }
+};
+
+storefrontRouter.post('/payments/razorpay/webhook', razorpayWebhookHandler);
+storefrontRouter.post('/payment/razorpay/webhook', razorpayWebhookHandler);
+
+// 11. Customer Booking Management (Protected with Firebase / OTP Customer Auth)
+const trackBookingsHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Authenticated phone number derived securely from verified token
+    const customerPhone = req.customer?.phone || (req.query.phone as string);
+    if (!customerPhone) {
+      res.status(401).json({ error: 'Customer authentication required.' });
+      return;
+    }
+    const clean = customerPhone.replace(/\D/g, '').slice(-10);
     const bookings = (await db.query(`
       SELECT * FROM bookings 
       WHERE customer_phone LIKE ? 
@@ -1169,7 +1350,10 @@ storefrontRouter.get('/bookings/track', async (req: Request, res: Response): Pro
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to track bookings' });
   }
-});
+};
+
+storefrontRouter.get('/bookings/track', requireCustomerAuth, trackBookingsHandler);
+storefrontRouter.get('/customer/bookings', requireCustomerAuth, trackBookingsHandler);
 
 // Helper to parse appointment date and slot in India Standard Time (+05:30)
 function parseAppointmentDateTime(dateStr: string, slotStr: string): number | null {
@@ -1220,11 +1404,18 @@ const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> 
     const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : -1;
     const isWithin2Hours = diffMinutes < 120;
     const cancellationFee = isWithin2Hours ? 200 : 0;
-    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
+    
+    // Only verified captured payments qualify as prepaid refundable
+    const isRazorpay = booking.payment_method === 'RAZORPAY';
+    const isVerifiedCaptured = (booking.payment_status === 'verified' || booking.payment_status === 'paid');
+    const amountCollected = Number(booking.amount_collected || 0);
+    const isPrepaid = isRazorpay && isVerifiedCaptured;
 
     let refundableAmount = 0;
-    if (isPrepaid) {
-      refundableAmount = Math.max(0, booking.total_payable - cancellationFee);
+    if (isPrepaid && amountCollected > 0) {
+      refundableAmount = Math.max(0, amountCollected - cancellationFee);
+    } else if (!isRazorpay && amountCollected > 0) {
+      refundableAmount = Math.max(0, amountCollected - cancellationFee);
     }
 
     res.json({
@@ -1236,7 +1427,9 @@ const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> 
       cancellationFee,
       isPrepaid,
       paymentMethod: booking.payment_method,
+      paymentStatus: booking.payment_status,
       totalPayable: booking.total_payable,
+      amountCollected,
       refundableAmount,
       policyNotice: isWithin2Hours
         ? 'Late cancellation policy: You are cancelling less than 2 hours before the appointment. A ₹200 convenience fee applies.'
@@ -1250,7 +1443,7 @@ const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> 
 storefrontRouter.post('/bookings/cancel-preview', cancelPreviewHandler);
 storefrontRouter.post('/customer/cancel-preview', cancelPreviewHandler);
 
-// 2. Cancellation Confirmation (Enforces 2-hour window and handles Prepaid vs COD)
+// 2. Cancellation Confirmation (Enforces 2-hour window and handles Verified Razorpay vs Unpaid vs COD)
 const cancelBookingHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const { bookingId, phone, reason } = req.body;
@@ -1292,33 +1485,98 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
     const isWithin2Hours = diffMinutes < 120;
     const cancellationFee = isWithin2Hours ? 200 : 0;
     const windowBreached = isWithin2Hours ? 1 : 0;
-    const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
+
+    // Strict verified payment state classification:
+    // A booking with payment_method = 'RAZORPAY' is not necessarily paid!
+    const isRazorpay = booking.payment_method === 'RAZORPAY';
+    const isVerifiedCaptured = (booking.payment_status === 'verified' || booking.payment_status === 'paid');
+    const amountCollected = Number(booking.amount_collected || 0);
 
     let refundAmount = 0;
-    let refundStatus = 'not_applicable_cod';
+    let refundStatus = 'not_applicable';
     let paymentStatus = booking.payment_status;
+    let refundType: 'razorpay' | 'cod_cash' | 'none' = 'none';
     let customerMessage = '';
+    let razorpayRefundId: string | null = null;
 
-    if (isPrepaid) {
-      refundAmount = Math.max(0, booking.total_payable - cancellationFee);
-      refundStatus = cancellationFee === 0 ? 'full_refund_pending' : 'partial_refund_pending';
-      paymentStatus = 'refund_pending';
-      customerMessage = cancellationFee === 0
-        ? `Appointment cancelled at least 2 hours before scheduled slot. 100% full refund of ₹${refundAmount} has been initiated to your original payment method (5–7 business days).`
-        : `Appointment cancelled less than 2 hours before scheduled slot. Late convenience fee of ₹200 deducted. Net refund of ₹${refundAmount} has been initiated to your original payment method (5–7 business days).`;
+    if (isRazorpay) {
+      if (!isVerifiedCaptured || amountCollected <= 0) {
+        // Pending or failed online payment: Customer was never charged
+        refundAmount = 0;
+        refundStatus = 'not_applicable';
+        refundType = 'none';
+        paymentStatus = cancellationFee > 0 ? 'cancellation_fee_due_online' : 'cancelled_unpaid';
+        customerMessage = cancellationFee === 0
+          ? 'Online appointment request cancelled before payment was captured. No charge has been made to your bank account.'
+          : 'Online appointment cancelled less than 2 hours before scheduled slot. A late cancellation convenience fee of ₹200 is due on your account.';
+      } else {
+        // Verified captured Razorpay payment
+        refundAmount = Math.max(0, amountCollected - cancellationFee);
+        refundType = 'razorpay';
+        if (refundAmount > 0) {
+          try {
+            const refRes = await razorpayService.initiateRefund({
+              paymentId: booking.razorpay_payment_id || `pay_${booking.id}`,
+              amountInPaise: Math.round(refundAmount * 100),
+              notes: { bookingId: booking.id, reason: reason || 'Customer cancellation' }
+            });
+            if (refRes.success && refRes.refundId) {
+              refundStatus = 'refunded';
+              paymentStatus = 'refunded';
+              razorpayRefundId = refRes.refundId;
+              customerMessage = cancellationFee === 0
+                ? `Appointment cancelled at least 2 hours before scheduled slot. Full refund of ₹${refundAmount} successfully processed to your original payment method (Ref: ${refRes.refundId}).`
+                : `Appointment cancelled less than 2 hours before scheduled slot. Late fee of ₹200 deducted. Net refund of ₹${refundAmount} successfully processed to your original payment method (Ref: ${refRes.refundId}).`;
+            } else {
+              refundStatus = 'razorpay_refund_pending';
+              paymentStatus = 'refund_pending';
+              customerMessage = cancellationFee === 0
+                ? `Appointment cancelled at least 2 hours before scheduled slot. 100% full refund of ₹${refundAmount} has been registered and is pending gateway processing (5–7 business days).`
+                : `Appointment cancelled less than 2 hours before scheduled slot. Late fee of ₹200 deducted. Net refund of ₹${refundAmount} has been registered and is pending gateway processing (5–7 business days).`;
+            }
+          } catch {
+            refundStatus = 'razorpay_refund_pending';
+            paymentStatus = 'refund_pending';
+            customerMessage = `Net refund of ₹${refundAmount} registered and queued for gateway settlement.`;
+          }
+        } else {
+          refundStatus = 'retained_as_cancellation_fee';
+          paymentStatus = 'retained_as_cancellation_fee';
+          customerMessage = 'Appointment cancelled less than 2 hours before slot. Payment retained as cancellation fee.';
+        }
+      }
     } else {
-      // Cash on Delivery: No advance payment was made
-      refundAmount = 0;
-      refundStatus = 'not_applicable_cod';
-      paymentStatus = cancellationFee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
-      customerMessage = cancellationFee === 0
-        ? 'Cash-on-Delivery appointment cancelled at least 2 hours before scheduled slot. No cancellation fee applies.'
-        : 'Cash-on-Delivery appointment cancelled less than 2 hours before scheduled slot. A late cancellation convenience fee of ₹200 is recorded on your account for admin recovery.';
+      // Cash on Delivery
+      if (amountCollected > 0) {
+        refundAmount = Math.max(0, amountCollected - cancellationFee);
+        refundType = 'cod_cash';
+        if (refundAmount > 0) {
+          refundStatus = 'cod_cash_refund_due';
+          paymentStatus = 'cod_cash_refund_pending';
+          customerMessage = `Appointment cancelled. Cash refund of ₹${refundAmount} is due to you from BeautyDoor concierge.`;
+        } else {
+          refundStatus = 'retained_as_cancellation_fee';
+          paymentStatus = 'retained_as_cancellation_fee';
+          customerMessage = 'Doorstep deposit retained as late cancellation fee.';
+        }
+      } else {
+        // COD Unpaid: No payment was made
+        refundAmount = 0;
+        refundStatus = 'not_applicable';
+        refundType = 'none';
+        paymentStatus = cancellationFee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
+        customerMessage = cancellationFee === 0
+          ? 'Cash-on-Delivery appointment cancelled at least 2 hours before scheduled slot. No cancellation fee applies.'
+          : 'Cash-on-Delivery appointment cancelled less than 2 hours before scheduled slot. A late cancellation convenience fee of ₹200 is recorded on your account.';
+      }
     }
 
     const cancelTimestamp = new Date(now).toISOString();
     const cancelReasonClean = reason || 'Client cancellation request';
-    const updatedNotes = `${booking.internal_notes || ''} | Cancelled at ${cancelTimestamp}: ${cancelReasonClean} (Fee: ₹${cancellationFee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid' : 'COD'})`;
+    const paymentDesc = isRazorpay
+      ? (isVerifiedCaptured ? `Razorpay Verified (Captured ₹${amountCollected})` : 'Razorpay Unpaid/Pending')
+      : (amountCollected > 0 ? `COD Collected (Cash ₹${amountCollected})` : 'COD Unpaid');
+    const updatedNotes = `${booking.internal_notes || ''} | Cancelled at ${cancelTimestamp}: ${cancelReasonClean} (Fee: ₹${cancellationFee}, Refund: ₹${refundAmount}, ${paymentDesc})${razorpayRefundId ? ` | Razorpay Refund ID: ${razorpayRefundId}` : ''}`;
 
     await db.execute(`
       UPDATE bookings 
@@ -1330,6 +1588,7 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
           refund_amount = ?,
           refund_status = ?,
           payment_status = ?,
+          razorpay_refund_id = COALESCE(?, razorpay_refund_id),
           internal_notes = ?
       WHERE id = ?
     `, [
@@ -1340,12 +1599,18 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
       refundAmount,
       refundStatus,
       paymentStatus,
+      razorpayRefundId || null,
       updatedNotes,
       bookingId
     ]);
 
     if (booking.customer_email) {
-      emailService.sendBookingCancellationEmail(booking, cancellationFee, refundAmount).catch(err => {
+      emailService.sendBookingCancellationEmail(booking, cancellationFee, refundAmount, {
+        isPrepaid: isRazorpay && isVerifiedCaptured,
+        isCod: !isRazorpay,
+        amountCollected,
+        refundStatus
+      }).catch(err => {
         console.warn('[Email] Storefront cancellation dispatch error:', err.message);
       });
     }
@@ -1359,9 +1624,13 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
       isWithin2Hours,
       minutesBeforeSlot: diffMinutes,
       cancellationFee,
+      fee: cancellationFee,
       refundAmount,
       refundStatus,
+      paymentStatus,
       paymentMethod: booking.payment_method,
+      refundType,
+      razorpayRefundId,
       message: customerMessage
     });
   } catch (err: any) {
@@ -1369,8 +1638,8 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-storefrontRouter.post('/bookings/cancel', cancelBookingHandler);
-storefrontRouter.post('/customer/cancel', cancelBookingHandler);
+storefrontRouter.post('/bookings/cancel', requireCustomerAuth, cancelBookingHandler);
+storefrontRouter.post('/customer/cancel', requireCustomerAuth, cancelBookingHandler);
 
 const rescheduleBookingHandler = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1404,8 +1673,8 @@ const rescheduleBookingHandler = async (req: Request, res: Response): Promise<vo
   }
 };
 
-storefrontRouter.post('/bookings/reschedule', rescheduleBookingHandler);
-storefrontRouter.post('/customer/reschedule', rescheduleBookingHandler);
+storefrontRouter.post('/bookings/reschedule', requireCustomerAuth, rescheduleBookingHandler);
+storefrontRouter.post('/customer/reschedule', requireCustomerAuth, rescheduleBookingHandler);
 
 // 12. Reviews & Customer Feedback (Only Genuine Approved Reviews)
 storefrontRouter.get('/reviews', async (_req: Request, res: Response): Promise<void> => {

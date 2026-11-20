@@ -21,7 +21,12 @@ async function startServer() {
     ? parseInt(process.env.PORT, 10)
     : 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
   app.use(express.urlencoded({ extended: true }));
 
   // Health check endpoint for Render / monitoring

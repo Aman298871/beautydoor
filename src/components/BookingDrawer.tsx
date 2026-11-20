@@ -77,7 +77,7 @@ export const BookingDrawer: React.FC<Props> = ({
   const [couponLoading, setCouponLoading] = useState(false);
 
   // Payment & Submission state
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'razorpay'>('cod');
+  const [paymentMethod] = useState<'cod'>('cod');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -244,13 +244,14 @@ export const BookingDrawer: React.FC<Props> = ({
         isPackage: i.isPackage,
         packageId: i.isPackage ? i.service.id : undefined,
         variantId: i.selectedVariant?.id,
+        variantName: i.selectedVariant?.name || (i.selectedVariant as any)?.variantName,
         addonIds: i.selectedAddons.map(a => a.id),
         customizedServices: (i as any).customizedServices,
         customPackageName: (i as any).customPackageName
       })),
       appointmentDate: selectedDate,
       appointmentSlot: selectedSlot,
-      paymentMethod: paymentMethod === 'razorpay' ? 'RAZORPAY' : 'COD',
+      paymentMethod: 'COD',
       couponCode: appliedCoupon?.code,
       notes: specialNotes
     };
@@ -267,48 +268,6 @@ export const BookingDrawer: React.FC<Props> = ({
         throw new Error(data.error || 'Failed to place booking');
       }
 
-      // If Razorpay online payment was selected, create order securely
-      if (paymentMethod === 'razorpay' && (data.booking?.id || data.bookingId)) {
-        const bId = data.booking?.id || data.bookingId;
-        const amountToPay = data.totalPayable || finalTotal;
-        try {
-          const orderRes = await fetch('/api/storefront/payment/razorpay/order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: amountToPay, bookingId: bId })
-          });
-          const orderData = await orderRes.json();
-          // If live Razorpay checkout is configured on window, launch payment handler;
-          // Otherwise keep payment status as 'pending' to be safely collected via UPI/Cash after service
-          if ((window as any).Razorpay && orderData.keyId && orderData.orderId && !orderData.keyId.includes('placeholder')) {
-            // Live Razorpay options
-            const rzp = new (window as any).Razorpay({
-              key: orderData.keyId,
-              amount: orderData.amount,
-              currency: orderData.currency || 'INR',
-              order_id: orderData.orderId,
-              name: 'BeautyDoor Doorstep Services',
-              description: `Appointment ${bId}`,
-              handler: async (resp: any) => {
-                await fetch('/api/storefront/payment/razorpay/verify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    razorpayOrderId: resp.razorpay_order_id,
-                    razorpayPaymentId: resp.razorpay_payment_id,
-                    razorpaySignature: resp.razorpay_signature,
-                    bookingId: bId
-                  })
-                });
-              }
-            });
-            rzp.open();
-          }
-        } catch (payErr) {
-          console.warn('Online payment initialization notice:', payErr);
-        }
-      }
-
       const confirmedBooking = data.booking || {
         id: data.bookingId,
         customerName,
@@ -316,7 +275,7 @@ export const BookingDrawer: React.FC<Props> = ({
         appointmentDate: selectedDate,
         appointmentSlot: selectedSlot,
         totalPayable: data.totalPayable || finalTotal,
-        paymentMethod: paymentMethod === 'razorpay' ? 'ONLINE' : 'COD',
+        paymentMethod: 'COD',
         paymentStatus: 'pending',
         items: cartItems.map(i => ({ serviceName: i.service.name, finalItemPrice: i.totalItemPrice }))
       };
@@ -937,65 +896,25 @@ export const BookingDrawer: React.FC<Props> = ({
                       )}
                     </div>
 
-                    {/* Payment Method Options */}
+                    {/* Payment Method - Exclusively Cash on Delivery / Pay After Service */}
                     <div className="pt-2 space-y-2">
-                      <label className="text-xs font-semibold text-[#1F1A1C]">Choose Payment Method</label>
-                      
-                      {/* Option 1: Cash on Delivery */}
-                      <div
-                        onClick={() => setPaymentMethod('cod')}
-                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                          paymentMethod === 'cod'
-                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
-                            : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]'
-                        }`}
-                      >
+                      <label className="text-xs font-semibold text-[#1F1A1C]">Payment Method</label>
+                      <div className="p-3.5 rounded-xl border border-[#4A0417] bg-[#FAF7F2] shadow-xs flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            paymentMethod === 'cod' ? 'border-[#4A0417]' : 'border-[#8C7A7C]'
-                          }`}>
-                            {paymentMethod === 'cod' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
+                          <div className="w-4 h-4 rounded-full border-2 border-[#4A0417] flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-[#4A0417]" />
                           </div>
                           <div>
                             <p className="text-xs sm:text-sm font-semibold text-[#1F1A1C]">
                               Cash on Delivery (Pay After Service)
                             </p>
                             <p className="text-[11px] text-[#6B5A5C]">
-                              Pay via Cash or UPI to the specialist after service completion.
+                              Pay via Cash or any UPI QR scan directly to the beautician after your service is completed.
                             </p>
                           </div>
                         </div>
-                        <span className="text-[10px] uppercase font-bold text-[#4A0417] bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#E8DDD3]">
-                          Popular
-                        </span>
-                      </div>
-
-                      {/* Option 2: Online Payment */}
-                      <div
-                        onClick={() => setPaymentMethod('razorpay')}
-                        className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                          paymentMethod === 'razorpay'
-                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
-                            : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            paymentMethod === 'razorpay' ? 'border-[#4A0417]' : 'border-[#8C7A7C]'
-                          }`}>
-                            {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
-                          </div>
-                          <div>
-                            <p className="text-xs sm:text-sm font-semibold text-[#1F1A1C]">
-                              Online Payment (UPI, Credit/Debit Cards, NetBanking)
-                            </p>
-                            <p className="text-[11px] text-[#6B5A5C]">
-                              Instant order confirmation via Razorpay secure checkout.
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-[10px] uppercase font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          Instant
+                        <span className="text-[10px] uppercase font-bold text-[#4A0417] bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#E8DDD3] shrink-0">
+                          Doorstep
                         </span>
                       </div>
                     </div>

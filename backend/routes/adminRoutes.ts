@@ -5,6 +5,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
 import { emailService } from '../services/emailService.ts';
+import { razorpayService } from '../services/razorpayService.ts';
 
 export const adminRouter = Router();
 
@@ -229,28 +230,56 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
   const windowBreached = diffMinutes < 120; // Exactly 120 min is complimentary (>= 2h)
   const fee = windowBreached ? 200 : 0;
 
-  // Accurately classify payment source:
-  // 1. Razorpay Prepaid: Customer paid online via Razorpay gateway
-  // 2. COD Collected: Cash on Delivery where beautician/admin collected cash in full or partially
-  // 3. COD Unpaid: Cash on Delivery where no payment has been made yet
+  // Accurately classify payment source and verification state:
+  // 1. Razorpay: Must verify that payment was actually captured (status 'verified' or 'paid' with collected > 0)
+  //    If payment_status is 'pending' or 'failed', customer never paid: refund is 0, no refund pending.
+  // 2. COD Collected: Cash was actually collected at doorstep in advance
+  // 3. COD Unpaid: Nothing was collected
   const isRazorpay = booking.payment_method === 'RAZORPAY';
+  const isVerifiedCaptured = (booking.payment_status === 'verified' || booking.payment_status === 'paid');
   const amountCollected = Number(booking.amount_collected || (booking.payment_status === 'collected' && !isRazorpay ? booking.total_payable : 0));
 
   let refundAmount = 0;
   let refundStatus = 'not_applicable';
   let paymentStatus = booking.payment_status;
   let refundType: 'razorpay' | 'cod_cash' | 'none' = 'none';
+  let razorpayRefundId: string | null = null;
 
   if (isRazorpay) {
-    const totalPaid = amountCollected > 0 ? amountCollected : Number(booking.total_payable || 0);
-    refundAmount = Math.max(0, totalPaid - fee);
-    refundType = 'razorpay';
-    if (refundAmount > 0) {
-      refundStatus = 'razorpay_refund_pending';
-      paymentStatus = 'refund_pending';
+    if (!isVerifiedCaptured || amountCollected <= 0) {
+      // Unpaid or pending Razorpay booking: Customer was never charged!
+      refundAmount = 0;
+      refundStatus = 'not_applicable';
+      refundType = 'none';
+      paymentStatus = fee > 0 ? 'cancellation_fee_due_online' : 'cancelled_unpaid';
     } else {
-      refundStatus = 'retained_as_cancellation_fee';
-      paymentStatus = 'retained_as_cancellation_fee';
+      // Verified captured Razorpay payment
+      refundAmount = Math.max(0, amountCollected - fee);
+      refundType = 'razorpay';
+      if (refundAmount > 0) {
+        // Attempt automated gateway refund if configured or in test mode
+        try {
+          const refundRes = await razorpayService.initiateRefund({
+            paymentId: booking.razorpay_payment_id || `pay_${booking.id}`,
+            amountInPaise: Math.round(refundAmount * 100),
+            notes: { bookingId: booking.id, reason: reason || 'Admin cancellation' }
+          });
+          if (refundRes.success && refundRes.refundId) {
+            refundStatus = 'refunded';
+            paymentStatus = 'refunded';
+            razorpayRefundId = refundRes.refundId;
+          } else {
+            refundStatus = 'razorpay_refund_pending';
+            paymentStatus = 'refund_pending';
+          }
+        } catch {
+          refundStatus = 'razorpay_refund_pending';
+          paymentStatus = 'refund_pending';
+        }
+      } else {
+        refundStatus = 'retained_as_cancellation_fee';
+        paymentStatus = 'retained_as_cancellation_fee';
+      }
     }
   } else {
     // COD or other offline cash method
@@ -274,8 +303,10 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
   }
 
   const cancelTimestamp = new Date(now).toISOString();
-  const paymentDesc = isRazorpay ? 'Razorpay Prepaid' : (amountCollected > 0 ? `COD Collected (Cash ₹${amountCollected})` : 'COD Unpaid');
-  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${paymentDesc})`;
+  const paymentDesc = isRazorpay 
+    ? (isVerifiedCaptured ? `Razorpay Verified (Captured ₹${amountCollected})` : 'Razorpay Unpaid/Pending') 
+    : (amountCollected > 0 ? `COD Collected (Cash ₹${amountCollected})` : 'COD Unpaid');
+  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${paymentDesc})${razorpayRefundId ? ` | Razorpay Refund ID: ${razorpayRefundId}` : ''}`;
 
   await db.execute(`
     UPDATE bookings
@@ -287,6 +318,7 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
         refund_amount = ?,
         refund_status = ?,
         payment_status = ?,
+        razorpay_refund_id = COALESCE(?, razorpay_refund_id),
         internal_notes = ?
     WHERE id = ?
   `, [
@@ -297,6 +329,7 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     refundAmount,
     refundStatus,
     paymentStatus,
+    razorpayRefundId || null,
     updatedNotes,
     id
   ]);
@@ -308,7 +341,8 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     refund_amount: refundAmount,
     refund_status: refundStatus,
     payment_status: paymentStatus,
-    refund_type: refundType
+    refund_type: refundType,
+    razorpay_refund_id: razorpayRefundId
   }, req.ip);
 
   // Trigger automated cancellation email if customer email exists

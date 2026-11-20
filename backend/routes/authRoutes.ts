@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { db } from '../db/database.ts';
 import { generateAdminToken, requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
 import { smsService } from '../services/smsService.ts';
+import { firebaseAuthService } from '../services/firebaseAuthService.ts';
 
 export const authRouter = Router();
 
@@ -221,10 +222,13 @@ authRouter.post('/customer/otp/verify', (req: Request, res: Response): void => {
     // Invalidate immediately to prevent replay attacks
     otpStore.delete(cleanPhone);
 
+    const token = firebaseAuthService.generateCustomerToken(cleanPhone);
+
     res.json({
       success: true,
       customerId: `cust-${cleanPhone}`,
       phone: `+91 ${cleanPhone}`,
+      token,
       message: 'Mobile number verified successfully.'
     });
   } else {

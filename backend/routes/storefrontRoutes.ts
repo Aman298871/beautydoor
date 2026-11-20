@@ -1033,7 +1033,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     console.log(`[NOTIFICATION DISPATCH] Booking Confirmation SMS & WhatsApp dispatched to +91 ${cleanPhone} for Appointment ID ${bookingId}.`);
 
     if (customerEmail && customerEmail.trim().includes('@')) {
-      emailService.sendBookingConfirmationEmail({
+      emailService.sendBookingReceivedEmail({
         id: bookingId,
         customer_name: customerName,
         customer_phone: `+91 ${cleanPhone}`,
@@ -1046,7 +1046,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         appointment_slot: appointmentSlot,
         payment_method: chosenPaymentMethod,
         total_payable: totalPayable
-      }).catch(err => console.warn('[Email] Storefront booking confirmation error:', err.message));
+      }).catch(err => console.warn('[Email] Storefront booking received dispatch error:', err.message));
     }
 
     res.status(201).json({
@@ -1410,7 +1410,7 @@ storefrontRouter.post('/customer/reschedule', rescheduleBookingHandler);
 // 12. Reviews & Customer Feedback (Only Genuine Approved Reviews)
 storefrontRouter.get('/reviews', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const reviews = await db.query('SELECT * FROM reviews WHERE is_approved = 1 ORDER BY created_at DESC', []);
+    const reviews = await db.query('SELECT * FROM reviews WHERE is_approved = 1 ORDER BY is_featured DESC, display_order ASC, created_at DESC', []);
     res.json({ reviews });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to load reviews' });
@@ -1427,8 +1427,8 @@ storefrontRouter.post('/reviews', async (req: Request, res: Response): Promise<v
 
     const reviewId = `rev-${Date.now()}`;
     await db.execute(`
-      INSERT INTO reviews (id, customer_name, customer_location, rating, comment, service_tag, verified_booking, is_approved, display_order, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, 1, 0, ?)
+      INSERT INTO reviews (id, customer_name, customer_location, rating, comment, service_tag, verified_booking, is_approved, is_featured, display_order, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?)
     `, [
       reviewId,
       customerName,

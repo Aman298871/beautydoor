@@ -811,21 +811,48 @@ export default function AdminApp() {
     }
   };
 
-  // Moderate Review
-  const handleModerateReview = async (id: string, isApproved: boolean) => {
+  // Moderate Review (Approval and Featured toggles)
+  const handleModerateReview = async (id: string, updates: { isApproved?: boolean; isFeatured?: boolean }) => {
     try {
-      await fetch(`/api/admin/reviews/${id}`, {
+      const res = await fetch(`/api/admin/reviews/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ isApproved })
+        body: JSON.stringify(updates)
       });
-      notify('Review moderation status updated.');
-      fetchAdminData();
+      if (res.ok) {
+        notify('Review moderation status updated.');
+        fetchAdminData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify(data.error || 'Failed to update review.');
+      }
     } catch (err) {
       console.error(err);
+      notify('Network error updating review.');
+    }
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this review?')) return;
+    try {
+      const res = await fetch(`/api/admin/reviews/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        notify('Review deleted successfully.');
+        fetchAdminData();
+      } else {
+        notify('Failed to delete review.');
+      }
+    } catch (err) {
+      console.error(err);
+      notify('Network error deleting review.');
     }
   };
 
@@ -2347,31 +2374,61 @@ export default function AdminApp() {
                     <th className="py-3 px-4">Rating</th>
                     <th className="py-3 px-4">Service</th>
                     <th className="py-3 px-4">Comment</th>
-                    <th className="py-3 px-4 text-right">Moderation</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Featured</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F4EFEA]">
                   {reviews.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-[#8C7A7C] italic">
+                      <td colSpan={7} className="py-8 text-center text-[#8C7A7C] italic">
                         No submitted customer reviews awaiting moderation.
                       </td>
                     </tr>
                   ) : (
                     reviews.map((r) => (
                       <tr key={r.id} className="hover:bg-[#FAF7F2]">
-                        <td className="py-3 px-4 font-semibold text-[#1F1A1C]">{r.customer_name}</td>
-                        <td className="py-3 px-4 text-amber-600 font-bold">★ {r.rating}</td>
-                        <td className="py-3 px-4 text-[#554749]">{r.service_name}</td>
-                        <td className="py-3 px-4 text-[#554749] max-w-sm italic truncate">“{r.comment}”</td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 font-semibold text-[#1F1A1C]">
+                          {r.customer_name}
+                          {r.customer_location && (
+                            <span className="block text-[10px] text-[#8C7A7C] font-normal">{r.customer_location}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-amber-600 font-bold whitespace-nowrap">★ {r.rating} / 5</td>
+                        <td className="py-3 px-4 text-[#554749]">{r.service_tag || r.service_name || 'General Service'}</td>
+                        <td className="py-3 px-4 text-[#554749] max-w-xs italic truncate">“{r.comment}”</td>
+                        <td className="py-3 px-4 text-center">
                           <button
-                            onClick={() => handleModerateReview(r.id, r.is_approved === 1 ? false : true)}
-                            className={`px-3 py-1 rounded text-[11px] font-semibold ${
-                              r.is_approved === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-600'
+                            onClick={() => handleModerateReview(r.id, { isApproved: r.is_approved === 1 ? false : true })}
+                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                              r.is_approved === 1 
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100' 
+                                : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
                             }`}
                           >
                             {r.is_approved === 1 ? 'Approved' : 'Pending Approval'}
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleModerateReview(r.id, { isFeatured: r.is_featured === 1 ? false : true })}
+                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                              r.is_featured === 1 
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold hover:bg-amber-200' 
+                                : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                            }`}
+                          >
+                            {r.is_featured === 1 ? '⭐ Featured' : 'Normal'}
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleDeleteReview(r.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete Review"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>

@@ -63,6 +63,12 @@ function toPgQuery(sql: string): string {
   return sql.replace(/\?/g, () => `$${paramIndex++}`);
 }
 
+export interface TransactionClient {
+  query: <T = any>(sql: string, params?: any[]) => Promise<T[]>;
+  queryRow: <T = any>(sql: string, params?: any[]) => Promise<T | undefined>;
+  execute: (sql: string, params?: any[]) => Promise<{ rowCount: number }>;
+}
+
 /**
  * Universal Database Wrapper for PostgreSQL
  */
@@ -107,17 +113,36 @@ export class DatabaseWrapper {
   }
 
   /**
-   * Transaction execution helper for PostgreSQL
+   * Atomic transaction execution helper with query/queryRow/execute helpers
    */
-  async withTransaction<T>(callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+  async withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T> {
     const client = await pgPool.connect();
     try {
       await client.query('BEGIN');
-      const result = await callback(client);
+      const tx: TransactionClient = {
+        query: async <R = any>(sql: string, params: any[] = []): Promise<R[]> => {
+          const pgSql = toPgQuery(sql);
+          const res = await client.query(pgSql, params);
+          return res.rows as R[];
+        },
+        queryRow: async <R = any>(sql: string, params: any[] = []): Promise<R | undefined> => {
+          const pgSql = toPgQuery(sql);
+          const res = await client.query(pgSql, params);
+          return (res.rows[0] as R) || undefined;
+        },
+        execute: async (sql: string, params: any[] = []): Promise<{ rowCount: number }> => {
+          const pgSql = toPgQuery(sql);
+          const res = await client.query(pgSql, params);
+          return { rowCount: res.rowCount || 0 };
+        }
+      };
+      const result = await callback(tx);
       await client.query('COMMIT');
       return result;
     } catch (e) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch { }
       throw e;
     } finally {
       client.release();
@@ -387,6 +412,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       service_tag VARCHAR(128) NOT NULL,
       verified_booking INTEGER NOT NULL DEFAULT 1,
       is_approved INTEGER NOT NULL DEFAULT 1,
+      is_featured INTEGER NOT NULL DEFAULT 0,
       display_order INTEGER NOT NULL DEFAULT 0,
       created_at VARCHAR(64) NOT NULL
     );
@@ -556,6 +582,13 @@ async function seedEssentialData() {
   }
   try {
     await db.execute("ALTER TABLE packages ADD COLUMN image_url VARCHAR(255)");
+  } catch {
+    // Column already exists
+  }
+
+  // Idempotent migration for is_featured in reviews
+  try {
+    await db.execute("ALTER TABLE reviews ADD COLUMN is_featured INTEGER NOT NULL DEFAULT 0");
   } catch {
     // Column already exists
   }

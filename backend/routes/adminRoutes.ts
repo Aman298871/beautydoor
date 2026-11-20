@@ -120,6 +120,7 @@ adminRouter.patch('/bookings/:id/assign', async (req: Request, res: Response): P
     }
   }
 
+  const previousStatus = booking.booking_status;
   const newStatus = beauticianId ? 'assigned' : 'confirmed';
   const updatedNotes = notes 
     ? `${booking.internal_notes || ''} | Dispatch [${adminUser}]: ${notes}`
@@ -135,8 +136,12 @@ adminRouter.patch('/bookings/:id/assign', async (req: Request, res: Response): P
 
   recordAuditLog(adminUser, 'DISPATCH_ASSIGN', 'BOOKING', id, { beauticianId, newStatus }, req.ip);
 
-  if (booking && (newStatus === 'assigned' || newStatus === 'confirmed') && booking.customer_email) {
-    emailService.sendBookingConfirmationEmail(booking).catch(err => console.warn('[Email] Assign dispatch error:', err.message));
+  // Send confirmation email ONLY if booking was not already confirmed or assigned
+  if (booking && booking.customer_email && previousStatus !== 'confirmed' && previousStatus !== 'assigned') {
+    const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+    if (updated) {
+      emailService.sendBookingConfirmationEmail(updated).catch(err => console.warn('[Email] Assign dispatch error:', err.message));
+    }
   }
 
   res.json({ success: true, message: `Beautician successfully assigned. Booking is now ${newStatus}.` });
@@ -146,6 +151,12 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
   const { id } = req.params;
   const { bookingStatus, paymentStatus, notes } = req.body;
   const adminUser = req.adminUser?.username || 'admin';
+
+  const previousBooking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (!previousBooking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
 
   (await db.execute(`
     UPDATE bookings 
@@ -157,7 +168,10 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
 
   recordAuditLog(adminUser, 'UPDATE_BOOKING_STATUS', 'BOOKING', id, { bookingStatus, paymentStatus }, req.ip);
 
-  if (bookingStatus === 'confirmed' || bookingStatus === 'assigned') {
+  // Send confirmation email ONLY when transitioning to confirmed/assigned from an unconfirmed status
+  if ((bookingStatus === 'confirmed' || bookingStatus === 'assigned') && 
+      previousBooking.booking_status !== 'confirmed' && 
+      previousBooking.booking_status !== 'assigned') {
     const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
     if (updated && updated.customer_email) {
       emailService.sendBookingConfirmationEmail(updated).catch(err => console.warn('[Email] Status dispatch error:', err.message));
@@ -215,27 +229,53 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
   const windowBreached = diffMinutes < 120; // Exactly 120 min is complimentary (>= 2h)
   const fee = windowBreached ? 200 : 0;
 
-  const isPrepaid = booking.payment_method === 'RAZORPAY' || booking.payment_status === 'verified' || booking.payment_status === 'paid' || booking.payment_status === 'collected';
-  const refundAmount = isPrepaid ? Math.max(0, booking.total_payable - fee) : 0;
-  
+  // Accurately classify payment source:
+  // 1. Razorpay Prepaid: Customer paid online via Razorpay gateway
+  // 2. COD Collected: Cash on Delivery where beautician/admin collected cash in full or partially
+  // 3. COD Unpaid: Cash on Delivery where no payment has been made yet
+  const isRazorpay = booking.payment_method === 'RAZORPAY';
+  const amountCollected = Number(booking.amount_collected || (booking.payment_status === 'collected' && !isRazorpay ? booking.total_payable : 0));
+
+  let refundAmount = 0;
   let refundStatus = 'not_applicable';
   let paymentStatus = booking.payment_status;
+  let refundType: 'razorpay' | 'cod_cash' | 'none' = 'none';
 
-  if (isPrepaid) {
+  if (isRazorpay) {
+    const totalPaid = amountCollected > 0 ? amountCollected : Number(booking.total_payable || 0);
+    refundAmount = Math.max(0, totalPaid - fee);
+    refundType = 'razorpay';
     if (refundAmount > 0) {
-      refundStatus = 'refund_pending_approval';
+      refundStatus = 'razorpay_refund_pending';
       paymentStatus = 'refund_pending';
     } else {
-      refundStatus = 'not_applicable';
+      refundStatus = 'retained_as_cancellation_fee';
       paymentStatus = 'retained_as_cancellation_fee';
     }
   } else {
-    refundStatus = 'not_applicable';
-    paymentStatus = fee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
+    // COD or other offline cash method
+    if (amountCollected > 0) {
+      refundAmount = Math.max(0, amountCollected - fee);
+      refundType = 'cod_cash';
+      if (refundAmount > 0) {
+        refundStatus = 'cod_cash_refund_due';
+        paymentStatus = 'cod_cash_refund_pending';
+      } else {
+        refundStatus = 'retained_as_cancellation_fee';
+        paymentStatus = 'retained_as_cancellation_fee';
+      }
+    } else {
+      // COD Unpaid: Nothing was collected
+      refundAmount = 0;
+      refundStatus = 'not_applicable';
+      refundType = 'none';
+      paymentStatus = fee > 0 ? 'cancellation_fee_due_cod' : 'cancelled_cod';
+    }
   }
 
   const cancelTimestamp = new Date(now).toISOString();
-  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${isPrepaid ? 'Prepaid/Collected' : 'COD'})`;
+  const paymentDesc = isRazorpay ? 'Razorpay Prepaid' : (amountCollected > 0 ? `COD Collected (Cash ₹${amountCollected})` : 'COD Unpaid');
+  const updatedNotes = `${booking.internal_notes || ''} | Cancelled by [${adminUser}] at ${cancelTimestamp}: ${reason || 'Admin cancellation'} (Fee: ₹${fee}, Refund: ₹${refundAmount}, ${paymentDesc})`;
 
   await db.execute(`
     UPDATE bookings
@@ -267,12 +307,18 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     window_breached: windowBreached,
     refund_amount: refundAmount,
     refund_status: refundStatus,
-    payment_status: paymentStatus
+    payment_status: paymentStatus,
+    refund_type: refundType
   }, req.ip);
 
   // Trigger automated cancellation email if customer email exists
   if (booking.customer_email) {
-    emailService.sendBookingCancellationEmail(booking, fee, refundAmount).catch(err => {
+    emailService.sendBookingCancellationEmail(booking, fee, refundAmount, {
+      isPrepaid: isRazorpay,
+      isCod: !isRazorpay,
+      amountCollected,
+      refundStatus
+    }).catch(err => {
       console.warn('[Email] Cancellation dispatch error:', err.message);
     });
   }
@@ -285,7 +331,8 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     windowBreached,
     refundAmount,
     refundStatus,
-    paymentStatus
+    paymentStatus,
+    refundType
   });
 });
 
@@ -295,17 +342,6 @@ adminRouter.post('/bookings/:id/collect-payment', async (req: Request, res: Resp
   const { paymentMethod, amountPaid, notes } = req.body;
   const adminUser = req.adminUser?.username || 'admin';
 
-  const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
-  if (!booking) {
-    res.status(404).json({ error: 'Booking not found.' });
-    return;
-  }
-
-  if (booking.booking_status === 'cancelled') {
-    res.status(400).json({ error: 'Cannot collect payment on a cancelled booking.' });
-    return;
-  }
-
   const rawMethod = (paymentMethod || 'Cash').toString().trim();
   const normalizedMethod = rawMethod.charAt(0).toUpperCase() + rawMethod.slice(1).toLowerCase();
   if (!['Cash', 'Upi', 'Card'].includes(normalizedMethod)) {
@@ -314,67 +350,118 @@ adminRouter.post('/bookings/:id/collect-payment', async (req: Request, res: Resp
   }
   const method = normalizedMethod === 'Upi' ? 'UPI' : normalizedMethod;
 
-  const currentCollected = Number(booking.amount_collected || (booking.payment_status === 'collected' ? booking.total_payable : 0));
-  const currentRemaining = booking.remaining_balance !== null && booking.remaining_balance !== undefined
-    ? Number(booking.remaining_balance)
-    : Math.max(0, booking.total_payable - currentCollected);
+  try {
+    const result = await db.withTransaction(async (client) => {
+      const lockClause = db.isPostgres ? 'FOR UPDATE' : '';
+      const booking = (await client.queryRow(`SELECT * FROM bookings WHERE id = ? ${lockClause}`, [id])) as any;
+      if (!booking) {
+        throw new Error('BOOKING_NOT_FOUND');
+      }
 
-  if (currentRemaining <= 0) {
-    res.status(400).json({ error: 'This booking has already been fully paid and collected.' });
-    return;
+      if (booking.booking_status === 'cancelled') {
+        throw new Error('CANNOT_COLLECT_CANCELLED');
+      }
+
+      // Query authoritative sum of previous payments from booking_payments
+      const sumRow = (await client.queryRow(
+        'SELECT COALESCE(SUM(amount), 0) AS total_paid FROM booking_payments WHERE booking_id = ?',
+        [id]
+      )) as any;
+      const priorCollected = Number(sumRow?.total_paid || 0);
+      const totalPayable = Number(booking.total_payable || 0);
+      const currentRemaining = Math.max(0, totalPayable - priorCollected);
+
+      if (currentRemaining <= 0) {
+        throw new Error('ALREADY_FULLY_PAID');
+      }
+
+      const amountToCollect = amountPaid !== undefined ? Math.round(Number(amountPaid)) : currentRemaining;
+      if (isNaN(amountToCollect) || amountToCollect <= 0) {
+        throw new Error('INVALID_AMOUNT');
+      }
+
+      if (amountToCollect > currentRemaining) {
+        throw new Error(`EXCESSIVE_AMOUNT:${amountToCollect}:${currentRemaining}`);
+      }
+
+      const timestamp = new Date().toISOString();
+      const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+      await client.execute(`
+        INSERT INTO booking_payments (id, booking_id, amount, payment_method, notes, collected_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [paymentId, id, amountToCollect, method, notes || null, adminUser, timestamp]);
+
+      // Re-sum authoritative total from booking_payments
+      const afterSumRow = (await client.queryRow(
+        'SELECT COALESCE(SUM(amount), 0) AS total_paid FROM booking_payments WHERE booking_id = ?',
+        [id]
+      )) as any;
+      const newCollected = Number(afterSumRow?.total_paid || (priorCollected + amountToCollect));
+      const newRemaining = Math.max(0, totalPayable - newCollected);
+      const newPaymentStatus = newRemaining === 0 ? 'collected' : 'partially_collected';
+
+      const updatedNotes = `${booking.internal_notes || ''} | Payment of ₹${amountToCollect} collected via ${method} by [${adminUser}] at ${timestamp}${notes ? `: ${notes}` : ''}`;
+
+      await client.execute(`
+        UPDATE bookings
+        SET amount_collected = ?,
+            remaining_balance = ?,
+            payment_status = ?,
+            internal_notes = ?
+        WHERE id = ?
+      `, [newCollected, newRemaining, newPaymentStatus, updatedNotes, id]);
+
+      return {
+        paymentId,
+        amountToCollect,
+        newCollected,
+        newRemaining,
+        newPaymentStatus
+      };
+    });
+
+    recordAuditLog(adminUser, 'COLLECT_PAYMENT', 'BOOKING', id, {
+      paymentId: result.paymentId,
+      method,
+      amount: result.amountToCollect,
+      amount_collected: result.newCollected,
+      remaining_balance: result.newRemaining,
+      payment_status: result.newPaymentStatus
+    }, req.ip);
+
+    res.json({
+      success: true,
+      message: `Payment of ₹${result.amountToCollect} successfully recorded via ${method}. Outstanding balance: ₹${result.newRemaining}.`,
+      paymentId: result.paymentId,
+      amountCollected: result.newCollected,
+      remainingBalance: result.newRemaining,
+      paymentStatus: result.newPaymentStatus
+    });
+  } catch (err: any) {
+    if (err.message === 'BOOKING_NOT_FOUND') {
+      res.status(404).json({ error: 'Booking not found.' });
+      return;
+    }
+    if (err.message === 'CANNOT_COLLECT_CANCELLED') {
+      res.status(400).json({ error: 'Cannot collect payment on a cancelled booking.' });
+      return;
+    }
+    if (err.message === 'ALREADY_FULLY_PAID') {
+      res.status(400).json({ error: 'This booking has already been fully paid and collected.' });
+      return;
+    }
+    if (err.message === 'INVALID_AMOUNT') {
+      res.status(400).json({ error: 'Payment amount must be a positive number greater than zero.' });
+      return;
+    }
+    if (err.message?.startsWith('EXCESSIVE_AMOUNT:')) {
+      const parts = err.message.split(':');
+      res.status(400).json({ error: `Cannot collect ₹${parts[1]}. Outstanding balance is only ₹${parts[2]}.` });
+      return;
+    }
+    res.status(500).json({ error: err.message || 'Payment collection transaction failed.' });
   }
-
-  const amountToCollect = amountPaid !== undefined ? Math.round(Number(amountPaid)) : currentRemaining;
-  if (isNaN(amountToCollect) || amountToCollect <= 0) {
-    res.status(400).json({ error: 'Payment amount must be a positive number greater than zero.' });
-    return;
-  }
-
-  if (amountToCollect > currentRemaining) {
-    res.status(400).json({ error: `Cannot collect ₹${amountToCollect}. Outstanding balance is only ₹${currentRemaining}.` });
-    return;
-  }
-
-  const newCollected = currentCollected + amountToCollect;
-  const newRemaining = Math.max(0, booking.total_payable - newCollected);
-  const newPaymentStatus = newRemaining === 0 ? 'collected' : 'partially_collected';
-
-  const timestamp = new Date().toISOString();
-  const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-  await db.execute(`
-    INSERT INTO booking_payments (id, booking_id, amount, payment_method, notes, collected_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [paymentId, id, amountToCollect, method, notes || null, adminUser, timestamp]);
-
-  const updatedNotes = `${booking.internal_notes || ''} | Payment of ₹${amountToCollect} collected via ${method} by [${adminUser}] at ${timestamp}${notes ? `: ${notes}` : ''}`;
-
-  await db.execute(`
-    UPDATE bookings
-    SET amount_collected = ?,
-        remaining_balance = ?,
-        payment_status = ?,
-        internal_notes = ?
-    WHERE id = ?
-  `, [newCollected, newRemaining, newPaymentStatus, updatedNotes, id]);
-
-  recordAuditLog(adminUser, 'COLLECT_PAYMENT', 'BOOKING', id, {
-    paymentId,
-    method,
-    amount: amountToCollect,
-    amount_collected: newCollected,
-    remaining_balance: newRemaining,
-    payment_status: newPaymentStatus
-  }, req.ip);
-
-  res.json({
-    success: true,
-    message: `Payment of ₹${amountToCollect} successfully recorded via ${method}. Outstanding balance: ₹${newRemaining}.`,
-    paymentId,
-    amountCollected: newCollected,
-    remainingBalance: newRemaining,
-    paymentStatus: newPaymentStatus
-  });
 });
 
 adminRouter.get('/bookings/:id/payments', async (req: Request, res: Response): Promise<void> => {
@@ -1136,6 +1223,15 @@ adminRouter.patch('/reviews/:id', async (req: Request, res: Response): Promise<v
 
   recordAuditLog(adminUser, 'MODERATE_REVIEW', 'FEEDBACK', id, { isApproved, isFeatured }, req.ip);
   res.json({ success: true });
+});
+
+adminRouter.delete('/reviews/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute('DELETE FROM reviews WHERE id = ?', [id]);
+  recordAuditLog(adminUser, 'DELETE_REVIEW', 'FEEDBACK', id, {}, req.ip);
+  res.json({ success: true, message: `Review ${id} deleted.` });
 });
 
 // 9. Audit Logs

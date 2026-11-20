@@ -76,7 +76,7 @@ export const HowItWorksPage: React.FC = () => {
           <div className="space-y-1 text-center sm:text-left">
             <h3 className="text-xl font-serif font-bold">Ready to Experience BeautyDoor?</h3>
             <p className="text-xs text-[#E8DDD3] font-light">
-              Book online today with code BEAUTYFIRST for flat ₹200 savings.
+              Book online today with code BEAUTYFIRST for flat ₹100 savings on orders of ₹1,100 or more.
             </p>
           </div>
 

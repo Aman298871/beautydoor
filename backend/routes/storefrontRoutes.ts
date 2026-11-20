@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
+import { emailService } from '../services/emailService.ts';
 
 export const storefrontRouter = Router();
 
@@ -570,7 +571,7 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
     if (couponCode && typeof couponCode === 'string') {
       const cleanCode = couponCode.trim().toUpperCase();
       const todayDateStr = new Date().toISOString().split('T')[0];
-      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [cleanCode, todayDateStr])) as any;
+      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND (expires_at IS NULL OR SUBSTR(expires_at, 1, 10) >= ?)', [cleanCode, todayDateStr])) as any;
       if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
@@ -716,6 +717,11 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     if (!customerName || !customerPhone || !address?.flat || !items?.length || !appointmentDate || !appointmentSlot) {
       res.status(400).json({ error: 'All appointment details, service address, and contact information are required.' });
+      return;
+    }
+
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      res.status(400).json({ error: 'Please provide a valid email address.' });
       return;
     }
 
@@ -906,7 +912,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     let validCoupon: string | null = null;
     if (couponCode && typeof couponCode === 'string') {
       const todayDateStr = new Date().toISOString().split('T')[0];
-      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND expires_at >= ?', [couponCode.trim().toUpperCase(), todayDateStr])) as any;
+      const cp = (await db.queryRow('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND (expires_at IS NULL OR SUBSTR(expires_at, 1, 10) >= ?)', [couponCode.trim().toUpperCase(), todayDateStr])) as any;
       if (cp && subtotal >= cp.min_order_amount) {
         if (cp.discount_type === 'percentage') {
           const raw = Math.round((amountAfterPackage * cp.discount_value) / 100);
@@ -1025,6 +1031,23 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     };
 
     console.log(`[NOTIFICATION DISPATCH] Booking Confirmation SMS & WhatsApp dispatched to +91 ${cleanPhone} for Appointment ID ${bookingId}.`);
+
+    if (customerEmail && customerEmail.trim().includes('@')) {
+      emailService.sendBookingConfirmationEmail({
+        id: bookingId,
+        customer_name: customerName,
+        customer_phone: `+91 ${cleanPhone}`,
+        customer_email: customerEmail.trim(),
+        flat: address.flat,
+        area: address.area || address.locality || territory?.area_name || 'Delhi NCR',
+        city: address.city || territory?.city || 'Delhi',
+        pincode: cleanPin,
+        appointment_date: appointmentDate,
+        appointment_slot: appointmentSlot,
+        payment_method: chosenPaymentMethod,
+        total_payable: totalPayable
+      }).catch(err => console.warn('[Email] Storefront booking confirmation error:', err.message));
+    }
 
     res.status(201).json({
       success: true,
@@ -1321,6 +1344,12 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
       bookingId
     ]);
 
+    if (booking.customer_email) {
+      emailService.sendBookingCancellationEmail(booking, cancellationFee, refundAmount).catch(err => {
+        console.warn('[Email] Storefront cancellation dispatch error:', err.message);
+      });
+    }
+
     res.json({
       success: true,
       bookingId,
@@ -1431,10 +1460,10 @@ storefrontRouter.get('/faqs', async (_req: Request, res: Response): Promise<void
 // Active Customer Coupons for storefront Offers & Cart pages
 storefrontRouter.get('/coupons', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const now = new Date().toISOString();
+    const todayDateStr = new Date().toISOString().split('T')[0];
     const coupons = await db.query(
-      'SELECT id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, description FROM coupons WHERE is_active = 1 AND expires_at >= ? ORDER BY min_order_amount ASC',
-      [now]
+      'SELECT id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, description FROM coupons WHERE is_active = 1 AND (expires_at IS NULL OR SUBSTR(expires_at, 1, 10) >= ?) ORDER BY min_order_amount ASC',
+      [todayDateStr]
     );
     res.json({ coupons });
   } catch (err: any) {

@@ -24,6 +24,7 @@ interface PackageItem {
   inclusions: (string | PackageInclusion)[];
   benefits?: string[];
   badge?: string;
+  image_url?: string;
   vlcc_facial_variant?: string;
 }
 
@@ -208,9 +209,22 @@ export const PackagesPage: React.FC<Props> = ({
                   key={pkg.id}
                   className="bg-white rounded-2xl border border-[#E8DDD3] hover:border-[#C5A880] p-6 flex flex-col justify-between transition-all hover:shadow-lg relative overflow-hidden"
                 >
+                  {/* Package Promotional Poster Banner if available */}
+                  {pkg.image_url && (
+                    <div className="mb-4 -mx-6 -mt-6 h-56 sm:h-64 overflow-hidden relative border-b border-[#E8DDD3]">
+                      <img
+                        src={pkg.image_url}
+                        alt={pkg.name}
+                        className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+                    </div>
+                  )}
+
                   {/* Decorative Corner Badge */}
                   {pkg.badge && (
-                    <div className="absolute top-0 right-0 bg-[#4A0417] text-[#FAF7F2] text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-bl-lg shadow-xs">
+                    <div className="absolute top-0 right-0 bg-[#4A0417] text-[#FAF7F2] text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-bl-lg shadow-xs z-10">
                       {pkg.badge}
                     </div>
                   )}

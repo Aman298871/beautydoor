@@ -155,6 +155,15 @@ export default function AdminApp() {
 
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
+  // Payment Collection Modal State
+  const [collectingPaymentBooking, setCollectingPaymentBooking] = useState<any | null>(null);
+  const [collectPaymentMethod, setCollectPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
+  const [collectPaymentAmount, setCollectPaymentAmount] = useState<string>('');
+  const [collectPaymentNotes, setCollectPaymentNotes] = useState<string>('');
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [loadingPaymentHistory, setLoadingPaymentHistory] = useState<boolean>(false);
+  const [collectPaymentSubmitting, setCollectPaymentSubmitting] = useState<boolean>(false);
+
   const notify = (msg: string) => {
     setNotificationMsg(msg);
     setTimeout(() => setNotificationMsg(null), 3500);
@@ -530,7 +539,8 @@ export default function AdminApp() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to cancel booking');
-      notify(`Booking ${cancellingBooking.id} cancelled. ${data.fee ? `Fee ₹${data.fee} applied.` : 'Free cancellation applied.'}`);
+      const feeApplied = data.cancellationFee !== undefined ? data.cancellationFee : data.fee;
+      notify(`Booking ${cancellingBooking.id} cancelled. ${feeApplied ? `Fee ₹${feeApplied} applied.` : 'Free cancellation applied.'}`);
       setCancellingBooking(null);
       fetchAdminData();
     } catch (err: any) {
@@ -538,22 +548,67 @@ export default function AdminApp() {
     }
   };
 
-  const handleRecordPaymentCollection = async (bookingId: string) => {
-    const method = window.prompt('Enter collection method (cash, upi, card):', 'cash');
-    if (!method) return;
+  const openPaymentCollectionModal = async (booking: any) => {
+    setCollectingPaymentBooking(booking);
+    const remaining = booking.remaining_balance !== undefined && booking.remaining_balance !== null
+      ? Number(booking.remaining_balance)
+      : Math.max(0, booking.total_payable - (booking.amount_collected || 0));
+    setCollectPaymentAmount(String(remaining));
+    setCollectPaymentMethod('Cash');
+    setCollectPaymentNotes('');
+    setPaymentHistory([]);
+    setLoadingPaymentHistory(true);
     try {
-      const res = await fetch(`/api/admin/bookings/${bookingId}/collect-payment`, {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.payments)) {
+        setPaymentHistory(data.payments);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingPaymentHistory(false);
+    }
+  };
+
+  const handleSubmitCollectPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!collectingPaymentBooking) return;
+    const amountNum = parseFloat(collectPaymentAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      notify('Please enter a valid payment amount greater than zero.');
+      return;
+    }
+    const remaining = collectingPaymentBooking.remaining_balance !== undefined && collectingPaymentBooking.remaining_balance !== null
+      ? Number(collectingPaymentBooking.remaining_balance)
+      : Math.max(0, collectingPaymentBooking.total_payable - (collectingPaymentBooking.amount_collected || 0));
+    if (amountNum > remaining) {
+      notify(`Cannot collect more than the remaining balance of ₹${remaining}.`);
+      return;
+    }
+    setCollectPaymentSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${collectingPaymentBooking.id}/collect-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ paymentMethod: method.toLowerCase() })
+        body: JSON.stringify({
+          paymentMethod: collectPaymentMethod,
+          amountPaid: amountNum,
+          notes: collectPaymentNotes.trim() || undefined
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to record payment');
-      notify(`Payment collection recorded for booking ${bookingId}.`);
+      notify(data.message || `Payment of ₹${amountNum} recorded successfully.`);
+      setCollectingPaymentBooking(null);
       setSelectedBookingForDispatch(null);
       fetchAdminData();
     } catch (err: any) {
       notify(err.message);
+    } finally {
+      setCollectPaymentSubmitting(false);
     }
   };
 
@@ -3231,10 +3286,10 @@ export default function AdminApp() {
                 </button>
                 {selectedBookingForDispatch.payment_status !== 'collected' && selectedBookingForDispatch.booking_status !== 'cancelled' && (
                   <button
-                    onClick={() => handleRecordPaymentCollection(selectedBookingForDispatch.id)}
+                    onClick={() => openPaymentCollectionModal(selectedBookingForDispatch)}
                     className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded text-xs font-semibold hover:bg-purple-100"
                   >
-                    Record Payment (₹{selectedBookingForDispatch.total_payable})
+                    Collect Payment (₹{selectedBookingForDispatch.remaining_balance !== undefined && selectedBookingForDispatch.remaining_balance !== null ? selectedBookingForDispatch.remaining_balance : selectedBookingForDispatch.total_payable})
                   </button>
                 )}
                 {selectedBookingForDispatch.booking_status !== 'cancelled' && (
@@ -4681,6 +4736,155 @@ export default function AdminApp() {
                   className="px-5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded font-semibold"
                 >
                   Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* COLLECT PAYMENT MODAL (Ledger & Partial Payment Support) */}
+      {collectingPaymentBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  ₹
+                </div>
+                <div>
+                  <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                    Collect Payment
+                  </h4>
+                  <p className="text-xs text-[#7A6B6D]">Booking Ref: <span className="font-mono font-bold text-[#4A0417]">{collectingPaymentBooking.id}</span></p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCollectingPaymentBooking(null)}
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Financial Summary Card */}
+            <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E8DDD3] text-xs space-y-2">
+              <div className="flex justify-between text-[#5C4D4F]">
+                <span>Customer:</span>
+                <span className="font-semibold text-[#1F1A1C]">{collectingPaymentBooking.customer_name} ({collectingPaymentBooking.customer_phone})</span>
+              </div>
+              <div className="flex justify-between text-[#5C4D4F]">
+                <span>Appointment:</span>
+                <span className="font-semibold text-[#1F1A1C]">{collectingPaymentBooking.appointment_date} · {collectingPaymentBooking.appointment_slot}</span>
+              </div>
+              <div className="pt-2 border-t border-[#E8DDD3] grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 bg-white rounded-lg border border-[#E8DDD3]">
+                  <span className="text-[10px] uppercase text-[#7A6B6D] font-bold block">Total Bill</span>
+                  <span className="text-sm font-bold text-[#1F1A1C]">₹{collectingPaymentBooking.total_payable}</span>
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-[#E8DDD3]">
+                  <span className="text-[10px] uppercase text-emerald-700 font-bold block">Collected</span>
+                  <span className="text-sm font-bold text-emerald-700">₹{collectingPaymentBooking.amount_collected || (collectingPaymentBooking.payment_status === 'collected' ? collectingPaymentBooking.total_payable : 0)}</span>
+                </div>
+                <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
+                  <span className="text-[10px] uppercase text-amber-800 font-bold block">Balance Due</span>
+                  <span className="text-sm font-bold text-amber-800">
+                    ₹{collectingPaymentBooking.remaining_balance !== undefined && collectingPaymentBooking.remaining_balance !== null
+                      ? collectingPaymentBooking.remaining_balance
+                      : Math.max(0, collectingPaymentBooking.total_payable - (collectingPaymentBooking.amount_collected || 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Collection Form */}
+            <form onSubmit={handleSubmitCollectPayment} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold block mb-1 text-[#1F1A1C]">Payment Method *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Cash', 'UPI', 'Card'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setCollectPaymentMethod(m)}
+                      className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${
+                        collectPaymentMethod === m
+                          ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
+                          : 'bg-[#FAF7F2] text-[#4A0417] border-[#E8DDD3] hover:bg-gray-100'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                  Amount to Collect (₹) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={collectingPaymentBooking.remaining_balance !== undefined && collectingPaymentBooking.remaining_balance !== null
+                    ? collectingPaymentBooking.remaining_balance
+                    : Math.max(0, collectingPaymentBooking.total_payable - (collectingPaymentBooking.amount_collected || 0))}
+                  value={collectPaymentAmount}
+                  onChange={(e) => setCollectPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold text-base text-[#1F1A1C] focus:outline-none focus:border-[#4A0417]"
+                  required
+                />
+                <span className="text-[10px] text-[#7A6B6D] mt-1 block">
+                  Supports full or partial payments. Amount cannot exceed outstanding balance.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1 text-[#1F1A1C]">Notes / Reference ID (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. UPI Ref / Last 4 digits / Client note"
+                  value={collectPaymentNotes}
+                  onChange={(e) => setCollectPaymentNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
+                />
+              </div>
+
+              {/* Payment History Ledger */}
+              {loadingPaymentHistory ? (
+                <p className="text-[11px] text-[#7A6B6D] italic">Loading payment history...</p>
+              ) : paymentHistory.length > 0 ? (
+                <div className="pt-2 border-t border-[#E8DDD3]">
+                  <p className="font-bold text-[11px] text-[#4A0417] mb-1.5 uppercase tracking-wider">Payment Ledger ({paymentHistory.length})</p>
+                  <div className="divide-y divide-[#E8DDD3] border border-[#E8DDD3] rounded-lg max-h-32 overflow-y-auto bg-white">
+                    {paymentHistory.map((p, idx) => (
+                      <div key={p.id || idx} className="p-2 flex justify-between items-center text-[11px]">
+                        <div>
+                          <span className="font-bold text-[#1F1A1C]">₹{p.amount}</span>
+                          <span className="text-[#7A6B6D] ml-2 font-medium">via {p.payment_method}</span>
+                          {p.notes && <span className="text-[#8C7A7C] ml-1.5 italic">({p.notes})</span>}
+                        </div>
+                        <span className="text-[10px] text-[#7A6B6D] font-mono">{p.created_at ? p.created_at.split('T')[0] : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#F4EFEA]">
+                <button
+                  type="button"
+                  onClick={() => setCollectingPaymentBooking(null)}
+                  className="px-4 py-2 text-[#6B5A5C] hover:bg-gray-100 rounded text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={collectPaymentSubmitting}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded text-xs font-semibold shadow-xs"
+                >
+                  {collectPaymentSubmitting ? 'Recording...' : `Record Payment (₹${collectPaymentAmount || 0})`}
                 </button>
               </div>
             </form>

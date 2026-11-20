@@ -53,6 +53,7 @@ export interface MasterPackage {
   selling_price: number;
   discount_percent: number;
   badge?: string;
+  image_url?: string;
   category_ids: string[];
   inclusions: { name: string; is_free?: boolean }[];
   benefits: string[];
@@ -2012,6 +2013,34 @@ export const MASTER_SERVICES: MasterService[] = [
 
 // 3. THE 10 OFFICIAL BEAUTYDOOR SIGNATURE PACKAGES (Section 14)
 export const MASTER_PACKAGES: MasterPackage[] = [
+  {
+    id: 'pkg-vlcc-facial-waxing-special-999',
+    name: 'VLCC Facial & Waxing Package',
+    slug: 'vlcc-facial-waxing-special-999',
+    subtitle: 'VLCC Facial (Glow / Anti-Tan) + Full Hand Waxing + Full Legs Waxing + Underarms Waxing + Free Eyebrows',
+    description: 'Official BeautyDoor promotional beauty package featuring your choice of VLCC Facial (Glow or Anti-Tan), full hand waxing, full legs waxing, underarms waxing, and complimentary free eyebrows.',
+    duration_mins: 75,
+    duration_display: '1 hour 15 minutes',
+    original_price: 1499,
+    selling_price: 999,
+    discount_percent: 33,
+    badge: 'Special Offer ₹999 Only',
+    image_url: '/images/package_vlcc_special_999.jpg',
+    category_ids: ['cat-packages', 'cat-facials', 'cat-honey-waxing'],
+    inclusions: [
+      { name: 'VLCC Facial (Choice of Glow or Anti-Tan)', is_free: false },
+      { name: 'Full Hand Waxing', is_free: false },
+      { name: 'Full Legs Waxing', is_free: false },
+      { name: 'Underarms Waxing', is_free: false },
+      { name: 'Free Eyebrows', is_free: true }
+    ],
+    benefits: [
+      'Choice of VLCC Glow or Anti-Tan Facial for radiant, smooth skin',
+      'Complete full hand, full legs, and underarms waxing ceremony',
+      'Complimentary eyebrow shaping included free'
+    ],
+    is_published: 1
+  },
   {
     id: 'pkg-glow-and-smooth',
     name: 'Facial & Waxing Package',

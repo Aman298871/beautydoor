@@ -240,6 +240,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       inclusions_json TEXT NOT NULL DEFAULT '[]',
       benefits_json TEXT NOT NULL DEFAULT '[]',
       badge VARCHAR(64),
+      image_url VARCHAR(255),
       category_ids_json TEXT NOT NULL DEFAULT '[]',
       is_published INTEGER NOT NULL DEFAULT 1,
       display_order INTEGER NOT NULL DEFAULT 0,
@@ -504,14 +505,16 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
 
-  // Idempotent migration for cancellation tracking columns in bookings
+  // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [
     { name: 'cancelled_at', type: 'VARCHAR(64)' },
     { name: 'cancellation_reason', type: 'TEXT' },
     { name: 'cancellation_fee', type: 'INTEGER NOT NULL DEFAULT 0' },
     { name: 'cancellation_window_breached', type: 'INTEGER NOT NULL DEFAULT 0' },
     { name: 'refund_amount', type: 'INTEGER NOT NULL DEFAULT 0' },
-    { name: 'refund_status', type: "VARCHAR(64) NOT NULL DEFAULT 'not_applicable'" }
+    { name: 'refund_status', type: "VARCHAR(64) NOT NULL DEFAULT 'not_applicable'" },
+    { name: 'amount_collected', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'remaining_balance', type: 'INTEGER' }
   ];
   for (const col of newBookingCols) {
     try {
@@ -521,12 +524,62 @@ async function seedEssentialData() {
     }
   }
 
-  // Idempotent migration for category_ids_json in packages
+  // Idempotent creation of booking_payments ledger table for partial & full payment accounting
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS booking_payments (
+        id VARCHAR(255) PRIMARY KEY,
+        booking_id VARCHAR(255) NOT NULL,
+        amount INTEGER NOT NULL,
+        payment_method VARCHAR(64) NOT NULL,
+        notes TEXT,
+        collected_by VARCHAR(255) NOT NULL,
+        created_at VARCHAR(64) NOT NULL
+      )
+    `);
+  } catch { }
+  try {
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_booking_payments_bid ON booking_payments(booking_id)");
+  } catch { }
+
+  // Initialize remaining_balance on legacy records
+  try {
+    await db.execute("UPDATE bookings SET remaining_balance = CASE WHEN payment_status = 'collected' THEN 0 ELSE (total_payable - COALESCE(amount_collected, 0)) END WHERE remaining_balance IS NULL");
+    await db.execute("UPDATE bookings SET amount_collected = total_payable WHERE payment_status = 'collected' AND (amount_collected = 0 OR amount_collected IS NULL)");
+  } catch { }
+
+  // Idempotent migration for category_ids_json and image_url in packages
   try {
     await db.execute("ALTER TABLE packages ADD COLUMN category_ids_json TEXT DEFAULT '[]'");
   } catch {
     // Column already exists
   }
+  try {
+    await db.execute("ALTER TABLE packages ADD COLUMN image_url VARCHAR(255)");
+  } catch {
+    // Column already exists
+  }
+
+  // Idempotent creation of booking_notifications audit table for email notifications
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS booking_notifications (
+        id VARCHAR(255) PRIMARY KEY,
+        booking_id VARCHAR(255) NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        notification_type VARCHAR(64) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        status VARCHAR(32) NOT NULL,
+        provider VARCHAR(64) NOT NULL,
+        message_id VARCHAR(255),
+        error_message TEXT,
+        sent_at VARCHAR(64) NOT NULL
+      )
+    `);
+  } catch { }
+  try {
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_booking_notifications_bid ON booking_notifications(booking_id)");
+  } catch { }
 
   // Idempotent migration to make pincode column nullable in bookings for existing databases
   try {
@@ -565,7 +618,9 @@ async function seedEssentialData() {
     const territories = [
       { id: 'ter-del-1', city: 'Delhi', area: 'Vasant Kunj & Shanti Kunj', pin: '110070', fee: 0, min: 1000 },
       { id: 'ter-del-2', city: 'Delhi', area: 'Hauz Khas, Green Park & Safdarjung', pin: '110016', fee: 0, min: 1000 },
-      { id: 'ter-del-3', city: 'Delhi', area: 'Saket, Malviya Nagar & Sainik Farm', pin: '110017', fee: 0, min: 1000 },
+      { id: 'ter-del-saket', city: 'Delhi', area: 'Saket', pin: '110017', fee: 0, min: 1000 },
+      { id: 'ter-del-malviya-nagar', city: 'Delhi', area: 'Malviya Nagar', pin: '110017', fee: 0, min: 1000 },
+      { id: 'ter-del-sainik-farm', city: 'Delhi', area: 'Sainik Farm', pin: '110017', fee: 0, min: 1000 },
       { id: 'ter-del-4', city: 'Delhi', area: 'Greater Kailash 1 & 2 (GK)', pin: '110048', fee: 0, min: 1000 },
       { id: 'ter-del-5', city: 'Delhi', area: 'Lajpat Nagar & Defence Colony', pin: '110024', fee: 0, min: 1000 },
       { id: 'ter-del-6', city: 'Delhi', area: 'Dwarka (Sector 4, 6, 10, 12, 19)', pin: '110075', fee: 0, min: 1000 },
@@ -614,8 +669,8 @@ async function seedEssentialData() {
     }
   }
 
-  // Clean up legacy composite record 'Saket, Malviya Nagar & Sainik Farm' so customers only see the three individual localities
-  await db.execute("DELETE FROM territories WHERE (id = 'ter-del-3' OR area_name LIKE '%Saket, Malviya Nagar%') AND area_name LIKE '%&%'");
+  // Safely archive legacy composite record 'Saket, Malviya Nagar & Sainik Farm' to preserve historical booking data while ensuring customers only see the 3 individual localities
+  await db.execute("UPDATE territories SET is_active = 0 WHERE (id = 'ter-del-3' OR area_name LIKE '%Saket, Malviya Nagar%') AND area_name LIKE '%&%' AND is_active = 1");
 
   // 5. Promotional Coupons (idempotent)
   const cpCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM coupons');
@@ -634,19 +689,22 @@ async function seedEssentialData() {
   }
 
   // Targeted idempotent migration for BEAUTYFIRST coupon (Owner approved: ₹100 flat off, ₹1,100 min order)
-  const existingBeautyFirst = await db.queryRow('SELECT id FROM coupons WHERE code = ?', ['BEAUTYFIRST']);
+  const existingBeautyFirst = await db.queryRow<{ id: string; expires_at?: string }>('SELECT id, expires_at FROM coupons WHERE code = ?', ['BEAUTYFIRST']);
+  const todayDateStr = new Date().toISOString().split('T')[0];
   if (existingBeautyFirst) {
+    const isExpired = existingBeautyFirst.expires_at && existingBeautyFirst.expires_at.split('T')[0] < todayDateStr;
+    const targetExpiry = (!existingBeautyFirst.expires_at || isExpired) ? '2028-12-31' : existingBeautyFirst.expires_at;
     await db.execute(`
       UPDATE coupons SET
         discount_type = 'flat',
         discount_value = 100,
         min_order_amount = 1100,
         max_discount = 100,
-        expires_at = COALESCE(expires_at, '2028-12-31'),
+        expires_at = ?,
         is_active = 1,
         description = 'Use BEAUTYFIRST to get ₹100 off on orders of ₹1,100 or more.'
       WHERE code = 'BEAUTYFIRST'
-    `);
+    `, [targetExpiry]);
   } else {
     await db.execute(`
       INSERT INTO coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, expires_at, is_active, description)
@@ -1214,8 +1272,8 @@ async function seedEssentialData() {
         INSERT INTO packages (
           id, name, slug, subtitle, description, duration_mins, duration_display,
           original_price, selling_price, discount_percent, inclusions_json, benefits_json,
-          badge, category_ids_json, is_published, display_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          badge, image_url, category_ids_json, is_published, display_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         p.id,
         p.name,
@@ -1230,6 +1288,7 @@ async function seedEssentialData() {
         JSON.stringify(p.inclusions),
         JSON.stringify(p.benefits),
         p.badge || null,
+        p.image_url || null,
         JSON.stringify(p.category_ids || []),
         1,
         pOrder++,
@@ -1330,8 +1389,8 @@ async function seedEssentialData() {
         INSERT INTO packages (
           id, name, slug, subtitle, description, duration_mins, duration_display,
           original_price, selling_price, discount_percent, inclusions_json, benefits_json,
-          badge, category_ids_json, is_published, display_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          badge, image_url, category_ids_json, is_published, display_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         p.id,
         p.name,
@@ -1346,6 +1405,7 @@ async function seedEssentialData() {
         JSON.stringify(p.inclusions),
         JSON.stringify(p.benefits),
         p.badge || null,
+        p.image_url || null,
         JSON.stringify(p.category_ids || []),
         p.is_published !== undefined ? p.is_published : 1,
         11,
@@ -1354,6 +1414,24 @@ async function seedEssentialData() {
       ]);
     }
   }
+
+  // Ensure owner-approved VLCC Facial & Waxing Package (₹999, 75 mins) is fully synced and published with poster image
+  await db.execute(`
+    UPDATE packages SET
+      name = 'VLCC Facial & Waxing Package',
+      subtitle = 'VLCC Facial (Glow / Anti-Tan) + Full Hand Waxing + Full Legs Waxing + Underarms Waxing + Free Eyebrows',
+      description = 'Official BeautyDoor promotional beauty package featuring your choice of VLCC Facial (Glow or Anti-Tan), full hand waxing, full legs waxing, underarms waxing, and complimentary free eyebrows.',
+      selling_price = 999,
+      original_price = 1499,
+      discount_percent = 33,
+      duration_mins = 75,
+      duration_display = '1 hour 15 minutes',
+      badge = 'Special Offer ₹999 Only',
+      image_url = '/images/package_vlcc_special_999.jpg',
+      category_ids_json = '["cat-packages", "cat-facials", "cat-honey-waxing"]',
+      is_published = 1
+    WHERE id = 'pkg-vlcc-facial-waxing-special-999'
+  `);
 
   // Ensure owner-approved Glow & Groom Combo (₹999, 70 mins) is synced in DRAFT awaiting owner audio confirmation
   await db.execute(`

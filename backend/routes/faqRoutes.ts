@@ -142,11 +142,12 @@ export async function generateDynamicAnswer(handler: string | null, staticAnswer
           ORDER BY display_order ASC
         `, [now])) as any[];
 
+        const todayDateStr = new Date().toISOString().split('T')[0];
         const coupons = (await db.query(`
           SELECT code, description, discount_type, discount_value, min_order_amount 
           FROM coupons 
-          WHERE is_active = 1 AND (expires_at IS NULL OR expires_at >= ?)
-        `, [now])) as any[];
+          WHERE is_active = 1 AND (expires_at IS NULL OR SUBSTR(expires_at, 1, 10) >= ?)
+        `, [todayDateStr])) as any[];
 
         let reply = `🎁 Current BeautyDoor Offers & Savings Today:\n\n`;
 

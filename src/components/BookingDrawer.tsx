@@ -220,6 +220,11 @@ export const BookingDrawer: React.FC<Props> = ({
       return;
     }
 
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setSubmitError('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 

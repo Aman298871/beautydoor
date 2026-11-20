@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
+import { emailService } from '../services/emailService.ts';
 
 export const adminRouter = Router();
 
@@ -19,8 +20,8 @@ adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> 
   const revenueRow = (await db.queryRow(`
     SELECT 
       SUM(CASE WHEN booking_status != 'cancelled' THEN total_payable ELSE 0 END) as total_revenue,
-      SUM(CASE WHEN payment_status IN ('collected', 'verified') THEN total_payable ELSE 0 END) as collected_revenue,
-      SUM(CASE WHEN booking_status != 'cancelled' AND payment_status NOT IN ('collected', 'verified') THEN total_payable ELSE 0 END) as pending_revenue
+      SUM(COALESCE(amount_collected, CASE WHEN payment_status IN ('collected', 'verified') THEN total_payable ELSE 0 END)) as collected_revenue,
+      SUM(CASE WHEN booking_status != 'cancelled' THEN COALESCE(remaining_balance, CASE WHEN payment_status IN ('collected', 'verified') THEN 0 ELSE total_payable END) ELSE 0 END) as pending_revenue
     FROM bookings
   `, [])) as any;
 
@@ -134,6 +135,10 @@ adminRouter.patch('/bookings/:id/assign', async (req: Request, res: Response): P
 
   recordAuditLog(adminUser, 'DISPATCH_ASSIGN', 'BOOKING', id, { beauticianId, newStatus }, req.ip);
 
+  if (booking && (newStatus === 'assigned' || newStatus === 'confirmed') && booking.customer_email) {
+    emailService.sendBookingConfirmationEmail(booking).catch(err => console.warn('[Email] Assign dispatch error:', err.message));
+  }
+
   res.json({ success: true, message: `Beautician successfully assigned. Booking is now ${newStatus}.` });
 });
 
@@ -151,6 +156,14 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
   `, [bookingStatus || null, paymentStatus || null, notes || null, notes || null, id]));
 
   recordAuditLog(adminUser, 'UPDATE_BOOKING_STATUS', 'BOOKING', id, { bookingStatus, paymentStatus }, req.ip);
+
+  if (bookingStatus === 'confirmed' || bookingStatus === 'assigned') {
+    const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+    if (updated && updated.customer_email) {
+      emailService.sendBookingConfirmationEmail(updated).catch(err => console.warn('[Email] Status dispatch error:', err.message));
+    }
+  }
+
   res.json({ success: true });
 });
 
@@ -257,10 +270,18 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
     payment_status: paymentStatus
   }, req.ip);
 
+  // Trigger automated cancellation email if customer email exists
+  if (booking.customer_email) {
+    emailService.sendBookingCancellationEmail(booking, fee, refundAmount).catch(err => {
+      console.warn('[Email] Cancellation dispatch error:', err.message);
+    });
+  }
+
   res.json({
     success: true,
     message: `Booking ${id} has been marked as cancelled.`,
     cancellationFee: fee,
+    fee: fee,
     windowBreached,
     refundAmount,
     refundStatus,
@@ -268,7 +289,7 @@ adminRouter.post('/bookings/:id/cancel', async (req: Request, res: Response): Pr
   });
 });
 
-// Explicit Payment Collection Recording
+// Explicit Payment Collection Recording with Ledger Support (Partial & Full Payments)
 adminRouter.post('/bookings/:id/collect-payment', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const { paymentMethod, amountPaid, notes } = req.body;
@@ -285,28 +306,95 @@ adminRouter.post('/bookings/:id/collect-payment', async (req: Request, res: Resp
     return;
   }
 
-  const method = paymentMethod || 'Cash';
-  const collectedAmount = amountPaid !== undefined ? Number(amountPaid) : booking.total_payable;
+  const rawMethod = (paymentMethod || 'Cash').toString().trim();
+  const normalizedMethod = rawMethod.charAt(0).toUpperCase() + rawMethod.slice(1).toLowerCase();
+  if (!['Cash', 'Upi', 'Card'].includes(normalizedMethod)) {
+    res.status(400).json({ error: 'Payment method must be Cash, UPI, or Card.' });
+    return;
+  }
+  const method = normalizedMethod === 'Upi' ? 'UPI' : normalizedMethod;
+
+  const currentCollected = Number(booking.amount_collected || (booking.payment_status === 'collected' ? booking.total_payable : 0));
+  const currentRemaining = booking.remaining_balance !== null && booking.remaining_balance !== undefined
+    ? Number(booking.remaining_balance)
+    : Math.max(0, booking.total_payable - currentCollected);
+
+  if (currentRemaining <= 0) {
+    res.status(400).json({ error: 'This booking has already been fully paid and collected.' });
+    return;
+  }
+
+  const amountToCollect = amountPaid !== undefined ? Math.round(Number(amountPaid)) : currentRemaining;
+  if (isNaN(amountToCollect) || amountToCollect <= 0) {
+    res.status(400).json({ error: 'Payment amount must be a positive number greater than zero.' });
+    return;
+  }
+
+  if (amountToCollect > currentRemaining) {
+    res.status(400).json({ error: `Cannot collect ₹${amountToCollect}. Outstanding balance is only ₹${currentRemaining}.` });
+    return;
+  }
+
+  const newCollected = currentCollected + amountToCollect;
+  const newRemaining = Math.max(0, booking.total_payable - newCollected);
+  const newPaymentStatus = newRemaining === 0 ? 'collected' : 'partially_collected';
+
   const timestamp = new Date().toISOString();
-  const updatedNotes = `${booking.internal_notes || ''} | Payment of ₹${collectedAmount} collected via ${method} by [${adminUser}] at ${timestamp}${notes ? `: ${notes}` : ''}`;
+  const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+  await db.execute(`
+    INSERT INTO booking_payments (id, booking_id, amount, payment_method, notes, collected_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [paymentId, id, amountToCollect, method, notes || null, adminUser, timestamp]);
+
+  const updatedNotes = `${booking.internal_notes || ''} | Payment of ₹${amountToCollect} collected via ${method} by [${adminUser}] at ${timestamp}${notes ? `: ${notes}` : ''}`;
 
   await db.execute(`
     UPDATE bookings
-    SET payment_status = 'collected',
+    SET amount_collected = ?,
+        remaining_balance = ?,
+        payment_status = ?,
         internal_notes = ?
     WHERE id = ?
-  `, [updatedNotes, id]);
+  `, [newCollected, newRemaining, newPaymentStatus, updatedNotes, id]);
 
   recordAuditLog(adminUser, 'COLLECT_PAYMENT', 'BOOKING', id, {
+    paymentId,
     method,
-    amount: collectedAmount
+    amount: amountToCollect,
+    amount_collected: newCollected,
+    remaining_balance: newRemaining,
+    payment_status: newPaymentStatus
   }, req.ip);
 
   res.json({
     success: true,
-    message: `Payment of ₹${collectedAmount} successfully recorded via ${method}.`,
-    paymentStatus: 'collected'
+    message: `Payment of ₹${amountToCollect} successfully recorded via ${method}. Outstanding balance: ₹${newRemaining}.`,
+    paymentId,
+    amountCollected: newCollected,
+    remainingBalance: newRemaining,
+    paymentStatus: newPaymentStatus
   });
+});
+
+adminRouter.get('/bookings/:id/payments', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const payments = await db.query('SELECT * FROM booking_payments WHERE booking_id = ? ORDER BY created_at DESC', [id]);
+    res.json({ payments });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch payment history' });
+  }
+});
+
+adminRouter.get('/bookings/:id/notifications', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const notifications = await db.query('SELECT * FROM booking_notifications WHERE booking_id = ? ORDER BY sent_at DESC', [id]);
+    res.json({ notifications });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch notifications' });
+  }
 });
 
 adminRouter.post('/bookings/:id/notes', async (req: Request, res: Response): Promise<void> => {

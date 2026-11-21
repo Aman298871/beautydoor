@@ -56,7 +56,7 @@ export default function AdminApp() {
 
   // Active Tab: 24 modules architecture
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs'
+    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs' | 'notifications'
   >('dispatch');
 
   // Module data
@@ -76,7 +76,13 @@ export default function AdminApp() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
+  const [notificationsList, setNotificationsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Rejection modal state
+  const [rejectingBooking, setRejectingBooking] = useState<any | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [rejectionSubmitting, setRejectionSubmitting] = useState(false);
 
   // Filter & Modal states for Waxing/Catalog, Packages, and Pending
   const [selectedServiceCatFilter, setSelectedServiceCatFilter] = useState('all');
@@ -205,52 +211,88 @@ export default function AdminApp() {
     if (!token) return;
     setLoading(true);
     const headers = { Authorization: `Bearer ${token}` };
+
+    const safeFetch = async (url: string, defaultValue: any) => {
+      try {
+        const res = await fetch(url, { headers });
+        if (res.status === 401) {
+          handleLogout();
+          return defaultValue;
+        }
+        if (!res.ok) {
+          console.warn(`[Admin] Endpoint ${url} returned HTTP ${res.status}`);
+          return defaultValue;
+        }
+        return await res.json();
+      } catch (err: any) {
+        console.warn(`[Admin] Fetch error on ${url}:`, err.message);
+        return defaultValue;
+      }
+    };
+
     try {
-      const [ov, bk, srv, cats, cust, camp, beau, ter, coup, rev, aud, sett, faqsRes, pkgRes, hygRes, pendRes, auditRes] = await Promise.all([
-        fetch('/api/admin/overview', { headers }).then(r => r.json()),
-        fetch('/api/admin/bookings', { headers }).then(r => r.json()),
-        fetch('/api/admin/services', { headers }).then(r => r.json()),
-        fetch('/api/admin/categories', { headers }).then(r => r.json()),
-        fetch('/api/admin/customers', { headers }).then(r => r.json()),
-        fetch('/api/admin/campaigns', { headers }).then(r => r.json()),
-        fetch('/api/admin/beauticians', { headers }).then(r => r.json()),
-        fetch('/api/admin/territories', { headers }).then(r => r.json()),
-        fetch('/api/admin/coupons', { headers }).then(r => r.json()),
-        fetch('/api/admin/reviews', { headers }).then(r => r.json()),
-        fetch('/api/admin/audit-logs', { headers }).then(r => r.json()),
-        fetch('/api/admin/settings', { headers }).then(r => r.json()),
-        fetch('/api/admin/faqs/manage', { headers }).then(r => r.json()),
-        fetch('/api/admin/packages', { headers }).then(r => r.json()),
-        fetch('/api/admin/hygiene', { headers }).then(r => r.json()),
-        fetch('/api/admin/pending-services', { headers }).then(r => r.json()),
-        fetch('/api/admin/price-audits', { headers }).then(r => r.json())
+      const results = await Promise.allSettled([
+        safeFetch('/api/admin/overview', {}),
+        safeFetch('/api/admin/bookings', { bookings: [] }),
+        safeFetch('/api/admin/services', { services: [] }),
+        safeFetch('/api/admin/categories', { categories: [] }),
+        safeFetch('/api/admin/customers', { customers: [] }),
+        safeFetch('/api/admin/campaigns', { campaigns: [] }),
+        safeFetch('/api/admin/beauticians', { beauticians: [] }),
+        safeFetch('/api/admin/territories', { territories: [] }),
+        safeFetch('/api/admin/coupons', { coupons: [] }),
+        safeFetch('/api/admin/reviews', { reviews: [] }),
+        safeFetch('/api/admin/audit-logs', { logs: [] }),
+        safeFetch('/api/admin/settings', { settings: {} }),
+        safeFetch('/api/admin/faqs/manage', { faqs: [] }),
+        safeFetch('/api/admin/packages', { packages: [] }),
+        safeFetch('/api/admin/hygiene', { commitments: [] }),
+        safeFetch('/api/admin/pending-services', { pending: [] }),
+        safeFetch('/api/admin/price-audits', { audits: [] }),
+        safeFetch('/api/admin/notifications', { notifications: [] })
       ]);
 
-      if (ov.error) {
-        // Token invalid or expired
-        handleLogout();
-        return;
-      }
+      const getVal = (idx: number, def: any) => (results[idx].status === 'fulfilled' ? results[idx].value : def);
 
-      setOverview(ov);
-      setBookings(bk.bookings || []);
-      setServices(srv.services || []);
-      setCategories(cats.categories || []);
-      setCustomers(cust.customers || []);
-      setCampaigns(camp.campaigns || []);
-      setBeauticians(beau.beauticians || []);
-      setTerritories(ter.territories || []);
-      setCoupons(coup.coupons || []);
-      setReviews(rev.reviews || []);
-      setAuditLogs(aud.logs || []);
-      setSettings(sett.settings || {});
-      setFaqsList(faqsRes.faqs || []);
-      setPackagesList(pkgRes.packages || []);
-      setHygieneList(hygRes.commitments || []);
-      setPendingServices(pendRes.pending || []);
-      setPriceAuditLogs(auditRes.audits || []);
+      const ov = getVal(0, {});
+      const bk = getVal(1, { bookings: [] });
+      const srv = getVal(2, { services: [] });
+      const cats = getVal(3, { categories: [] });
+      const cust = getVal(4, { customers: [] });
+      const camp = getVal(5, { campaigns: [] });
+      const beau = getVal(6, { beauticians: [] });
+      const ter = getVal(7, { territories: [] });
+      const coup = getVal(8, { coupons: [] });
+      const rev = getVal(9, { reviews: [] });
+      const aud = getVal(10, { logs: [] });
+      const sett = getVal(11, { settings: {} });
+      const faqsRes = getVal(12, { faqs: [] });
+      const pkgRes = getVal(13, { packages: [] });
+      const hygRes = getVal(14, { commitments: [] });
+      const pendRes = getVal(15, { pending: [] });
+      const auditRes = getVal(16, { audits: [] });
+      const notifRes = getVal(17, { notifications: [] });
+
+      if (ov && !ov.error) setOverview(ov);
+      if (bk.bookings) setBookings(bk.bookings);
+      if (srv.services) setServices(srv.services);
+      if (cats.categories) setCategories(cats.categories);
+      if (cust.customers) setCustomers(cust.customers);
+      if (camp.campaigns) setCampaigns(camp.campaigns);
+      if (beau.beauticians) setBeauticians(beau.beauticians);
+      if (ter.territories) setTerritories(ter.territories);
+      if (coup.coupons) setCoupons(coup.coupons);
+      if (rev.reviews) setReviews(rev.reviews);
+      if (aud.logs) setAuditLogs(aud.logs);
+      if (sett.settings) setSettings(sett.settings);
+      if (faqsRes.faqs) setFaqsList(faqsRes.faqs);
+      if (pkgRes.packages) setPackagesList(pkgRes.packages);
+      if (hygRes.commitments) setHygieneList(hygRes.commitments);
+      if (pendRes.pending || pendRes.pendingServices) setPendingServices(pendRes.pending || pendRes.pendingServices);
+      if (auditRes.audits || auditRes.logs) setPriceAuditLogs(auditRes.audits || auditRes.logs);
+      if (notifRes.notifications) setNotificationsList(notifRes.notifications);
     } catch (err) {
-      console.error(err);
+      console.error('[Admin] Data fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -355,11 +397,153 @@ export default function AdminApp() {
     }
   };
 
+  // Real-time synchronization: 15s interval + focus + visibility event listener
   useEffect(() => {
-    if (token) {
+    if (!token) return;
+    fetchAdminData();
+    const interval = setInterval(() => {
       fetchAdminData();
-    }
+    }, 15000);
+
+    const onFocus = () => {
+      fetchAdminData();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAdminData();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [token]);
+
+  // Explicit Accept Booking
+  const handleAcceptBooking = async (bookingId: string) => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/accept`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        notify(data.error || 'Failed to accept booking');
+        return;
+      }
+      notify(`Booking ${bookingId} confirmed! Confirmation email dispatched.`);
+      setSelectedBookingForDispatch(null);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message || 'Error accepting booking');
+    }
+  };
+
+  // Explicit Reject Booking with Reason
+  const handleConfirmRejection = async () => {
+    if (!rejectingBooking) return;
+    if (!rejectionReasonInput.trim()) {
+      notify('Please enter a polite reason for rejecting this booking.');
+      return;
+    }
+    setRejectionSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${rejectingBooking.id}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: rejectionReasonInput.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        notify(data.error || 'Failed to reject booking');
+        return;
+      }
+      notify(`Booking ${rejectingBooking.id} rejected. Customer notified via email.`);
+      setRejectingBooking(null);
+      setRejectionReasonInput('');
+      setSelectedBookingForDispatch(null);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message || 'Error rejecting booking');
+    } finally {
+      setRejectionSubmitting(false);
+    }
+  };
+
+  // Beautician Roster CRUD handlers
+  const handleSaveBeautician = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBeautician) return;
+    try {
+      const url = isNewBeautician ? '/api/admin/beauticians' : `/api/admin/beauticians/${editingBeautician.id}`;
+      const method = isNewBeautician ? 'POST' : 'PUT';
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(editingBeautician)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        notify(data.error || 'Failed to save beautician profile');
+        return;
+      }
+      notify(isNewBeautician ? 'New specialist onboarded.' : 'Specialist profile updated.');
+      setEditingBeautician(null);
+      setIsNewBeautician(false);
+      fetchAdminData();
+    } catch (err: any) {
+      notify(err.message || 'Error saving beautician');
+    }
+  };
+
+  const handleToggleBeauticianStatus = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'available' ? 'on_leave' : 'available';
+      const res = await fetch(`/api/admin/beauticians/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        notify(`Beautician status updated to ${newStatus}.`);
+        fetchAdminData();
+      }
+    } catch (err: any) {
+      notify(err.message || 'Error toggling beautician status');
+    }
+  };
+
+  const handleDeleteBeautician = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to permanently remove specialist ${name} from the roster?`)) return;
+    try {
+      const res = await fetch(`/api/admin/beauticians/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        notify(`Beautician ${name} removed.`);
+        fetchAdminData();
+      }
+    } catch (err: any) {
+      notify(err.message || 'Error deleting beautician');
+    }
+  };
 
   // Assign Beautician with conflict prevention
   const handleConfirmAssignment = async () => {
@@ -641,30 +825,6 @@ export default function AdminApp() {
       setBeauticianAppointmentsList(data.appointments || []);
     } catch (err: any) {
       notify('Failed to load appointments: ' + err.message);
-    }
-  };
-
-  const handleSaveBeautician = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-      const url = isNewBeautician ? '/api/admin/beauticians' : `/api/admin/beauticians/${editingBeautician.id}`;
-      const method = isNewBeautician ? 'POST' : 'PUT';
-
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify(editingBeautician)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save beautician');
-
-      notify(isNewBeautician ? 'Beautician onboarded!' : 'Beautician updated!');
-      setEditingBeautician(null);
-      setIsNewBeautician(false);
-      fetchAdminData();
-    } catch (err: any) {
-      notify(err.message);
     }
   };
 
@@ -1195,8 +1355,37 @@ export default function AdminApp() {
           </div>
         </div>
 
+        {/* Mobile Viewport Module Dropdown Navigation (< 640px) */}
+        <div className="sm:hidden px-4 py-2.5 border-b border-[#E8DDD3] bg-[#FAF7F2]">
+          <label className="text-[10px] uppercase font-bold text-[#7A6B6D] block mb-1">Select Management Workspace</label>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full text-xs font-semibold py-2 px-3 bg-white border border-[#E8DDD3] rounded-lg text-[#4A0417] shadow-xs focus:outline-none"
+          >
+            <option value="dispatch">Dispatch & Bookings ({bookings.length})</option>
+            <option value="overview">Executive KPIs</option>
+            <option value="services">Catalog & Waxing ({services.length})</option>
+            <option value="packages">Signature Packages ({packagesList.length})</option>
+            <option value="hygiene">Hygiene Promise ({hygieneList.length})</option>
+            <option value="pending">Pending Owner Prices ({pendingServices.length})</option>
+            <option value="priceAudit">Price Audit Logs ({priceAuditLogs.length})</option>
+            <option value="categories">Categories ({categories.length})</option>
+            <option value="campaigns">Promotional Campaigns ({campaigns.length})</option>
+            <option value="beauticians">Beauticians Roster ({beauticians.length})</option>
+            <option value="territories">Pincodes & Hubs ({territories.length})</option>
+            <option value="coupons">Coupons ({coupons.length})</option>
+            <option value="customers">Customers ({customers.length})</option>
+            <option value="reviews">Review Moderation ({reviews.length})</option>
+            <option value="notifications">Notification History ({notificationsList.length})</option>
+            <option value="audit">Audit Logs ({auditLogs.length})</option>
+            <option value="settings">Settings & Policies</option>
+            <option value="faqs">Chatbot FAQs ({faqsList.length})</option>
+          </select>
+        </div>
+
         {/* Tab Navigation */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 sm:space-x-5 overflow-x-auto text-xs font-semibold text-[#6B5A5C] scrollbar-none">
+        <div className="hidden sm:flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-x-2 sm:space-x-5 overflow-x-auto text-xs font-semibold text-[#6B5A5C] scrollbar-none">
           <button
             onClick={() => setActiveTab('dispatch')}
             className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
@@ -1368,6 +1557,16 @@ export default function AdminApp() {
           >
             <HelpCircle className="w-3.5 h-3.5" />
             <span>Chatbot FAQs ({faqsList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'notifications' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+            <span>Notifications ({notificationsList.length})</span>
           </button>
         </div>
       </header>
@@ -2186,24 +2385,110 @@ export default function AdminApp() {
         {/* 5. BEAUTICIANS ROSTER */}
         {activeTab === 'beauticians' && (
           <div className="space-y-6">
-            <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
-              Certified Beauticians Roster
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {beauticians.map((b) => (
-                <div key={b.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-2">
-                  <h4 className="font-bold text-sm text-[#1F1A1C]">{b.name}</h4>
-                  <p className="text-xs text-[#7A6B6D] tabular-nums">{b.phone}</p>
-                  <p className="text-xs text-[#554749]">Specialties: {b.specialties?.join(', ')}</p>
-                  <p className="text-xs text-[#554749]">Territories: {b.territories?.join(', ')}</p>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded inline-block ${
-                    b.status === 'available' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'
-                  }`}>
-                    {b.status}
-                  </span>
-                </div>
-              ))}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Certified Beauticians Roster ({beauticians.length})
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Manage authorized female salon specialists, their assigned service hubs, on-leave status, and active schedules.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingBeautician({
+                    name: '',
+                    phone: '',
+                    experienceYears: 4,
+                    specialties: ['Waxing', 'Facials & Cleanups', 'Pedicure'],
+                    territories: ['Delhi', 'Gurugram'],
+                    status: 'available',
+                    isActive: 1
+                  });
+                  setIsNewBeautician(true);
+                }}
+                className="px-4 py-2 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+              >
+                <Plus className="w-4 h-4 text-[#C5A880]" />
+                <span>Onboard New Specialist</span>
+              </button>
             </div>
+
+            {beauticians.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-[#E8DDD3] text-center space-y-3">
+                <Users className="w-10 h-10 text-[#C5A880] mx-auto opacity-70" />
+                <h4 className="font-bold text-sm text-[#1F1A1C]">No specialists currently registered</h4>
+                <p className="text-xs text-[#7A6B6D] max-w-sm mx-auto">
+                  Click the button above to add certified beauticians to assign to customer appointments.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {beauticians.map((b) => (
+                  <div key={b.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-bold text-sm text-[#1F1A1C]">{b.name}</h4>
+                          <p className="text-xs text-[#7A6B6D] tabular-nums font-mono">{b.phone}</p>
+                        </div>
+                        <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${
+                          b.status === 'available'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-red-50 text-red-800 border-red-200'
+                        }`}>
+                          {b.status === 'available' ? 'Available' : 'On Leave'}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-[#554749] space-y-1">
+                        <p><strong>Experience:</strong> {b.experience_years || b.experienceYears || 3}+ Years</p>
+                        <p><strong>Rating:</strong> {b.rating || '5.0'} ★ ({b.total_jobs || 0} completed)</p>
+                        <p className="truncate"><strong>Specialties:</strong> {Array.isArray(b.specialties) ? b.specialties.join(', ') : 'Waxing, Facials'}</p>
+                        <p className="truncate"><strong>Hubs:</strong> {Array.isArray(b.territories) ? b.territories.join(', ') : 'Delhi NCR'}</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-[#F4EFEA] flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => handleToggleBeauticianStatus(b.id, b.status)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border transition-colors ${
+                          b.status === 'available'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {b.status === 'available' ? 'Set On Leave' : 'Set Available'}
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingBeautician({
+                              ...b,
+                              specialties: Array.isArray(b.specialties) ? b.specialties : ['facial', 'waxing'],
+                              territories: Array.isArray(b.territories) ? b.territories : ['Delhi']
+                            });
+                            setIsNewBeautician(false);
+                          }}
+                          className="p-1.5 text-[#554749] hover:text-[#1F1A1C] hover:bg-[#FAF7F2] rounded border border-[#E8DDD3]"
+                          title="Edit Specialist"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBeautician(b.id, b.name)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200"
+                          title="Remove Specialist"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -2760,24 +3045,67 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-2">
                   <div>
                     <label className="font-semibold block mb-1">Cancellation Window (Hours)</label>
                     <input
                       type="number"
-                      value={settings.cancellation_window_hours || '4'}
+                      value={settings.cancellation_window_hours || '2'}
                       onChange={(e) => setSettings({ ...settings, cancellation_window_hours: e.target.value })}
-                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold text-[#4A0417]"
                     />
+                    <span className="text-[10px] text-[#7A6B6D] mt-0.5 block">Approved Policy: 2 Hours (100% Free)</span>
                   </div>
 
                   <div>
-                    <label className="font-semibold block mb-1">Minimum Booking Order (₹)</label>
+                    <label className="font-semibold block mb-1">Late Cancellation Fee (₹)</label>
                     <input
                       type="number"
-                      value={settings.min_order_amount || '499'}
+                      value={settings.cancellation_fee_late || '200'}
+                      onChange={(e) => setSettings({ ...settings, cancellation_fee_late: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold text-[#4A0417]"
+                    />
+                    <span className="text-[10px] text-[#7A6B6D] mt-0.5 block">Approved Policy: ₹200 Convenience Fee</span>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1">Default Minimum Order (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.min_order_amount || '1000'}
                       onChange={(e) => setSettings({ ...settings, min_order_amount: e.target.value })}
-                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold text-[#4A0417]"
+                    />
+                    <span className="text-[10px] text-[#7A6B6D] mt-0.5 block">Delhi: ₹1,000 · Haryana: ₹1,500 · Noida: ₹1,500</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-2 bg-[#FAF7F2] p-3 rounded-xl border border-[#E8DDD3]">
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#4A0417]">Delhi Minimum (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.min_order_delhi || '1000'}
+                      onChange={(e) => setSettings({ ...settings, min_order_delhi: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#4A0417]">Haryana Minimum (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.min_order_haryana || '1500'}
+                      onChange={(e) => setSettings({ ...settings, min_order_haryana: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#4A0417]">Noida Minimum (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.min_order_noida || '1500'}
+                      onChange={(e) => setSettings({ ...settings, min_order_noida: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-white border border-[#E8DDD3] rounded-md font-bold"
                     />
                   </div>
                 </div>
@@ -3254,6 +3582,96 @@ export default function AdminApp() {
           </div>
         )}
 
+        {/* 14. NOTIFICATIONS AUDIT LOGS */}
+        {activeTab === 'notifications' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#4A0417] mb-1">
+                  <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                  <span>Automated Communications & Notification Ledger</span>
+                </div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Notification History ({notificationsList.length})
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Audit trail of all transactional booking emails and cellular SMS alerts sent to customers and business owner.
+                </p>
+              </div>
+              <button
+                onClick={fetchAdminData}
+                className="px-3 py-1.5 bg-white border border-[#E8DDD3] text-[#4A0417] rounded-lg text-xs font-semibold hover:bg-[#FAF7F2] shadow-xs flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Logs</span>
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-[#E8DDD3] overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAF7F2] text-[#4A0417] uppercase tracking-wider font-semibold border-b border-[#E8DDD3]">
+                    <tr>
+                      <th className="py-3 px-4">Timestamp</th>
+                      <th className="py-3 px-4">Booking ID</th>
+                      <th className="py-3 px-4">Recipient</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4">Subject / Message</th>
+                      <th className="py-3 px-4">Channel / Gateway</th>
+                      <th className="py-3 px-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F4EFEA]">
+                    {notificationsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-[#8C7A7C] italic">
+                          No notifications recorded in history yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      notificationsList.map((n) => (
+                        <tr key={n.id} className="hover:bg-[#FAF7F2] transition-colors">
+                          <td className="py-3 px-4 whitespace-nowrap text-[#7A6B6D] font-mono text-[11px]">
+                            {n.sent_at ? new Date(n.sent_at).toLocaleString('en-IN') : 'Just now'}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-[#4A0417] tabular-nums">
+                            {n.booking_id}
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-[#1F1A1C]">
+                            {n.recipient_email}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="capitalize font-medium text-[#554749]">
+                              {(n.notification_type || '').replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-xs truncate text-[#554749]">
+                            {n.subject}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                              {n.provider}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+                              n.status === 'sent' || n.status === 'simulated'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-red-50 text-red-800 border-red-200'
+                            }`}>
+                              {n.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* DISPATCH ASSIGNMENT MODAL */}
@@ -3278,9 +3696,59 @@ export default function AdminApp() {
 
             <div className="bg-[#FAF7F2] p-3 rounded-lg text-xs space-y-1">
               <p><strong>Appointment:</strong> {selectedBookingForDispatch.appointment_date} at {selectedBookingForDispatch.appointment_slot}</p>
-              <p><strong>Location:</strong> {selectedBookingForDispatch.flat}, {selectedBookingForDispatch.city} ({selectedBookingForDispatch.pincode})</p>
+              <p><strong>Location:</strong> {selectedBookingForDispatch.flat}, {selectedBookingForDispatch.area}, {selectedBookingForDispatch.city} ({selectedBookingForDispatch.pincode})</p>
               <p><strong>Total Value:</strong> ₹{selectedBookingForDispatch.total_payable} ({selectedBookingForDispatch.payment_method})</p>
+              {selectedBookingForDispatch.customer_email && (
+                <p><strong>Customer Email:</strong> {selectedBookingForDispatch.customer_email}</p>
+              )}
             </div>
+
+            {/* Booked Items & Packages List */}
+            {selectedBookingForDispatch.items && selectedBookingForDispatch.items.length > 0 && (
+              <div className="bg-white p-3 rounded-xl border border-[#E8DDD3] space-y-1.5 text-xs">
+                <span className="font-bold text-[#4A0417] text-[11px] uppercase tracking-wider block">Booked Treatments & Variants:</span>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {selectedBookingForDispatch.items.map((it: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px] border-b border-[#FAF7F2] pb-1">
+                      <span>
+                        • <strong>{it.service_name || it.serviceName}</strong>
+                        {it.variant_name && <span className="text-[#4A0417] font-bold"> ({it.variant_name})</span>}
+                      </span>
+                      <span className="font-bold tabular-nums">₹{it.final_item_price || it.finalItemPrice || it.unit_price}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Accept / Reject Quick Decision Bar for Pending Requests */}
+            {selectedBookingForDispatch.booking_status === 'pending' && (
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div>
+                  <p className="font-bold text-amber-900 text-xs">Pending Appointment Action</p>
+                  <p className="text-[11px] text-amber-800">Accept to send confirmation email or reject with a reason.</p>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleAcceptBooking(selectedBookingForDispatch.id)}
+                    className="flex-1 sm:flex-initial px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold shadow-xs"
+                  >
+                    Accept & Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectingBooking(selectedBookingForDispatch);
+                      setRejectionReasonInput('Certified female specialists are fully booked during this requested slot.');
+                    }}
+                    className="flex-1 sm:flex-initial px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-semibold shadow-xs"
+                  >
+                    Reject Booking
+                  </button>
+                </div>
+              </div>
+            )}
 
             {selectedBookingForDispatch.booking_status === 'cancelled' && (
               <div className="bg-red-50/90 border border-red-200 p-3.5 rounded-xl text-xs space-y-2 text-red-950">
@@ -3910,6 +4378,175 @@ export default function AdminApp() {
                   className="px-5 py-1.5 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F]"
                 >
                   Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT BOOKING REASON MODAL */}
+      {rejectingBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-red-200 p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <h4 className="font-serif text-lg font-bold text-red-950">Reject Appointment Request</h4>
+              </div>
+              <button onClick={() => setRejectingBooking(null)} className="p-1 text-[#6B5A5C]">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#554749]">
+              Booking ID: <strong>{rejectingBooking.id}</strong> · Client: <strong>{rejectingBooking.customer_name}</strong>
+            </p>
+
+            <div className="space-y-1.5 text-xs">
+              <label className="font-semibold block text-[#1F1A1C]">Polite Reason for Customer Notification *</label>
+              <textarea
+                rows={3}
+                required
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                placeholder="e.g. All certified female specialists are fully booked during this requested slot."
+                className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:outline-none focus:border-red-600"
+              />
+              <span className="text-[11px] text-[#7A6B6D]">
+                This explanation will be delivered politely to the customer's email and saved on the booking record.
+              </span>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setRejectingBooking(null)}
+                className="px-4 py-2 text-[#6B5A5C] hover:bg-gray-100 rounded font-semibold"
+              >
+                Keep Booking
+              </button>
+              <button
+                type="button"
+                disabled={rejectionSubmitting || !rejectionReasonInput.trim()}
+                onClick={handleConfirmRejection}
+                className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white rounded font-semibold shadow-xs disabled:opacity-50"
+              >
+                {rejectionSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BEAUTICIAN ADD / EDIT MODAL */}
+      {editingBeautician && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-[#4A0417]" />
+                <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  {isNewBeautician ? 'Onboard Certified Specialist' : 'Edit Specialist Profile'}
+                </h4>
+              </div>
+              <button onClick={() => setEditingBeautician(null)} className="p-1 text-[#6B5A5C]">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBeautician} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingBeautician.name || ''}
+                    onChange={(e) => setEditingBeautician({ ...editingBeautician, name: e.target.value })}
+                    placeholder="e.g. Sunita Sharma"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Mobile Phone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editingBeautician.phone || ''}
+                    onChange={(e) => setEditingBeautician({ ...editingBeautician, phone: e.target.value })}
+                    placeholder="e.g. +91 98765 43210"
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Experience (Years)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={editingBeautician.experience_years || editingBeautician.experienceYears || 3}
+                    onChange={(e) => setEditingBeautician({ ...editingBeautician, experienceYears: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Specialist Status</label>
+                  <select
+                    value={editingBeautician.status || 'available'}
+                    onChange={(e) => setEditingBeautician({ ...editingBeautician, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-medium"
+                  >
+                    <option value="available">Available for Dispatch</option>
+                    <option value="on_leave">On Leave / Unavailable</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Specialties (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={Array.isArray(editingBeautician.specialties) ? editingBeautician.specialties.join(', ') : (editingBeautician.specialties || '')}
+                  onChange={(e) => setEditingBeautician({
+                    ...editingBeautician,
+                    specialties: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+                  })}
+                  placeholder="e.g. Waxing, Facials, Cleanup, Pedicure"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Assigned Hubs / Territories (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={Array.isArray(editingBeautician.territories) ? editingBeautician.territories.join(', ') : (editingBeautician.territories || '')}
+                  onChange={(e) => setEditingBeautician({
+                    ...editingBeautician,
+                    territories: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+                  })}
+                  placeholder="e.g. Delhi, Gurugram, South Delhi"
+                  className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[#F4EFEA] flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBeautician(null)}
+                  className="px-4 py-2 text-[#6B5A5C] hover:bg-gray-100 rounded font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#4A0417] text-white rounded font-semibold hover:bg-[#36020F] shadow-xs"
+                >
+                  {isNewBeautician ? 'Onboard Specialist' : 'Save Changes'}
                 </button>
               </div>
             </form>

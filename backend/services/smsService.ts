@@ -58,6 +58,49 @@ export class SmsService {
   }
 
   /**
+   * Send automatic appointment alert to business owner (Preeti) on new customer booking
+   */
+  public async sendBookingAlertToOwner(booking: any): Promise<SmsSendResult> {
+    const ownerPhone = (process.env.OWNER_PHONE_NUMBER || '7827722522').replace(/\D/g, '').slice(-10);
+    const bookingId = booking.id || booking.bookingId || 'BD-APPT';
+    const cName = booking.customer_name || booking.customerName || 'Customer';
+    const cPhone = booking.customer_phone || booking.customerPhone || '';
+    const date = booking.appointment_date || booking.appointmentDate || '';
+    const slot = booking.appointment_slot || booking.appointmentSlot || '';
+    const total = booking.total_payable || booking.totalPayable || 0;
+    const method = booking.payment_method || booking.paymentMethod || 'COD';
+    const address = `${booking.flat || booking.address?.flat || ''}, ${booking.area || booking.address?.area || 'Delhi NCR'}`;
+
+    const text = `New BeautyDoor Booking ${bookingId}! Client: ${cName} (${cPhone}), Slot: ${date} ${slot}, Amount: ₹${total} (${method}). Address: ${address}.`;
+
+    console.log(`[SMS:OWNER_ALERT] Sending booking alert to owner (+91 ${ownerPhone}): "${text}"`);
+
+    // In dev / console mode or test
+    if (this.provider === 'console' || process.env.NODE_ENV !== 'production') {
+      return {
+        success: true,
+        provider: 'console',
+        messageId: `owner-alert-${Date.now()}`,
+        telemetryMessage: `Owner SMS alert logged for ${bookingId} to +91 ${ownerPhone}`
+      };
+    }
+
+    try {
+      if (this.provider === 'msg91') {
+        return await this.sendViaMsg91(ownerPhone, bookingId);
+      } else if (this.provider === 'fast2sms') {
+        return await this.sendViaFast2Sms(ownerPhone, bookingId);
+      } else if (this.provider === 'twilio') {
+        return await this.sendViaTwilio(ownerPhone, bookingId);
+      }
+      return this.sendViaConsole(ownerPhone, bookingId);
+    } catch (err: any) {
+      console.warn('[SMS:OWNER_ALERT] Failed to deliver owner SMS:', err.message);
+      return { success: false, provider: this.provider, error: err.message };
+    }
+  }
+
+  /**
    * Dispatch OTP SMS directly to customer's mobile number
    */
   public async sendOtp(phone: string, otp: string): Promise<SmsSendResult> {

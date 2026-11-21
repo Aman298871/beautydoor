@@ -338,6 +338,17 @@ async function initPostgresSchema(pool: pg.Pool) {
       min_order_amount INTEGER NOT NULL DEFAULT 499
     );
 
+    CREATE TABLE IF NOT EXISTS customers (
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      phone VARCHAR(64) UNIQUE NOT NULL,
+      email VARCHAR(255),
+      total_bookings INTEGER NOT NULL DEFAULT 0,
+      total_spent INTEGER NOT NULL DEFAULT 0,
+      last_booking_at VARCHAR(64),
+      created_at VARCHAR(64) NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS beauticians (
       id VARCHAR(255) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -602,6 +613,40 @@ async function seedEssentialData() {
   try {
     await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_refund_id VARCHAR(255)");
   } catch {}
+
+  // Idempotent creation and backfill for customers table from existing bookings
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(64) UNIQUE NOT NULL,
+        email VARCHAR(255),
+        total_bookings INTEGER NOT NULL DEFAULT 0,
+        total_spent INTEGER NOT NULL DEFAULT 0,
+        last_booking_at VARCHAR(64),
+        created_at VARCHAR(64) NOT NULL
+      )
+    `);
+    await db.execute(`
+      INSERT INTO customers (id, name, phone, email, total_bookings, total_spent, last_booking_at, created_at)
+      SELECT 
+        customer_id as id,
+        customer_name as name,
+        customer_phone as phone,
+        MAX(customer_email) as email,
+        COUNT(id) as total_bookings,
+        SUM(total_payable) as total_spent,
+        MAX(created_at) as last_booking_at,
+        MIN(created_at) as created_at
+      FROM bookings
+      GROUP BY customer_id, customer_name, customer_phone
+      ON CONFLICT (id) DO UPDATE SET
+        total_bookings = EXCLUDED.total_bookings,
+        total_spent = EXCLUDED.total_spent,
+        last_booking_at = EXCLUDED.last_booking_at
+    `);
+  } catch { }
 
   // Idempotent creation of booking_notifications audit table for email notifications
   try {

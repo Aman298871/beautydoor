@@ -673,6 +673,86 @@ export class EmailService {
     await this.logNotification(bookingId, recipient, 'booking_cancellation', subject, result);
     return result;
   }
+
+  /**
+   * Send Booking Rejected Email with polite explanation and support contact
+   */
+  public async sendBookingRejectedEmail(booking: any, reason: string): Promise<EmailDispatchResult> {
+    const email = booking.customer_email || booking.customerEmail;
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return { success: false, provider: 'simulated', error: 'No valid customer email address provided' };
+    }
+
+    const recipient = email.trim();
+    const bookingId = booking.id;
+
+    if (await this.isNotificationAlreadySent(bookingId, 'booking_rejection')) {
+      return { success: true, provider: 'simulated', messageId: 'already_sent' };
+    }
+
+    const subject = `Booking Update: Regarding Your BeautyDoor Appointment (Ref: ${bookingId})`;
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Booking Update - BeautyDoor</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #F8F6F3; color: #1F1A1C;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; border: 1px solid #E8DDD3;">
+    <tr>
+      <td style="padding: 24px; text-align: center; background: linear-gradient(135deg, #4A0417, #7A1C30); color: #FFFFFF;">
+        <h1 style="margin: 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">BeautyDoor</h1>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: #E8DDD3; text-transform: uppercase; letter-spacing: 1px;">Doorstep Salon & Wellness · Delhi NCR</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 28px 24px;">
+        <div style="background-color: #FEF3F2; border: 1px solid #FECDCA; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <h2 style="margin: 0 0 8px 0; font-size: 16px; color: #B42318; font-weight: bold;">Appointment Could Not Be Accommodated</h2>
+          <p style="margin: 0; font-size: 13px; color: #7A271A; line-height: 1.5;">
+            Dear ${booking.customer_name || 'Valued Client'}, we regret to inform you that we are unable to accept your appointment for <strong>${booking.appointment_date}</strong> at <strong>${booking.appointment_slot}</strong>.
+          </p>
+        </div>
+
+        <div style="background-color: #FAF7F2; border-radius: 12px; border: 1px solid #E8DDD3; padding: 16px; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: #4A0417; font-weight: bold;">Reason from Salon Operations</h3>
+          <p style="margin: 0; font-size: 14px; color: #1F1A1C; font-weight: 500;">
+            ${reason || 'All certified female specialists are currently fully committed during this requested time slot.'}
+          </p>
+        </div>
+
+        <p style="font-size: 13px; color: #5C4D4F; line-height: 1.6; margin: 0 0 16px 0;">
+          If you made an online advance payment, a <strong>100% full refund</strong> has been automatically queued to your original payment method with zero cancellation fees.
+        </p>
+        <p style="font-size: 13px; color: #5C4D4F; line-height: 1.6; margin: 0 0 24px 0;">
+          We would love to pamper you at another time that suits your schedule. Please visit our website to pick another slot or call our concierge team directly.
+        </p>
+
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="tel:+917827722522" style="display: inline-block; background-color: #4A0417; color: #FFFFFF; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 13px; font-weight: 600;">
+            Call Preeti directly: +91 78277 22522
+          </a>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 20px 24px; background-color: #FAF7F2; border-top: 1px solid #E8DDD3; text-align: center; font-size: 12px; color: #7A6B6D; line-height: 1.6;">
+        <p style="margin: 0 0 6px 0;">BeautyDoor Concierge Desk · Delhi NCR</p>
+        <p style="margin: 0; font-weight: 600; color: #4A0417;">
+          WhatsApp / Call: +91 78277 22522 | Email: hello@beautydoor.in
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const result = await this.dispatchEmail(recipient, subject, html);
+    await this.logNotification(bookingId, recipient, 'booking_rejection', subject, result);
+    return result;
+  }
 }
 
 export const emailService = new EmailService();

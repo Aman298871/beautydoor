@@ -227,7 +227,17 @@ export class RazorpayService {
       return { success: false, error: 'Refund amount must be greater than zero.' };
     }
 
-    if (this.isConfigured() && process.env.NODE_ENV !== 'test') {
+    // Synthetic / test payment IDs or test environments return test refund
+    if (paymentId.startsWith('pay_test_') || process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_PAYMENTS === 'true') {
+      return {
+        success: true,
+        refundId: `rfnd_test_${Date.now()}_${paymentId.slice(-6)}`,
+        status: 'processed',
+        amount: amountInPaise
+      };
+    }
+
+    if (this.isConfigured()) {
       try {
         const auth = Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64');
         const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {

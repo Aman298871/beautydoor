@@ -133,7 +133,7 @@ export const ContactPage: React.FC = () => {
 
 export const FAQPage: React.FC = () => {
   const { navigate } = useRouter();
-  const faqs = [
+  const defaultFaqs = [
     {
       q: 'What is the minimum booking amount for doorstep appointments?',
       a: 'Minimum booking amount:\n• Delhi – ₹1,000\n• Haryana – ₹1,500\n• Noida – ₹1,500\n\nYour cart must meet the minimum order amount for your selected service location before you can confirm your booking.'
@@ -155,6 +155,23 @@ export const FAQPage: React.FC = () => {
       a: '• Free Cancellation: Cancellations made at least 2 hours prior to your scheduled service slot incur no charge (₹0 fee).\n• Late Cancellation: Cancellations made less than 2 hours before your scheduled appointment slot incur a ₹200 convenience charge.\n• Refund Processing: For online-paid orders, the ₹200 fee is deducted and the net balance is refunded to your original payment method in 5–7 business days. For Cash-on-Delivery orders, ₹200 is recorded on your account.'
     }
   ];
+
+  const [faqs, setFaqs] = React.useState<{ q: string; a: string }[]>(defaultFaqs);
+
+  React.useEffect(() => {
+    fetch('/api/faq')
+      .then(res => res.json())
+      .then(data => {
+        if (data.faqs && Array.isArray(data.faqs) && data.faqs.length > 0) {
+          const mapped = data.faqs.map((f: any) => ({
+            q: f.question,
+            a: f.answer || 'Please contact our support team for full assistance.'
+          }));
+          setFaqs(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="py-12 sm:py-16 bg-[#FAF7F2] min-h-[85vh]">

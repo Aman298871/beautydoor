@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { emailService } from '../services/emailService.ts';
+import { smsService } from '../services/smsService.ts';
 import { razorpayService } from '../services/razorpayService.ts';
 import { requireCustomerAuth } from '../middleware/customerAuthMiddleware.ts';
 
@@ -55,7 +56,21 @@ storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<v
       settings[r.key] = r.value;
     });
 
-    res.json({ categories, services, packages, hygieneCommitments, settings });
+    const isRazorpayActive = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+    const razorpayKey = razorpayService.getKeyId();
+
+    res.json({
+      categories,
+      services,
+      packages,
+      hygieneCommitments,
+      settings,
+      paymentOptions: {
+        codAvailable: true,
+        razorpayAvailable: isRazorpayActive,
+        razorpayKeyId: razorpayKey
+      }
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to load catalogue' });
   }
@@ -69,7 +84,16 @@ storefrontRouter.get('/settings', async (_req: Request, res: Response): Promise<
     rawSettings.forEach((r) => {
       settings[r.key] = r.value;
     });
-    res.json({ settings });
+    const isRazorpayActive = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+    const razorpayKey = razorpayService.getKeyId();
+
+    res.json({
+      settings,
+      razorpay: {
+        enabled: isRazorpayActive,
+        keyId: razorpayKey
+      }
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to load business settings' });
   }
@@ -947,10 +971,36 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     const bookingId = `BD-NCR-${randomSuffix}`;
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
-    const isRazorpayEnabled = process.env.ENABLE_RAZORPAY === 'true';
+    const isRazorpayEnabled = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
     const chosenPaymentMethod = (isRazorpayEnabled && paymentMethod === 'RAZORPAY') ? 'RAZORPAY' : 'COD';
     // Payments start as pending until verified through gateway webhook / signature or collected on doorstep
     const paymentStatus = 'pending';
+    const nowIso = new Date().toISOString();
+
+    // Upsert customer record
+    const customerId = `cust-${cleanPhone}`;
+    try {
+      await db.execute(`
+        INSERT INTO customers (id, name, phone, email, total_bookings, total_spent, last_booking_at, created_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+          name = COALESCE(EXCLUDED.name, customers.name),
+          email = COALESCE(EXCLUDED.email, customers.email),
+          total_bookings = customers.total_bookings + 1,
+          total_spent = customers.total_spent + EXCLUDED.total_spent,
+          last_booking_at = EXCLUDED.last_booking_at
+      `, [
+        customerId,
+        customerName,
+        `+91 ${cleanPhone}`,
+        customerEmail || null,
+        totalPayable,
+        nowIso,
+        nowIso
+      ]);
+    } catch (custErr: any) {
+      console.warn('[DB] Customer upsert notice:', custErr.message);
+    }
 
     // Insert booking
     await db.execute(`
@@ -963,7 +1013,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
     `, [
       bookingId,
-      `cust-${cleanPhone}`,
+      customerId,
       customerName,
       `+91 ${cleanPhone}`,
       customerEmail || null,
@@ -984,7 +1034,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       chosenPaymentMethod,
       paymentStatus,
       notes || 'Booked via BeautyDoor Customer Web Application.',
-      new Date().toISOString()
+      nowIso
     ]);
 
     for (let idx = 0; idx < validatedItems.length; idx++) {
@@ -1007,6 +1057,34 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         it.finalItemPrice,
         it.durationMins
       ]);
+    }
+
+    // Optional real Razorpay Order creation if customer chose online payment
+    let razorpayOrderData: any = null;
+    if (chosenPaymentMethod === 'RAZORPAY') {
+      try {
+        const amountInPaise = Math.round(totalPayable * 100);
+        const order = await razorpayService.createOrder({
+          bookingId,
+          amountInPaise,
+          currency: 'INR',
+          notes: {
+            bookingId,
+            customerName,
+            customerPhone: `+91 ${cleanPhone}`
+          }
+        });
+        await db.execute('UPDATE bookings SET razorpay_order_id = ? WHERE id = ?', [order.id, bookingId]);
+        razorpayOrderData = {
+          orderId: order.id,
+          amount: amountInPaise,
+          currency: 'INR',
+          keyId: razorpayService.getKeyId(),
+          bookingId
+        };
+      } catch (rpErr: any) {
+        console.warn('[Razorpay] Order creation on booking checkout:', rpErr.message);
+      }
     }
 
     const fullBooking = {
@@ -1032,8 +1110,13 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       paymentMethod: chosenPaymentMethod,
       paymentStatus,
       bookingStatus: 'pending',
-      createdAt: new Date().toISOString()
+      createdAt: nowIso
     };
+
+    // Dispatches automatic SMS Alert to Owner (Preeti)
+    smsService.sendBookingAlertToOwner(fullBooking).catch(err => {
+      console.warn('[SMS:Owner] Dispatch error:', err.message);
+    });
 
     console.log(`[NOTIFICATION DISPATCH] Booking Confirmation SMS & WhatsApp dispatched to +91 ${cleanPhone} for Appointment ID ${bookingId}.`);
 
@@ -1062,6 +1145,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       paymentMethod: chosenPaymentMethod,
       appointmentDate,
       appointmentSlot,
+      razorpayOrder: razorpayOrderData,
       message: `Appointment reserved successfully with Booking ID: ${bookingId}.`
     });
   } catch (err: any) {
@@ -1072,7 +1156,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 // 12. Real Razorpay Online Payment Integration (Compliant with real gateway or test mode)
 const createRazorpayOrderHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (process.env.ENABLE_RAZORPAY !== 'true') {
+    const isRazorpayActive = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+    if (!isRazorpayActive) {
       res.status(403).json({
         error: 'Online payments are temporarily disabled. Please book using Pay After Service (Cash / UPI) at doorstep.',
         code: 'RAZORPAY_DISABLED'
@@ -1141,7 +1226,8 @@ storefrontRouter.post('/payment/razorpay/order', createRazorpayOrderHandler);
 
 const verifyRazorpayHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (process.env.ENABLE_RAZORPAY !== 'true') {
+    const isRazorpayActive = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+    if (!isRazorpayActive) {
       res.status(403).json({
         error: 'Online payments are temporarily disabled. Please book using Pay After Service (Cash / UPI) at doorstep.',
         code: 'RAZORPAY_DISABLED'

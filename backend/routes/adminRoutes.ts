@@ -47,7 +47,14 @@ adminRouter.get('/overview', async (req: Request, res: Response): Promise<void> 
   const activeTerritories = ((await db.queryRow('SELECT COUNT(*) as count FROM territories WHERE is_active = 1', [])) as any).count;
   const activePackages = ((await db.queryRow('SELECT COUNT(*) as count FROM packages WHERE is_published = 1', [])) as any).count;
   const activeCoupons = ((await db.queryRow('SELECT COUNT(*) as count FROM coupons WHERE is_active = 1', [])) as any).count;
-  const totalCustomers = ((await db.queryRow('SELECT COUNT(*) as count FROM customers', [])) as any).count;
+  let totalCustomers = 0;
+  try {
+    const custRow = (await db.queryRow('SELECT COUNT(*) as count FROM customers', [])) as any;
+    totalCustomers = Number(custRow?.count || 0);
+  } catch {
+    const fallbackRow = (await db.queryRow('SELECT COUNT(DISTINCT customer_phone) as count FROM bookings', [])) as any;
+    totalCustomers = Number(fallbackRow?.count || 0);
+  }
 
   const now = new Date().toISOString();
   const activeCampaigns = ((await db.queryRow(`
@@ -180,6 +187,74 @@ adminRouter.patch('/bookings/:id/status', async (req: Request, res: Response): P
   }
 
   res.json({ success: true });
+});
+
+// Explicit Accept Booking Endpoint
+adminRouter.patch('/bookings/:id/accept', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  if (booking.booking_status === 'cancelled') {
+    res.status(400).json({ error: 'Cannot accept a cancelled booking.' });
+    return;
+  }
+
+  await db.execute("UPDATE bookings SET booking_status = 'confirmed' WHERE id = ?", [id]);
+  recordAuditLog(adminUser, 'ACCEPT_BOOKING', 'BOOKING', id, { previousStatus: booking.booking_status }, req.ip);
+
+  const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (updated && updated.customer_email) {
+    emailService.sendBookingConfirmationEmail(updated).catch(err => console.warn('[Email] Accept dispatch error:', err.message));
+  }
+
+  res.json({ success: true, booking: updated, message: `Booking ${id} accepted and confirmed.` });
+});
+
+// Explicit Reject Booking Endpoint
+adminRouter.patch('/bookings/:id/reject', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  if (!reason || !reason.trim()) {
+    res.status(400).json({ error: 'A polite rejection reason is required for customer notification.' });
+    return;
+  }
+
+  const booking = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (!booking) {
+    res.status(404).json({ error: 'Booking not found.' });
+    return;
+  }
+
+  if (booking.booking_status === 'cancelled') {
+    res.status(400).json({ error: 'Booking is already cancelled/rejected.' });
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  await db.execute(`
+    UPDATE bookings 
+    SET booking_status = 'cancelled',
+        cancellation_reason = ?,
+        cancelled_at = ?
+    WHERE id = ?
+  `, [`Salon Operations: ${reason.trim()}`, nowIso, id]);
+
+  recordAuditLog(adminUser, 'REJECT_BOOKING', 'BOOKING', id, { reason: reason.trim() }, req.ip);
+
+  const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
+  if (updated && updated.customer_email) {
+    emailService.sendBookingRejectedEmail(updated, reason.trim()).catch(err => console.warn('[Email] Rejection dispatch error:', err.message));
+  }
+
+  res.json({ success: true, booking: updated, message: `Booking ${id} rejected. Customer has been notified.` });
 });
 
 function parseAppointmentDateTime(dateStr: string, slotStr: string): number | null {
@@ -732,61 +807,7 @@ adminRouter.delete('/services/:id', async (req: Request, res: Response): Promise
   res.json({ success: true });
 });
 
-// 3b. Packages CRUD & Price Auditing are defined in Section 13 below with full audit logging and schema parity.
-
-// 3c. Hygiene Commitments CRUD
-adminRouter.get('/hygiene', async (_req: Request, res: Response): Promise<void> => {
-  const commitments = (await db.query('SELECT * FROM hygiene_commitments ORDER BY display_order ASC', []));
-  res.json({ commitments });
-});
-
-adminRouter.post('/hygiene', async (req: Request, res: Response): Promise<void> => {
-  const h = req.body;
-  const hygId = h.id || `hyg-${Date.now()}`;
-  const now = new Date().toISOString();
-
-  (await db.execute(`
-    INSERT INTO hygiene_commitments (id, title, description, icon_name, display_order, is_active, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [hygId, h.title, h.description, h.iconName || 'ShieldCheck', Number(h.displayOrder) || 0, h.isActive !== false ? 1 : 0, now]));
-
-  res.status(201).json({ success: true, id: hygId });
-});
-
-adminRouter.put('/hygiene/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const h = req.body;
-
-  (await db.execute(`
-    UPDATE hygiene_commitments SET
-      title = ?, description = ?, icon_name = ?, display_order = ?, is_active = ?
-    WHERE id = ?
-  `, [h.title, h.description, h.iconName || 'ShieldCheck', Number(h.displayOrder) || 0, h.isActive ? 1 : 0, id]));
-
-  res.json({ success: true });
-});
-
-adminRouter.delete('/hygiene/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  (await db.execute('DELETE FROM hygiene_commitments WHERE id = ?', [id]));
-  res.json({ success: true });
-});
-
-// 3d. Price Change Audit Logs
-adminRouter.get('/price-audits', async (_req: Request, res: Response): Promise<void> => {
-  const logs = (await db.query('SELECT * FROM price_audit_logs ORDER BY timestamp DESC LIMIT 100', []));
-  res.json({ logs });
-});
-
-// 3e. Pending / Incomplete Services (Missing Data View)
-adminRouter.get('/pending-services', async (_req: Request, res: Response): Promise<void> => {
-  const pendingServices = (await db.query(`
-    SELECT * FROM services 
-    WHERE is_published = 0 OR is_active = 0 OR selling_price = 0 OR pending_notes IS NOT NULL
-    ORDER BY category_id ASC
-  `, []));
-  res.json({ pendingServices });
-});
+// 3b. Hygiene Commitments, Price Audits, and Pending Services are defined in Section 14-16 below with full audit logging and schema parity.
 
 // 4. Amazon-Style Promotional Campaigns CRUD
 adminRouter.get('/campaigns', async (_req: Request, res: Response): Promise<void> => {
@@ -1013,6 +1034,15 @@ adminRouter.put('/beauticians/:id', async (req: Request, res: Response): Promise
 
   recordAuditLog(adminUser, 'UPDATE_BEAUTICIAN', 'STAFF', id, b, req.ip);
   res.json({ success: true });
+});
+
+adminRouter.delete('/beauticians/:id', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+
+  await db.execute('DELETE FROM beauticians WHERE id = ?', [id]);
+  recordAuditLog(adminUser, 'DELETE_BEAUTICIAN', 'STAFF', id, {}, req.ip);
+  res.json({ success: true, message: `Beautician ${id} removed.` });
 });
 
 adminRouter.get('/beauticians/:id/appointments', async (req: Request, res: Response): Promise<void> => {
@@ -1544,7 +1574,7 @@ adminRouter.delete('/hygiene/:id', async (req: Request, res: Response): Promise<
 // 15. Price Change Audit Trail
 adminRouter.get('/price-audits', async (_req: Request, res: Response): Promise<void> => {
   const audits = (await db.query('SELECT * FROM price_audit_logs ORDER BY timestamp DESC LIMIT 200', []));
-  res.json({ audits });
+  res.json({ audits, logs: audits });
 });
 
 // 16. Missing Data / Pending Owner Confirmation
@@ -1554,7 +1584,19 @@ adminRouter.get('/pending-services', async (_req: Request, res: Response): Promi
     WHERE is_published = 0 OR pending_notes IS NOT NULL OR selling_price IS NULL OR selling_price = 0
     ORDER BY created_at DESC
   `, []));
-  res.json({ pending });
+  res.json({ pending, pendingServices: pending });
+});
+
+// 16b. Notification Dispatch History Audit Trail
+adminRouter.get('/notifications', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const notifications = await db.query(`
+      SELECT * FROM booking_notifications ORDER BY sent_at DESC LIMIT 200
+    `, []);
+    res.json({ notifications });
+  } catch {
+    res.json({ notifications: [] });
+  }
 });
 
 

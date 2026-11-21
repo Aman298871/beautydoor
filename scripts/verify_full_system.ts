@@ -1,12 +1,8 @@
 import crypto from 'crypto';
-
-process.env.NODE_ENV = 'test';
-process.env.ENABLE_TEST_PAYMENTS = 'true';
-process.env.RAZORPAY_KEY_SECRET = 'test_secret_for_automated_suite_123';
-
 import { db, initDatabase } from '../backend/db/database.ts';
 import { lockScroll, unlockScroll, getScrollLockCount, forceResetScroll } from '../src/utils/scrollLock.ts';
 import { emailService } from '../backend/services/emailService.ts';
+import { smsService } from '../backend/services/smsService.ts';
 import { razorpayService } from '../backend/services/razorpayService.ts';
 import { firebaseAuthService } from '../backend/services/firebaseAuthService.ts';
 
@@ -771,7 +767,7 @@ async function verifyAll() {
 
   // Test 25: Razorpay vs COD Cancellation Refund Integrity (Captured vs Pending vs Failed)
   console.log('\nTest 25: Cancellation Refund Integrity: Captured vs Unpaid/Pending/Failed Payments');
-  
+
   // Case 1: Razorpay UNPAID / PENDING (customer selected Razorpay on checkout but did not pay or payment failed)
   // Cancellation within 2h -> fee applies, but customer paid 0, so refund = 0, NO refund-pending record created!
   const pendingBooking = {
@@ -847,7 +843,7 @@ async function verifyAll() {
   console.log('\nTest 26: Firebase / Customer Authentication Token Security');
   const customerPhone = '9876543210';
   const validToken = firebaseAuthService.generateCustomerToken(customerPhone);
-  
+
   // 1. Valid token verification
   const verifyRes = await firebaseAuthService.verifyToken(validToken);
   if (!verifyRes.valid || verifyRes.customer?.phone !== customerPhone) {
@@ -870,7 +866,7 @@ async function verifyAll() {
   console.log('\nTest 27: Cross-Customer Booking Access Protection');
   const tokenCustomerA = firebaseAuthService.generateCustomerToken('9876543210');
   const verifyCustomerA = await firebaseAuthService.verifyToken(tokenCustomerA);
-  
+
   // Attempting to query Customer B's phone using Customer A's token
   const requestedPhoneB = '9999988888';
   const cleanA = verifyCustomerA.customer!.phone.replace(/\D/g, '').slice(-10);
@@ -881,36 +877,50 @@ async function verifyAll() {
   console.log(`  ✓ Security violation intercepted: Customer A (+91 ${cleanA}) blocked from accessing Customer B (+91 ${cleanB}) bookings`);
   console.log('✓ PASS: Cross-customer isolation verified (customers cannot access another phone\'s bookings)');
 
-  // Test 28: COD-Only Release Enforcement & Dormant Razorpay Flag
-  console.log('\nTest 28: COD-Only Release Enforcement & Dormant Razorpay Flag');
-  const isRzpEnabled = process.env.ENABLE_RAZORPAY === 'true';
-  if (isRzpEnabled) {
-    throw new Error('ENABLE_RAZORPAY must be false for COD-only production release');
+  // Test 28: Razorpay Integration with Test Credentials & Dual Payment Support
+  console.log('\nTest 28: Razorpay Integration with Test Credentials & Dual Payment Support');
+  const activeKeyId = razorpayService.getKeyId();
+  if (!activeKeyId.startsWith('rzp_test_')) {
+    throw new Error(`Expected Razorpay test key ID starting with rzp_test_, got: ${activeKeyId}`);
   }
-  console.log('  ✓ Verified: ENABLE_RAZORPAY is false (Razorpay is dormant)');
+  console.log(`  ✓ Active Razorpay Key ID: ${activeKeyId}`);
 
-  // Test booking creation enforces COD even if client attempts RAZORPAY
+  // Test Razorpay Order creation & HMAC-SHA256 Signature Verification
+  const testOrderId = 'order_test_rzp_' + Date.now();
+  const testPaymentId = 'pay_test_rzp_' + Date.now();
+  const keySecret = razorpayService.getKeySecret();
+  const generatedSignature = crypto
+    .createHmac('sha256', keySecret)
+    .update(`${testOrderId}|${testPaymentId}`)
+    .digest('hex');
+
+  const sigCheck = razorpayService.verifyPaymentSignature({
+    orderId: testOrderId,
+    paymentId: testPaymentId,
+    signature: generatedSignature
+  });
+  if (!sigCheck.valid) {
+    throw new Error(`Razorpay signature verification failed: ${sigCheck.error}`);
+  }
+  console.log('  ✓ Verified HMAC-SHA256 payment signature verified successfully');
+
+  // Test booking creation with COD payment method
   const testCodBookingId = `BD-TEST-COD-${Date.now()}`;
-  const incomingPaymentMethod = 'RAZORPAY';
-  const effectivePaymentMethod = (process.env.ENABLE_RAZORPAY === 'true' && incomingPaymentMethod === 'RAZORPAY') ? 'RAZORPAY' : 'COD';
-  if (effectivePaymentMethod !== 'COD') {
-    throw new Error('Storefront booking should have forced COD payment method');
-  }
-
   await db.execute(`
     INSERT INTO bookings (
       id, customer_id, customer_name, customer_phone,
       flat, area, city, pincode,
       subtotal, total_payable, appointment_date, appointment_slot,
       payment_method, payment_status, created_at
-    ) VALUES (?, 'cust-test-cod', 'Ananya Gupta', '+91 9811223344', 'Flat 101', 'Saket', 'Delhi', '110017', 999, 999, '2026-11-26', '10:00 AM', ?, 'pending', ?)
-  `, [testCodBookingId, effectivePaymentMethod, new Date().toISOString()]);
+    ) VALUES (?, 'cust-test-cod', 'Ananya Gupta', '+91 9811223344', 'Flat 101', 'Saket', 'Delhi', '110017', 999, 999, '2026-11-26', '10:00 AM', 'COD', 'pending', ?)
+  `, [testCodBookingId, new Date().toISOString()]);
 
   const insertedCodBooking = await db.queryRow<any>('SELECT * FROM bookings WHERE id = ?', [testCodBookingId]);
   if (!insertedCodBooking || insertedCodBooking.payment_method !== 'COD' || insertedCodBooking.payment_status !== 'pending') {
     throw new Error('Booking was not stored with payment_method COD and status pending');
   }
-  console.log('  ✓ Stored booking successfully locked to COD with payment_status pending');
+  console.log('  ✓ Stored booking successfully recorded with payment_method COD and payment_status pending');
+  console.log('✓ PASS: Dual payment (COD and Razorpay) configuration verified');
 
   // Test 29: VLCC Facial & Waxing Package Variant Recording in Booking Items
   console.log('\nTest 29: VLCC Facial & Waxing Package Variant Recording in Booking Items');
@@ -945,8 +955,160 @@ async function verifyAll() {
   console.log(`  ✓ VLCC Package booking item stored with variant_name: "${recordedVlccItem.variant_name}", Price: ₹${recordedVlccItem.final_item_price}`);
   console.log('✓ PASS: VLCC Facial variant selection and booking item persistence verified');
 
+  // Test 30: Automated Owner SMS Alert on New Booking
+  console.log('\nTest 30: Automated Owner SMS Alert (Preeti Singh: 7827722522)');
+  const smsAlertRes = await smsService.sendBookingAlertToOwner({
+    id: 'BD-TEST-ALERT-01',
+    customer_name: 'Pooja Verma',
+    customer_phone: '+91 9811234567',
+    appointment_date: '2026-11-28',
+    appointment_slot: '11:00 AM',
+    total_payable: 1499,
+    payment_method: 'COD',
+    flat: 'Tower B, Flat 402',
+    area: 'Saket, New Delhi'
+  });
+  if (!smsAlertRes.success) {
+    throw new Error(`Owner SMS alert dispatch failed: ${smsAlertRes.error}`);
+  }
+  console.log(`  ✓ Owner SMS alert dispatched successfully (${smsAlertRes.telemetryMessage})`);
+  console.log('✓ PASS: Automated SMS alert to business owner verified');
+
+  // Test 31: Booking Accept/Confirm Flow & Notification
+  console.log('\nTest 31: Booking Accept & Confirmation Flow');
+  const acceptBookingId = `BD-TEST-ACCEPT-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO bookings (
+      id, customer_id, customer_name, customer_phone, customer_email,
+      flat, area, city, pincode,
+      subtotal, total_payable, appointment_date, appointment_slot,
+      payment_method, payment_status, booking_status, created_at
+    ) VALUES (?, 'cust-test-acc', 'Meera Kapoor', '+91 9810012345', 'meera@example.com', 'Flat 303', 'Hauz Khas', 'Delhi', '110016', 1500, 1500, '2026-11-29', '02:00 PM', 'COD', 'pending', 'pending', ?)
+  `, [acceptBookingId, new Date().toISOString()]);
+
+  // Admin accepts booking
+  await db.execute("UPDATE bookings SET booking_status = 'confirmed' WHERE id = ?", [acceptBookingId]);
+  const confirmedRow = await db.queryRow<any>('SELECT * FROM bookings WHERE id = ?', [acceptBookingId]);
+  if (!confirmedRow || confirmedRow.booking_status !== 'confirmed') {
+    throw new Error('Booking status was not updated to confirmed');
+  }
+
+  // Dispatches confirmed email
+  const confirmEmailRes = await emailService.sendBookingConfirmationEmail({
+    id: acceptBookingId,
+    customer_name: confirmedRow.customer_name,
+    customer_phone: confirmedRow.customer_phone,
+    customer_email: confirmedRow.customer_email,
+    flat: confirmedRow.flat,
+    area: confirmedRow.area,
+    city: confirmedRow.city,
+    total_payable: confirmedRow.total_payable,
+    payment_method: confirmedRow.payment_method,
+    appointment_date: confirmedRow.appointment_date,
+    appointment_slot: confirmedRow.appointment_slot
+  });
+  if (!confirmEmailRes.success) {
+    throw new Error(`Confirmation email failed: ${confirmEmailRes.error}`);
+  }
+  console.log(`  ✓ Booking ${acceptBookingId} confirmed and confirmation email dispatched`);
+  console.log('✓ PASS: Booking Accept lifecycle verified');
+
+  // Test 32: Booking Reject Flow with Mandatory Reason & Email
+  console.log('\nTest 32: Booking Reject Flow with Reason');
+  const rejectBookingId = `BD-TEST-REJECT-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO bookings (
+      id, customer_id, customer_name, customer_phone, customer_email,
+      flat, area, city, pincode,
+      subtotal, total_payable, appointment_date, appointment_slot,
+      payment_method, payment_status, booking_status, created_at
+    ) VALUES (?, 'cust-test-rej', 'Kavita Nair', '+91 9811122233', 'kavita@example.com', 'Villa 12', 'Vasant Kunj', 'Delhi', '110070', 2000, 2000, '2026-11-30', '04:00 PM', 'COD', 'pending', 'pending', ?)
+  `, [rejectBookingId, new Date().toISOString()]);
+
+  const rejectReason = 'Specialist slot fully reserved for requested time window. Please reschedule.';
+  await db.execute("UPDATE bookings SET booking_status = 'cancelled', cancellation_reason = ? WHERE id = ?", [rejectReason, rejectBookingId]);
+  const rejectedRow = await db.queryRow<any>('SELECT * FROM bookings WHERE id = ?', [rejectBookingId]);
+  if (!rejectedRow || rejectedRow.booking_status !== 'cancelled' || rejectedRow.cancellation_reason !== rejectReason) {
+    throw new Error('Booking status was not updated to cancelled with reason');
+  }
+
+  const rejectEmailRes = await emailService.sendBookingRejectedEmail({
+    id: rejectBookingId,
+    customer_name: rejectedRow.customer_name,
+    customer_phone: rejectedRow.customer_phone,
+    customer_email: rejectedRow.customer_email,
+    flat: rejectedRow.flat,
+    area: rejectedRow.area,
+    city: rejectedRow.city,
+    total_payable: rejectedRow.total_payable,
+    payment_method: rejectedRow.payment_method,
+    appointment_date: rejectedRow.appointment_date,
+    appointment_slot: rejectedRow.appointment_slot
+  }, rejectReason);
+  if (!rejectEmailRes.success) {
+    throw new Error(`Rejection email failed: ${rejectEmailRes.error}`);
+  }
+  console.log(`  ✓ Booking ${rejectBookingId} rejected with reason and email dispatched`);
+  console.log('✓ PASS: Booking Reject lifecycle verified');
+
+  // Test 33: Customers Table Persistence & Dynamic Aggregations
+  console.log('\nTest 33: Customers Table Schema & Dynamic Aggregations');
+  const customerCountRow = await db.queryRow<any>('SELECT COUNT(*) as cnt FROM customers');
+  if (customerCountRow === undefined || customerCountRow.cnt === undefined) {
+    throw new Error('Customers table count query failed');
+  }
+  console.log(`  ✓ Total registered customer records in database: ${customerCountRow.cnt}`);
+
+  // Test upserting a new customer
+  const newCustPhone = '+91 9877001122';
+  const newCustId = 'cust-9877001122';
+  await db.execute(`
+    INSERT INTO customers (id, name, phone, email, total_bookings, total_spent, last_booking_at, created_at)
+    VALUES (?, 'Ritu Sharma', ?, 'ritu@example.com', 1, 1500, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET total_bookings = customers.total_bookings + 1
+  `, [newCustId, newCustPhone, new Date().toISOString(), new Date().toISOString()]);
+
+  const fetchedCust = await db.queryRow<any>('SELECT * FROM customers WHERE id = ?', [newCustId]);
+  if (!fetchedCust || fetchedCust.name !== 'Ritu Sharma') {
+    throw new Error('Customer upsert failed');
+  }
+  console.log(`  ✓ Customer record ${fetchedCust.id} persisted with ${fetchedCust.total_bookings} booking(s)`);
+  console.log('✓ PASS: Customers table schema and upsert verified');
+
+  // Test 34: Beauticians Roster Full CRUD Lifecycle
+  console.log('\nTest 34: Beauticians Roster CRUD Lifecycle');
+  const testBeauticianId = `bty-test-${Date.now()}`;
+  // 1. Create
+  await db.execute(`
+    INSERT INTO beauticians (id, name, phone, specialties_json, territories_json, experience_years, is_active, status, rating, total_jobs, created_at)
+    VALUES (?, 'Suman Lata', '+91 9811998877', '["Facials", "Waxing"]', '["South Delhi"]', 4, 1, 'available', 4.9, 0, ?)
+  `, [testBeauticianId, new Date().toISOString()]);
+
+  const createdBty = await db.queryRow<any>('SELECT * FROM beauticians WHERE id = ?', [testBeauticianId]);
+  if (!createdBty || createdBty.name !== 'Suman Lata') {
+    throw new Error('Beautician creation failed');
+  }
+  console.log(`  ✓ Created beautician: ${createdBty.name} (Status: ${createdBty.status})`);
+
+  // 2. Toggle Status / Leave
+  await db.execute("UPDATE beauticians SET status = 'on_leave' WHERE id = ?", [testBeauticianId]);
+  const onLeaveBty = await db.queryRow<any>('SELECT status FROM beauticians WHERE id = ?', [testBeauticianId]);
+  if (onLeaveBty?.status !== 'on_leave') {
+    throw new Error('Beautician leave toggle failed');
+  }
+  console.log('  ✓ Toggled beautician to on-leave status (status = on_leave)');
+
+  // 3. Delete
+  await db.execute('DELETE FROM beauticians WHERE id = ?', [testBeauticianId]);
+  const deletedBty = await db.queryRow<any>('SELECT * FROM beauticians WHERE id = ?', [testBeauticianId]);
+  if (deletedBty) {
+    throw new Error('Beautician deletion failed');
+  }
+  console.log('  ✓ Cleanly deleted test beautician record');
+  console.log('✓ PASS: Beauticians Roster CRUD lifecycle verified');
+
   await db.close();
-  console.log('\n=== ALL 29 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 34 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

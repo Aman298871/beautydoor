@@ -246,3 +246,55 @@ authRouter.post('/customer/otp/verify', (req: Request, res: Response): void => {
     }
   }
 });
+
+// Customer Firebase ID Token Exchange / Login
+authRouter.post('/customer/firebase-login', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { idToken, phone } = req.body;
+    if (!idToken && !phone) {
+      res.status(400).json({ error: 'idToken or verified phone number is required.' });
+      return;
+    }
+
+    let verifiedPhone = '';
+    let customerUid = '';
+
+    if (idToken) {
+      const verifyRes = await firebaseAuthService.verifyToken(idToken);
+      if (!verifyRes.valid || !verifyRes.customer) {
+        res.status(401).json({ error: verifyRes.error || 'Invalid Firebase ID token.' });
+        return;
+      }
+      verifiedPhone = verifyRes.customer.phone;
+      customerUid = verifyRes.customer.uid;
+    } else if (process.env.ENABLE_DEV_OTP === 'true' && phone) {
+      verifiedPhone = phone.replace(/\D/g, '').slice(-10);
+      customerUid = `cust-${verifiedPhone}`;
+    } else {
+      res.status(401).json({ error: 'Valid Firebase ID token is required in production.' });
+      return;
+    }
+
+    const token = firebaseAuthService.generateCustomerToken(verifiedPhone, customerUid);
+
+    // Upsert customer in database
+    const nowIso = new Date().toISOString();
+    try {
+      await db.execute(`
+        INSERT INTO customers (id, name, phone, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (id) DO NOTHING
+      `, [customerUid, `Customer ${verifiedPhone.slice(-4)}`, `+91 ${verifiedPhone}`, nowIso]);
+    } catch {}
+
+    res.json({
+      success: true,
+      customerId: customerUid,
+      phone: `+91 ${verifiedPhone}`,
+      token,
+      message: 'Customer session authenticated successfully via Firebase.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Firebase login failed' });
+  }
+});

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { db } from '../db/database.ts';
 import { requireAdminAuth } from '../middleware/auth.ts';
 
@@ -530,8 +531,8 @@ faqRouter.post('/admin/query', requireAdminAuth, async (req: Request, res: Respo
 // 3. ADMIN FAQ MANAGEMENT (CRUD Endpoints - Requires Admin Auth)
 // ---------------------------------------------------------------------------
 
-// GET /api/admin/faqs or /api/faq/manage - List all FAQs (both customer & admin, filterable)
-faqRouter.get(['/manage', '/'], requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
+// GET /api/admin/faqs/manage or /api/faq/manage - List all FAQs (for admin management)
+faqRouter.get('/manage', requireAdminAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const audience = req.query.audience as string | undefined;
     let query = 'SELECT * FROM faqs';
@@ -548,6 +549,42 @@ faqRouter.get(['/manage', '/'], requireAdminAuth, async (req: Request, res: Resp
     res.json({ faqs });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to load FAQ management records' });
+  }
+});
+
+// GET /api/faq or /api/faq/ - Dual support: authenticated admin gets management list; public gets customer FAQs
+faqRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      jwt.verify(token, process.env.JWT_SECRET || 'beautydoor-secret-key-production-2026');
+      const audience = req.query.audience as string | undefined;
+      let query = 'SELECT * FROM faqs';
+      const params: any[] = [];
+      if (audience && (audience === 'customer' || audience === 'admin')) {
+        query += ' WHERE audience = ?';
+        params.push(audience);
+      }
+      query += ' ORDER BY audience ASC, display_order ASC';
+      const faqs = (await db.query(query, [...params]));
+      res.json({ faqs });
+      return;
+    } catch {
+      // not a valid admin token, fall through to public customer FAQs
+    }
+  }
+
+  try {
+    const faqs = (await db.query(`
+      SELECT id, category, question, answer, display_order, is_dynamic
+      FROM faqs
+      WHERE audience = 'customer' AND is_active = 1
+      ORDER BY display_order ASC
+    `, []));
+    res.json({ faqs });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to load FAQs' });
   }
 });
 

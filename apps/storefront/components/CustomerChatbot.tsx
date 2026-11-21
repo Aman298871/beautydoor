@@ -153,7 +153,7 @@ export const CustomerChatbot: React.FC<CustomerChatbotProps> = ({ onOpenBookingM
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
 
-    setTimeout(() => {
+    const fallbackToLocal = () => {
       const match = matchQueryToAnswer(query);
 
       if (match) {
@@ -187,7 +187,32 @@ While I don't have an exact match for "${query}", you can:
         setActiveFollowUps(['faq-price-rates', 'faq-how-to-book', 'faq-min-order-city', 'faq-pay-cod-upi']);
       }
       setLoading(false);
-    }, 200);
+    };
+
+    fetch('/api/faq/customer/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.matched && data.answer) {
+          const botMsg: Message = {
+            id: 'bot-' + Date.now(),
+            sender: 'bot',
+            text: data.answer,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            actionType: data.actionType || 'services'
+          };
+          setMessages(prev => [...prev, botMsg]);
+          setLoading(false);
+        } else {
+          fallbackToLocal();
+        }
+      })
+      .catch(() => {
+        fallbackToLocal();
+      });
   };
 
   // Do not render floating button or chat panel when checkout drawer is open

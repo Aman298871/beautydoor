@@ -79,6 +79,7 @@ export default function AdminApp() {
   const [settings, setSettings] = useState<any>({});
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
   const [enquiries, setEnquiries] = useState<any[]>([]);
+  const [apiErrors, setApiErrors] = useState<Record<string, { status: number; message: string; url: string }>>({});
   const [selectedSampleBooking, setSelectedSampleBooking] = useState<any | null>(null);
   const [isSampleInvoiceOpen, setIsSampleInvoiceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -216,88 +217,102 @@ export default function AdminApp() {
     setLoading(true);
     const headers = { Authorization: `Bearer ${token}` };
 
-    const safeFetch = async (url: string, defaultValue: any) => {
+    const safeFetch = async (url: string, key: string) => {
       try {
         const res = await fetch(url, { headers });
         if (res.status === 401) {
           handleLogout();
-          return defaultValue;
+          return null;
         }
         if (!res.ok) {
-          console.warn(`[Admin] Endpoint ${url} returned HTTP ${res.status}`);
-          return defaultValue;
+          const text = await res.text().catch(() => '');
+          let msg = `HTTP ${res.status}`;
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.error) msg = parsed.error;
+          } catch { }
+          setApiErrors((prev) => ({ ...prev, [key]: { status: res.status, message: msg, url } }));
+          console.warn(`[Admin] Endpoint ${url} returned HTTP ${res.status}: ${msg}`);
+          return null;
         }
+        setApiErrors((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
         return await res.json();
       } catch (err: any) {
+        setApiErrors((prev) => ({ ...prev, [key]: { status: 0, message: err.message || 'Network error', url } }));
         console.warn(`[Admin] Fetch error on ${url}:`, err.message);
-        return defaultValue;
+        return null;
       }
     };
 
     try {
       const results = await Promise.allSettled([
-        safeFetch('/api/admin/overview', {}),
-        safeFetch('/api/admin/bookings', { bookings: [] }),
-        safeFetch('/api/admin/services', { services: [] }),
-        safeFetch('/api/admin/categories', { categories: [] }),
-        safeFetch('/api/admin/customers', { customers: [] }),
-        safeFetch('/api/admin/campaigns', { campaigns: [] }),
-        safeFetch('/api/admin/beauticians', { beauticians: [] }),
-        safeFetch('/api/admin/territories', { territories: [] }),
-        safeFetch('/api/admin/coupons', { coupons: [] }),
-        safeFetch('/api/admin/reviews', { reviews: [] }),
-        safeFetch('/api/admin/audit-logs', { logs: [] }),
-        safeFetch('/api/admin/settings', { settings: {} }),
-        safeFetch('/api/admin/faqs/manage', { faqs: [] }),
-        safeFetch('/api/admin/packages', { packages: [] }),
-        safeFetch('/api/admin/hygiene', { commitments: [] }),
-        safeFetch('/api/admin/pending-services', { pending: [] }),
-        safeFetch('/api/admin/price-audits', { audits: [] }),
-        safeFetch('/api/admin/notifications', { notifications: [] }),
-        safeFetch('/api/admin/enquiries', { enquiries: [] })
+        safeFetch('/api/admin/overview', 'overview'),
+        safeFetch('/api/admin/bookings', 'bookings'),
+        safeFetch('/api/admin/services', 'services'),
+        safeFetch('/api/admin/categories', 'categories'),
+        safeFetch('/api/admin/customers', 'customers'),
+        safeFetch('/api/admin/campaigns', 'campaigns'),
+        safeFetch('/api/admin/beauticians', 'beauticians'),
+        safeFetch('/api/admin/territories', 'territories'),
+        safeFetch('/api/admin/coupons', 'coupons'),
+        safeFetch('/api/admin/reviews', 'reviews'),
+        safeFetch('/api/admin/audit-logs', 'auditLogs'),
+        safeFetch('/api/admin/settings', 'settings'),
+        safeFetch('/api/admin/faqs/manage', 'faqs'),
+        safeFetch('/api/admin/packages', 'packages'),
+        safeFetch('/api/admin/hygiene', 'hygiene'),
+        safeFetch('/api/admin/pending-services', 'pendingServices'),
+        safeFetch('/api/admin/price-audits', 'priceAudits'),
+        safeFetch('/api/admin/notifications', 'notifications'),
+        safeFetch('/api/admin/enquiries', 'enquiries')
       ]);
 
-      const getVal = (idx: number, def: any) => (results[idx].status === 'fulfilled' ? results[idx].value : def);
+      const getVal = (idx: number) => (results[idx].status === 'fulfilled' ? results[idx].value : null);
 
-      const ov = getVal(0, {});
-      const bk = getVal(1, { bookings: [] });
-      const srv = getVal(2, { services: [] });
-      const cats = getVal(3, { categories: [] });
-      const cust = getVal(4, { customers: [] });
-      const camp = getVal(5, { campaigns: [] });
-      const beau = getVal(6, { beauticians: [] });
-      const ter = getVal(7, { territories: [] });
-      const coup = getVal(8, { coupons: [] });
-      const rev = getVal(9, { reviews: [] });
-      const aud = getVal(10, { logs: [] });
-      const sett = getVal(11, { settings: {} });
-      const faqsRes = getVal(12, { faqs: [] });
-      const pkgRes = getVal(13, { packages: [] });
-      const hygRes = getVal(14, { commitments: [] });
-      const pendRes = getVal(15, { pending: [] });
-      const auditRes = getVal(16, { audits: [] });
-      const notifRes = getVal(17, { notifications: [] });
-      const enqRes = getVal(18, { enquiries: [] });
+      const ov = getVal(0);
+      const bk = getVal(1);
+      const srv = getVal(2);
+      const cats = getVal(3);
+      const cust = getVal(4);
+      const camp = getVal(5);
+      const beau = getVal(6);
+      const ter = getVal(7);
+      const coup = getVal(8);
+      const rev = getVal(9);
+      const aud = getVal(10);
+      const sett = getVal(11);
+      const faqsRes = getVal(12);
+      const pkgRes = getVal(13);
+      const hygRes = getVal(14);
+      const pendRes = getVal(15);
+      const auditRes = getVal(16);
+      const notifRes = getVal(17);
+      const enqRes = getVal(18);
 
       if (ov && !ov.error) setOverview(ov);
-      if (bk.bookings) setBookings(bk.bookings);
-      if (srv.services) setServices(srv.services);
-      if (cats.categories) setCategories(cats.categories);
-      if (cust.customers) setCustomers(cust.customers);
-      if (camp.campaigns) setCampaigns(camp.campaigns);
-      if (beau.beauticians) setBeauticians(beau.beauticians);
-      if (ter.territories) setTerritories(ter.territories);
-      if (coup.coupons) setCoupons(coup.coupons);
-      if (rev.reviews) setReviews(rev.reviews);
-      if (aud.logs) setAuditLogs(aud.logs);
-      if (sett.settings) setSettings(sett.settings);
-      if (faqsRes.faqs) setFaqsList(faqsRes.faqs);
-      if (pkgRes.packages) setPackagesList(pkgRes.packages);
-      if (hygRes.commitments) setHygieneList(hygRes.commitments);
-      if (pendRes.pending || pendRes.pendingServices) setPendingServices(pendRes.pending || pendRes.pendingServices);
-      if (auditRes.audits || auditRes.logs) setPriceAuditLogs(auditRes.audits || auditRes.logs);
-      if (notifRes.notifications) setNotificationsList(notifRes.notifications);
-      if (enqRes.enquiries) setEnquiries(enqRes.enquiries);
+      if (bk && bk.bookings) setBookings(bk.bookings);
+      if (srv && srv.services) setServices(srv.services);
+      if (cats && cats.categories) setCategories(cats.categories);
+      if (cust && cust.customers) setCustomers(cust.customers);
+      if (camp && camp.campaigns) setCampaigns(camp.campaigns);
+      if (beau && beau.beauticians) setBeauticians(beau.beauticians);
+      if (ter && ter.territories) setTerritories(ter.territories);
+      if (coup && coup.coupons) setCoupons(coup.coupons);
+      if (rev && rev.reviews) setReviews(rev.reviews);
+      if (aud && aud.logs) setAuditLogs(aud.logs);
+      if (sett && sett.settings) setSettings(sett.settings);
+      if (faqsRes && faqsRes.faqs) setFaqsList(faqsRes.faqs);
+      if (pkgRes && pkgRes.packages) setPackagesList(pkgRes.packages);
+      if (hygRes && hygRes.commitments) setHygieneList(hygRes.commitments);
+      if (pendRes && (pendRes.pending || pendRes.pendingServices)) setPendingServices(pendRes.pending || pendRes.pendingServices);
+      if (auditRes && (auditRes.audits || auditRes.logs)) setPriceAuditLogs(auditRes.audits || auditRes.logs);
+      if (notifRes && notifRes.notifications) setNotificationsList(notifRes.notifications);
+      if (enqRes && enqRes.enquiries) setEnquiries(enqRes.enquiries);
     } catch (err) {
       console.error('[Admin] Data fetch error:', err);
     } finally {
@@ -1413,6 +1428,25 @@ export default function AdminApp() {
           </select>
         </div>
 
+        {/* API Sync Diagnostic & Error Recovery Banner */}
+        {Object.keys(apiErrors).length > 0 && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+              <div>
+                <strong className="font-bold">Sync Notice:</strong> {Object.keys(apiErrors).length} server endpoint(s) failed to sync ({Object.keys(apiErrors).join(', ')}). Existing loaded records have been preserved.
+              </div>
+            </div>
+            <button
+              onClick={fetchAdminData}
+              className="px-3 py-1 bg-[#4A0417] hover:bg-[#32020F] text-white rounded font-semibold text-xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry Sync</span>
+            </button>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="hidden sm:flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-x-2 sm:space-x-5 overflow-x-auto text-xs font-semibold text-[#6B5A5C] scrollbar-none">
           <button
@@ -1564,9 +1598,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('policies')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'policies' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'policies' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#C5A880]" />
             <span>Compliance & Policies</span>
@@ -1789,7 +1822,7 @@ export default function AdminApp() {
                 onClick={() => {
                   setEditingService({
                     id: `srv-${Date.now()}`,
-                    categoryId: 'cat-rica',
+                    categoryId: categories[0]?.id || 'cat-rica-waxing',
                     name: '',
                     description: '',
                     benefits: ['Salon-smooth finish', 'Hygienic single-use disposables'],
@@ -1829,54 +1862,21 @@ export default function AdminApp() {
               >
                 All Treatments ({services.length})
               </button>
-              <button
-                onClick={() => setSelectedServiceCatFilter('cat-rica')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-rica'
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
-              >
-                RICA Waxing ({services.filter(s => s.category_id === 'cat-rica').length})
-              </button>
-              <button
-                onClick={() => setSelectedServiceCatFilter('cat-honey')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-honey'
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
-              >
-                Honey Waxing ({services.filter(s => s.category_id === 'cat-honey').length})
-              </button>
-              <button
-                onClick={() => setSelectedServiceCatFilter('cat-korean')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-korean'
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
-              >
-                Korean Waxing ({services.filter(s => s.category_id === 'cat-korean').length})
-              </button>
-              <button
-                onClick={() => setSelectedServiceCatFilter('cat-brazilian')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-brazilian'
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
-              >
-                Brazilian Peel-Off ({services.filter(s => s.category_id === 'cat-brazilian').length})
-              </button>
-              {categories.filter(c => !['cat-rica', 'cat-honey', 'cat-korean', 'cat-brazilian'].includes(c.id)).map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedServiceCatFilter(c.id)}
-                  className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === c.id
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                    }`}
-                >
-                  {c.name} ({services.filter(s => s.category_id === c.id).length})
-                </button>
-              ))}
+              {categories.map((c) => {
+                const count = services.filter((s) => s.category_id === c.id || s.categoryId === c.id).length;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedServiceCatFilter(c.id)}
+                    className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === c.id
+                      ? 'bg-[#4A0417] text-white shadow-xs'
+                      : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                      }`}
+                  >
+                    {c.name} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             {/* Services Grid */}
@@ -4068,13 +4068,12 @@ export default function AdminApp() {
                             {enq.message}
                           </td>
                           <td className="py-3 px-3">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
-                              enq.status === 'resolved'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : enq.status === 'in-progress'
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${enq.status === 'resolved'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : enq.status === 'in-progress'
                                 ? 'bg-blue-50 text-blue-800 border-blue-200'
                                 : 'bg-amber-50 text-amber-900 border-amber-200'
-                            }`}>
+                              }`}>
                               {enq.status || 'new'}
                             </span>
                           </td>
@@ -4318,16 +4317,9 @@ export default function AdminApp() {
                     onChange={(e) => setEditingService({ ...editingService, categoryId: e.target.value, category_id: e.target.value })}
                     className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold text-[#4A0417]"
                   >
-                    <option value="cat-rica">RICA Waxing</option>
-                    <option value="cat-honey">Honey Waxing</option>
-                    <option value="cat-korean">Korean Waxing</option>
-                    <option value="cat-brazilian">Brazilian Peel-Off Waxing</option>
-                    <option value="cat-packages">Beauty Packages</option>
-                    {categories
-                      .filter(c => !['cat-rica', 'cat-honey', 'cat-korean', 'cat-brazilian', 'cat-packages'].includes(c.id))
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>

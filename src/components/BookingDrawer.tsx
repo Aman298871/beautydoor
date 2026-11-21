@@ -115,16 +115,24 @@ export const BookingDrawer: React.FC<Props> = ({
     fetch('/api/settings')
       .then(res => res.json())
       .then(data => {
-        if (data.paymentOptions) {
-          if (typeof data.paymentOptions.razorpayAvailable === 'boolean') {
-            setRazorpayAvailable(data.paymentOptions.razorpayAvailable);
-          }
-          if (data.paymentOptions.razorpayKeyId) {
-            setRazorpayKeyId(data.paymentOptions.razorpayKeyId);
-          }
+        const isOnlineEnabled =
+          data?.paymentOptions?.razorpayAvailable !== undefined
+            ? Boolean(data.paymentOptions.razorpayAvailable)
+            : data?.razorpay?.enabled !== undefined
+            ? Boolean(data.razorpay.enabled)
+            : data?.settings?.razorpay_enabled !== undefined
+            ? data.settings.razorpay_enabled === 'true'
+            : false;
+        const keyId =
+          data?.paymentOptions?.razorpayKeyId ||
+          data?.razorpay?.keyId ||
+          data?.settings?.razorpay_key_id;
+        setRazorpayAvailable(Boolean(isOnlineEnabled));
+        if (keyId) {
+          setRazorpayKeyId(keyId);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Lock background scroll on mobile and desktop while booking drawer is open
@@ -325,60 +333,76 @@ export const BookingDrawer: React.FC<Props> = ({
         items: cartItems.map(i => ({ serviceName: i.service.name, finalItemPrice: i.totalItemPrice }))
       };
 
-      // Launch Razorpay checkout if selected and order created
-      if (paymentMethodChoice === 'RAZORPAY' && data.razorpayOrder) {
+      // Launch Razorpay checkout if selected
+      if (paymentMethodChoice === 'RAZORPAY') {
+        if (!data.razorpayOrder) {
+          throw new Error(data.error || 'Unable to initialize online payment order. Please retry or choose Pay After Service (COD).');
+        }
+        const activeKey = data.razorpayOrder.keyId || razorpayKeyId;
+        if (!activeKey) {
+          throw new Error('Online payment gateway key is missing. Please select Pay After Service (COD).');
+        }
         const sdkLoaded = await loadRazorpayScript();
-        if (sdkLoaded && (window as any).Razorpay) {
-          const rzpInstance = new (window as any).Razorpay({
-            key: data.razorpayOrder.keyId || razorpayKeyId || 'rzp_live_U2rRiMqcCnXRk6',
-            amount: data.razorpayOrder.amount,
-            currency: data.razorpayOrder.currency || 'INR',
-            name: 'BeautyDoor',
-            description: `At-Home Salon Appointment ${data.bookingId}`,
-            order_id: data.razorpayOrder.orderId,
-            prefill: {
-              name: customerName,
-              contact: customerPhone,
-              email: customerEmail || ''
-            },
-            theme: {
-              color: '#4A0417'
-            },
-            handler: async (response: any) => {
-              try {
-                await fetch('/api/payment/razorpay/verify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    bookingId: data.bookingId,
-                    razorpayOrderId: response.razorpay_order_id,
-                    razorpayPaymentId: response.razorpay_payment_id,
-                    razorpaySignature: response.razorpay_signature
-                  })
-                });
+        if (!sdkLoaded || !(window as any).Razorpay) {
+          throw new Error('Payment gateway SDK failed to load. Please check your internet connection or choose Pay After Service (COD).');
+        }
+
+        const rzpInstance = new (window as any).Razorpay({
+          key: activeKey,
+          amount: data.razorpayOrder.amount,
+          currency: data.razorpayOrder.currency || 'INR',
+          name: 'BeautyDoor',
+          description: `At-Home Salon Appointment ${data.bookingId}`,
+          order_id: data.razorpayOrder.orderId,
+          prefill: {
+            name: customerName,
+            contact: customerPhone,
+            email: customerEmail || ''
+          },
+          theme: {
+            color: '#4A0417'
+          },
+          handler: async (response: any) => {
+            try {
+              const verRes = await fetch('/api/payment/razorpay/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  bookingId: data.bookingId,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature
+                })
+              });
+              const verData = await verRes.json();
+              if (verRes.ok && verData.success) {
                 confirmedBooking.paymentStatus = 'paid';
                 confirmedBooking.paymentMethod = 'RAZORPAY';
-              } catch (verErr: any) {
-                console.warn('[Razorpay] Signature verification error:', verErr.message);
+              } else {
+                confirmedBooking.paymentStatus = 'pending';
+                setSubmitError(verData.error || 'Payment signature verification pending. Booking saved.');
               }
+            } catch (verErr: any) {
+              console.warn('[Razorpay] Signature verification error:', verErr.message);
+              confirmedBooking.paymentStatus = 'pending';
+            }
+            setCreatedBooking(confirmedBooking);
+            setStep(5);
+            onBookingSuccess(confirmedBooking);
+            onClearCart();
+          },
+          modal: {
+            ondismiss: () => {
+              // If modal is closed, appointment remains booked as pending payment
               setCreatedBooking(confirmedBooking);
               setStep(5);
               onBookingSuccess(confirmedBooking);
               onClearCart();
-            },
-            modal: {
-              ondismiss: () => {
-                // If modal is closed, appointment remains booked as pending payment
-                setCreatedBooking(confirmedBooking);
-                setStep(5);
-                onBookingSuccess(confirmedBooking);
-                onClearCart();
-              }
             }
-          });
-          rzpInstance.open();
-          return;
-        }
+          }
+        });
+        rzpInstance.open();
+        return;
       }
 
       setCreatedBooking(confirmedBooking);
@@ -439,12 +463,12 @@ export const BookingDrawer: React.FC<Props> = ({
                     {step === 5
                       ? 'Booking Confirmed'
                       : step === 1
-                      ? 'Your Cart'
-                      : step === 2
-                      ? 'Doorstep Address'
-                      : step === 3
-                      ? 'Choose Schedule'
-                      : 'Review & Payment'}
+                        ? 'Your Cart'
+                        : step === 2
+                          ? 'Doorstep Address'
+                          : step === 3
+                            ? 'Choose Schedule'
+                            : 'Review & Payment'}
                   </h3>
                 </div>
               </div>
@@ -615,11 +639,10 @@ export const BookingDrawer: React.FC<Props> = ({
                                     setCity(loc.id === 'Haryana' ? 'Gurugram' : loc.id);
                                     setMatchedTerritory(null);
                                   }}
-                                  className={`p-2.5 rounded-lg text-center border transition-all cursor-pointer ${
-                                    isSelected
+                                  className={`p-2.5 rounded-lg text-center border transition-all cursor-pointer ${isSelected
                                       ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                       : 'bg-[#FAF7F2] text-[#1F1A1C] border-[#E8DDD3] hover:border-[#4A0417]'
-                                  }`}
+                                    }`}
                                 >
                                   <div className="text-xs font-bold">{loc.label}</div>
                                   <div className={`text-[10px] mt-0.5 font-medium ${isSelected ? 'text-[#C5A880]' : 'text-[#7A6B6D]'}`}>
@@ -811,11 +834,10 @@ export const BookingDrawer: React.FC<Props> = ({
                             <button
                               key={dateStr}
                               onClick={() => setSelectedDate(dateStr)}
-                              className={`p-2.5 rounded-lg border text-center transition-all ${
-                                isSelected
+                              className={`p-2.5 rounded-lg border text-center transition-all ${isSelected
                                   ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
                                   : 'bg-[#FAF7F2] hover:bg-white border-[#E8DDD3] text-[#1F1A1C]'
-                              }`}
+                                }`}
                             >
                               <p className="text-[10px] uppercase font-semibold opacity-80">
                                 {d.toLocaleDateString('en-US', { weekday: 'short' })}
@@ -853,17 +875,15 @@ export const BookingDrawer: React.FC<Props> = ({
                             <button
                               key={slot}
                               onClick={() => setSelectedSlot(slot)}
-                              className={`py-2 px-2 text-xs font-semibold rounded-md border transition-all tabular-nums flex flex-col items-center justify-center relative ${
-                                isSelected
+                              className={`py-2 px-2 text-xs font-semibold rounded-md border transition-all tabular-nums flex flex-col items-center justify-center relative ${isSelected
                                   ? 'bg-[#4A0417] text-white border-[#4A0417]'
                                   : 'bg-white hover:bg-[#FAF7F2] border-[#E8DDD3] text-[#1F1A1C]'
-                              }`}
+                                }`}
                             >
                               <span>{slot}</span>
                               {hasSurcharge && (
-                                <span className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1 py-0.2 rounded ${
-                                  isSelected ? 'bg-amber-400 text-stone-900' : 'bg-amber-100 text-amber-900'
-                                }`}>
+                                <span className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1 py-0.2 rounded ${isSelected ? 'bg-amber-400 text-stone-900' : 'bg-amber-100 text-amber-900'
+                                  }`}>
                                   +₹100 Extra
                                 </span>
                               )}
@@ -1000,20 +1020,18 @@ export const BookingDrawer: React.FC<Props> = ({
                     {/* Payment Method Selector */}
                     <div className="pt-2 space-y-2">
                       <label className="text-xs font-semibold text-[#1F1A1C]">Select Payment Method</label>
-                      
+
                       {/* Cash on Delivery / Pay After Service */}
                       <div
                         onClick={() => setPaymentMethodChoice('COD')}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                          paymentMethodChoice === 'COD'
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${paymentMethodChoice === 'COD'
                             ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
                             : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            paymentMethodChoice === 'COD' ? 'border-[#4A0417]' : 'border-stone-300'
-                          }`}>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethodChoice === 'COD' ? 'border-[#4A0417]' : 'border-stone-300'
+                            }`}>
                             {paymentMethodChoice === 'COD' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
                           </div>
                           <div>
@@ -1037,16 +1055,14 @@ export const BookingDrawer: React.FC<Props> = ({
                       {razorpayAvailable && (
                         <div
                           onClick={() => setPaymentMethodChoice('RAZORPAY')}
-                          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                            paymentMethodChoice === 'RAZORPAY'
+                          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${paymentMethodChoice === 'RAZORPAY'
                               ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
                               : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              paymentMethodChoice === 'RAZORPAY' ? 'border-[#4A0417]' : 'border-stone-300'
-                            }`}>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethodChoice === 'RAZORPAY' ? 'border-[#4A0417]' : 'border-stone-300'
+                              }`}>
                               {paymentMethodChoice === 'RAZORPAY' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
                             </div>
                             <div>
@@ -1379,12 +1395,12 @@ export const BookingDrawer: React.FC<Props> = ({
                         {isSubmitting
                           ? 'Confirming...'
                           : isBelowMin
-                          ? `Min Order ₹${activeMinOrder}`
-                          : !agreedToTerms
-                          ? 'Accept Terms to Continue'
-                          : paymentMethodChoice === 'RAZORPAY'
-                          ? `Pay Online via Razorpay (₹${finalTotal.toLocaleString('en-IN')})`
-                          : 'Place Booking (Pay After Service)'}
+                            ? `Min Order ₹${activeMinOrder}`
+                            : !agreedToTerms
+                              ? 'Accept Terms to Continue'
+                              : paymentMethodChoice === 'RAZORPAY'
+                                ? `Pay Online via Razorpay (₹${finalTotal.toLocaleString('en-IN')})`
+                                : 'Place Booking (Pay After Service)'}
                       </span>
                     </button>
                   )}

@@ -56,6 +56,10 @@ export class RazorpayService {
     return this.keySecret || process.env.RAZORPAY_KEY_SECRET || (process.env.NODE_ENV !== 'production' ? 'test_secret_for_automated_suite_123' : '');
   }
 
+  public getWebhookSecret(): string {
+    return this.webhookSecret || this.getKeySecret();
+  }
+
   /**
    * Create an official Razorpay Order.
    * Calls the Razorpay REST API using Basic Auth (key_id:key_secret).

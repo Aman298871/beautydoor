@@ -32,3 +32,9 @@ services:
         value: admin@beautydoor.in
       - key: ENABLE_DEV_OTP
         value: "false"
+      - key: ENABLE_RAZORPAY
+        value: "true"
+      - key: RAZORPAY_ENABLED
+        value: "true"
+      - key: RAZORPAY_KEY_ID
+        value: rzp_live_U2rRiMqcCnXRk6

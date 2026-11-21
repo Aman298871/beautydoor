@@ -475,7 +475,7 @@ export const HomePage: React.FC<Props> = ({
                 onClick={() => navigate('/packages')}
                 className="text-sm font-semibold text-[#4A0417] hover:underline flex items-center gap-1 self-start sm:self-auto group"
               >
-                <span>View All 10 Packages</span>
+                <span>View All {packages.length > 0 ? `${packages.length} ` : ''}Packages</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>

@@ -521,8 +521,8 @@ async function seedEssentialData() {
     cancellation_policy: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
     announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
-    razorpay_enabled: 'false',
-    razorpay_key_id: '',
+    razorpay_enabled: 'true',
+    razorpay_key_id: 'rzp_live_U2rRiMqcCnXRk6',
     google_places_api_key: '',
     google_place_id: '',
     min_order_amount: '1000',
@@ -627,10 +627,10 @@ async function seedEssentialData() {
   // Idempotent migration for razorpay columns in bookings
   try {
     await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_signature VARCHAR(255)");
-  } catch {}
+  } catch { }
   try {
     await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_refund_id VARCHAR(255)");
-  } catch {}
+  } catch { }
 
   // Idempotent creation and backfill for customers table from existing bookings
   try {
@@ -937,67 +937,69 @@ async function seedEssentialData() {
     }
   }
 
-  // Update existing services with professional, anatomically accurate photography
+  // Update existing services with professional photography ONLY when image_url is missing or empty (preserves owner custom uploads)
+  const emptyImgClause = "AND (image_url IS NULL OR image_url = '' OR image_url LIKE '%placeholder%')";
+
   // 1. Threading
-  await db.execute("UPDATE services SET image_url = '/images/service_eyebrow_threading.jpg' WHERE category_id = 'cat-threading' OR LOWER(name) LIKE '%threading%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_eyebrow_threading.jpg' WHERE (category_id = 'cat-threading' OR LOWER(name) LIKE '%threading%') ${emptyImgClause}`);
 
   // 2. Korean Glass Skin Facials
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_korean_glass.jpg' WHERE category_id = 'cat-facials' AND (LOWER(name) LIKE '%korean%' OR LOWER(name) LIKE '%glass%')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_korean_glass.jpg' WHERE (category_id = 'cat-facials' AND (LOWER(name) LIKE '%korean%' OR LOWER(name) LIKE '%glass%')) ${emptyImgClause}`);
 
   // 3. Facial Cleanups
-  await db.execute("UPDATE services SET image_url = '/images/service_cleanup.jpg' WHERE category_id = 'cat-cleanup' OR LOWER(name) LIKE '%cleanup%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_cleanup.jpg' WHERE (category_id = 'cat-cleanup' OR LOWER(name) LIKE '%cleanup%') ${emptyImgClause}`);
 
   // 4. Facials (Diamond, O3+, Lotus, Vedicline)
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_treatment.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) NOT LIKE '%korean%' AND LOWER(name) NOT LIKE '%glass%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_diamond.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%diamond%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_o3_shine.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%')");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_gold.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%gold%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_wine.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%wine%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_pearl.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%pearl%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_facial_fruit.jpg' WHERE category_id = 'cat-facials' AND LOWER(name) LIKE '%fruit%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_treatment.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) NOT LIKE '%korean%' AND LOWER(name) NOT LIKE '%glass%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_diamond.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%diamond%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_o3_shine.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%o3%' AND (LOWER(name) LIKE '%shine%' OR LOWER(name) LIKE '%glow%')) ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_gold.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%gold%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_wine.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%wine%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_pearl.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%pearl%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_facial_fruit.jpg' WHERE (category_id = 'cat-facials' AND LOWER(name) LIKE '%fruit%') ${emptyImgClause}`);
 
   // 5. Bleach & De-Tan (General vs Arms vs Legs)
-  await db.execute("UPDATE services SET image_url = '/images/service_detan_bleach.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan')");
-  await db.execute("UPDATE services SET image_url = '/images/service_bleach_arms.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%arm%' OR LOWER(name) LIKE '%hand%')");
-  await db.execute("UPDATE services SET image_url = '/images/service_bleach_legs.jpg' WHERE category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%leg%' OR LOWER(name) LIKE '%feet%')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_detan_bleach.jpg' WHERE (category_id IN ('cat-bleach', 'cat-detan')) ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_bleach_arms.jpg' WHERE (category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%arm%' OR LOWER(name) LIKE '%hand%')) ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_bleach_legs.jpg' WHERE (category_id IN ('cat-bleach', 'cat-detan') AND (LOWER(name) LIKE '%leg%' OR LOWER(name) LIKE '%feet%')) ${emptyImgClause}`);
 
   // 6. Manicure & Pedicure (Dedicated assets for single vs combined)
-  await db.execute("UPDATE services SET image_url = '/images/service_manicure_pedicure.jpg' WHERE category_id = 'cat-manicure-pedicure'");
-  await db.execute("UPDATE services SET image_url = '/images/service_pedicure_spa.jpg' WHERE category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%pedicure%' AND LOWER(name) NOT LIKE '%manicure%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_manicure_spa.jpg' WHERE category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%manicure%' AND LOWER(name) NOT LIKE '%pedicure%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_manicure_pedicure.jpg' WHERE (category_id = 'cat-manicure-pedicure') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_pedicure_spa.jpg' WHERE (category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%pedicure%' AND LOWER(name) NOT LIKE '%manicure%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_manicure_spa.jpg' WHERE (category_id = 'cat-manicure-pedicure' AND LOWER(name) LIKE '%manicure%' AND LOWER(name) NOT LIKE '%pedicure%') ${emptyImgClause}`);
 
   // 7. Massages
-  await db.execute("UPDATE services SET image_url = '/images/service_head_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%head%' OR LOWER(name) LIKE '%scalp%')");
-  await db.execute("UPDATE services SET image_url = '/images/service_foot_massage.jpg' WHERE category_id = 'cat-massage' AND (LOWER(name) LIKE '%foot%' OR LOWER(name) LIKE '%feet%')");
-  await db.execute("UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) LIKE '%back massage%'");
-  await db.execute("UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE category_id = 'cat-massage' AND LOWER(name) NOT LIKE '%head%' AND LOWER(name) NOT LIKE '%scalp%' AND LOWER(name) NOT LIKE '%foot%' AND LOWER(name) NOT LIKE '%feet%' AND LOWER(name) NOT LIKE '%back massage%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_head_massage.jpg' WHERE (category_id = 'cat-massage' AND (LOWER(name) LIKE '%head%' OR LOWER(name) LIKE '%scalp%')) ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_foot_massage.jpg' WHERE (category_id = 'cat-massage' AND (LOWER(name) LIKE '%foot%' OR LOWER(name) LIKE '%feet%')) ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE (category_id = 'cat-massage' AND LOWER(name) LIKE '%back massage%') ${emptyImgClause}`);
+  await db.execute(`UPDATE services SET image_url = '/images/service_body_massage.jpg' WHERE (category_id = 'cat-massage' AND LOWER(name) NOT LIKE '%head%' AND LOWER(name) NOT LIKE '%scalp%' AND LOWER(name) NOT LIKE '%foot%' AND LOWER(name) NOT LIKE '%feet%' AND LOWER(name) NOT LIKE '%back massage%') ${emptyImgClause}`);
 
   // 8. Body Scrubs & Body Polishing
-  await db.execute("UPDATE services SET image_url = '/images/service_body_polishing.jpg' WHERE category_id = 'cat-body-scrub' OR LOWER(name) LIKE '%polishing%' OR LOWER(name) LIKE '%scrub%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_body_polishing.jpg' WHERE (category_id = 'cat-body-scrub' OR LOWER(name) LIKE '%polishing%' OR LOWER(name) LIKE '%scrub%') ${emptyImgClause}`);
 
   // 9. Waxing: default arms
-  await db.execute("UPDATE services SET image_url = '/images/service_waxing_arms_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-brazilian-peel-off')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_waxing_arms_legs.jpg' WHERE (category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing', 'cat-brazilian-peel-off')) ${emptyImgClause}`);
 
   // Waxing: Cartridge rollon
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_rollon.jpg' WHERE category_id = 'cat-rica-rollon'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_rollon.jpg' WHERE (category_id = 'cat-rica-rollon') ${emptyImgClause}`);
 
   // Waxing: Front (Stomach, Midriff)
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_front.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%front%' OR LOWER(name) LIKE '%stomach%' OR LOWER(name) LIKE '%midriff%') AND LOWER(name) NOT LIKE '%back%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_front.jpg' WHERE (category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%front%' OR LOWER(name) LIKE '%stomach%' OR LOWER(name) LIKE '%midriff%') AND LOWER(name) NOT LIKE '%back%') ${emptyImgClause}`);
 
   // Waxing: Legs only
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_legs.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%legs%' OR LOWER(name) LIKE '%half legs%') AND LOWER(name) NOT LIKE '%arms%' AND LOWER(name) NOT LIKE '%body%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_legs.jpg' WHERE (category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%legs%' OR LOWER(name) LIKE '%half legs%') AND LOWER(name) NOT LIKE '%arms%' AND LOWER(name) NOT LIKE '%body%') ${emptyImgClause}`);
 
   // Waxing: Underarms only
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_underarms.jpg' WHERE LOWER(name) LIKE '%underarm%' AND LOWER(name) NOT LIKE '%full arms%' AND LOWER(name) NOT LIKE '%half arms%'");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_underarms.jpg' WHERE (LOWER(name) LIKE '%underarm%' AND LOWER(name) NOT LIKE '%full arms%' AND LOWER(name) NOT LIKE '%half arms%') ${emptyImgClause}`);
 
   // Waxing: Back only
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full back%' OR LOWER(name) LIKE '%back wax%')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_back.jpg' WHERE (category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full back%' OR LOWER(name) LIKE '%back wax%')) ${emptyImgClause}`);
 
   // Waxing: Intimate / Sensitive / Bikini / Brazilian / Butt
-  await db.execute("UPDATE services SET image_url = '/images/service_wax_bikini.jpg' WHERE (LOWER(name) LIKE '%bikini%' OR LOWER(name) LIKE '%brazilian%' OR LOWER(name) LIKE '%butt%') OR (category_id = 'cat-brazilian-peel-off' AND LOWER(name) NOT LIKE '%underarm%')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_wax_bikini.jpg' WHERE ((LOWER(name) LIKE '%bikini%' OR LOWER(name) LIKE '%brazilian%' OR LOWER(name) LIKE '%butt%') OR (category_id = 'cat-brazilian-peel-off' AND LOWER(name) NOT LIKE '%underarm%')) ${emptyImgClause}`);
 
   // Waxing: Multi-zone packages & Full Body
-  await db.execute("UPDATE services SET image_url = '/images/service_full_body_wax_combo.jpg' WHERE category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full body%' OR LOWER(name) LIKE '%arms + underarms + full legs%' OR LOWER(name) LIKE '%arms + underarms + half legs%' OR LOWER(name) LIKE '%front + back%')");
+  await db.execute(`UPDATE services SET image_url = '/images/service_full_body_wax_combo.jpg' WHERE (category_id IN ('cat-rica-waxing', 'cat-rica-rollon', 'cat-honey-waxing', 'cat-korean-waxing') AND (LOWER(name) LIKE '%full body%' OR LOWER(name) LIKE '%arms + underarms + full legs%' OR LOWER(name) LIKE '%arms + underarms + half legs%' OR LOWER(name) LIKE '%front + back%')) ${emptyImgClause}`);
 
 
   // 10. Authentic Product-Specific Facial Treatment Protocols (steps_json)

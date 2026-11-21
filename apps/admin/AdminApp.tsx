@@ -1336,7 +1336,7 @@ export default function AdminApp() {
 
   return (
     <div className="min-h-screen bg-[#F8F6F3] text-[#1F1A1C]">
-      
+
       {/* Toast Notification */}
       {notificationMsg && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1F1A1C] text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-[#C5A880]/40">
@@ -1417,9 +1417,8 @@ export default function AdminApp() {
         <div className="hidden sm:flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-x-2 sm:space-x-5 overflow-x-auto text-xs font-semibold text-[#6B5A5C] scrollbar-none">
           <button
             onClick={() => setActiveTab('dispatch')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'dispatch' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'dispatch' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <CalendarDays className="w-3.5 h-3.5" />
             <span>Dispatch & Bookings ({bookings.length})</span>
@@ -1427,9 +1426,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('overview')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'overview' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'overview' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <LayoutDashboard className="w-3.5 h-3.5" />
             <span>Executive KPIs</span>
@@ -1437,9 +1435,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('services')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'services' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'services' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Scissors className="w-3.5 h-3.5" />
             <span>Catalog & Waxing ({services.length})</span>
@@ -1447,9 +1444,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('packages')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'packages' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'packages' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Gift className="w-3.5 h-3.5" />
             <span>Signature Packages ({packagesList.length})</span>
@@ -1457,9 +1453,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('hygiene')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'hygiene' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'hygiene' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>Hygiene Promise ({hygieneList.length})</span>
@@ -1467,9 +1462,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('pending')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'pending' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'pending' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <AlertCircle className={`w-3.5 h-3.5 ${pendingServices.length > 0 ? 'text-amber-600' : ''}`} />
             <span>Pending Owner Prices ({pendingServices.length})</span>
@@ -1480,9 +1474,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('priceAudit')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'priceAudit' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'priceAudit' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <History className="w-3.5 h-3.5" />
             <span>Price Audit Logs ({priceAuditLogs.length})</span>
@@ -1490,9 +1483,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('categories')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'categories' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'categories' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Tag className="w-3.5 h-3.5" />
             <span>Categories ({categories.length})</span>
@@ -1500,9 +1492,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('campaigns')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'campaigns' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'campaigns' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Megaphone className="w-3.5 h-3.5" />
             <span>Promotional Campaigns ({campaigns.length})</span>
@@ -1510,9 +1501,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('beauticians')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'beauticians' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'beauticians' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Users className="w-3.5 h-3.5" />
             <span>Beauticians Roster ({beauticians.length})</span>
@@ -1520,9 +1510,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('territories')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'territories' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'territories' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <MapPin className="w-3.5 h-3.5" />
             <span>Pincodes & Hubs ({territories.length})</span>
@@ -1530,9 +1519,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('coupons')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'coupons' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'coupons' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Coupons</span>
@@ -1540,9 +1528,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('customers')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'customers' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'customers' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
             <span>Customers ({customers.length})</span>
@@ -1550,9 +1537,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('reviews')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'reviews' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'reviews' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Review Moderation ({reviews.length})</span>
@@ -1560,9 +1546,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('audit')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'audit' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'audit' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Audit Logs ({auditLogs.length})</span>
@@ -1570,9 +1555,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'settings' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'settings' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Settings className="w-3.5 h-3.5" />
             <span>Settings</span>
@@ -1595,9 +1579,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('faqs')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'faqs' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'faqs' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <HelpCircle className="w-3.5 h-3.5" />
             <span>Chatbot FAQs ({faqsList.length})</span>
@@ -1605,9 +1588,8 @@ export default function AdminApp() {
 
           <button
             onClick={() => setActiveTab('notifications')}
-            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'notifications' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
-            }`}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'notifications' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
             <span>Notifications ({notificationsList.length})</span>
@@ -1617,7 +1599,7 @@ export default function AdminApp() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {/* 1. DISPATCH BOARD & BOOKINGS */}
         {activeTab === 'dispatch' && (
           <div className="space-y-6">
@@ -1707,15 +1689,14 @@ export default function AdminApp() {
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
-                              b.booking_status === 'assigned' || b.booking_status === 'confirmed'
-                                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                : b.booking_status === 'completed'
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${b.booking_status === 'assigned' || b.booking_status === 'confirmed'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : b.booking_status === 'completed'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 : b.booking_status === 'cancelled'
-                                ? 'bg-red-50 text-red-800 border-red-200'
-                                : 'bg-amber-50 text-amber-800 border-amber-200'
-                            }`}>
+                                  ? 'bg-red-50 text-red-800 border-red-200'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                              }`}>
                               {b.booking_status}
                             </span>
                           </td>
@@ -1726,11 +1707,10 @@ export default function AdminApp() {
                                 setSelectedBeauticianId(b.assigned_beautician_id || '');
                                 setDispatchError(null);
                               }}
-                              className={`px-3 py-1 rounded text-xs font-semibold ${
-                                b.booking_status === 'cancelled'
-                                  ? 'bg-red-100 text-red-900 hover:bg-red-200'
-                                  : 'bg-[#4A0417] text-white hover:bg-[#36020F]'
-                              }`}
+                              className={`px-3 py-1 rounded text-xs font-semibold ${b.booking_status === 'cancelled'
+                                ? 'bg-red-100 text-red-900 hover:bg-red-200'
+                                : 'bg-[#4A0417] text-white hover:bg-[#36020F]'
+                                }`}
                             >
                               {b.booking_status === 'cancelled' ? 'Audit Details' : 'Dispatch'}
                             </button>
@@ -1842,51 +1822,46 @@ export default function AdminApp() {
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none text-xs font-semibold">
               <button
                 onClick={() => setSelectedServiceCatFilter('all')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  selectedServiceCatFilter === 'all'
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'all'
+                  ? 'bg-[#4A0417] text-white shadow-xs'
+                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                  }`}
               >
                 All Treatments ({services.length})
               </button>
               <button
                 onClick={() => setSelectedServiceCatFilter('cat-rica')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  selectedServiceCatFilter === 'cat-rica'
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-rica'
+                  ? 'bg-[#4A0417] text-white shadow-xs'
+                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                  }`}
               >
                 RICA Waxing ({services.filter(s => s.category_id === 'cat-rica').length})
               </button>
               <button
                 onClick={() => setSelectedServiceCatFilter('cat-honey')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  selectedServiceCatFilter === 'cat-honey'
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-honey'
+                  ? 'bg-[#4A0417] text-white shadow-xs'
+                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                  }`}
               >
                 Honey Waxing ({services.filter(s => s.category_id === 'cat-honey').length})
               </button>
               <button
                 onClick={() => setSelectedServiceCatFilter('cat-korean')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  selectedServiceCatFilter === 'cat-korean'
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-korean'
+                  ? 'bg-[#4A0417] text-white shadow-xs'
+                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                  }`}
               >
                 Korean Waxing ({services.filter(s => s.category_id === 'cat-korean').length})
               </button>
               <button
                 onClick={() => setSelectedServiceCatFilter('cat-brazilian')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  selectedServiceCatFilter === 'cat-brazilian'
-                    ? 'bg-[#4A0417] text-white shadow-xs'
-                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'cat-brazilian'
+                  ? 'bg-[#4A0417] text-white shadow-xs'
+                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                  }`}
               >
                 Brazilian Peel-Off ({services.filter(s => s.category_id === 'cat-brazilian').length})
               </button>
@@ -1894,11 +1869,10 @@ export default function AdminApp() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedServiceCatFilter(c.id)}
-                  className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                    selectedServiceCatFilter === c.id
-                      ? 'bg-[#4A0417] text-white shadow-xs'
-                      : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === c.id
+                    ? 'bg-[#4A0417] text-white shadow-xs'
+                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                    }`}
                 >
                   {c.name} ({services.filter(s => s.category_id === c.id).length})
                 </button>
@@ -1943,9 +1917,8 @@ export default function AdminApp() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-[#F4EFEA] flex justify-between items-center text-xs">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        s.is_active === 1 && s.is_published !== 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${s.is_active === 1 && s.is_published !== 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                        }`}>
                         {s.is_active === 1 && s.is_published !== 0 ? 'Live on Storefront' : 'Hidden / Draft'}
                       </span>
 
@@ -1955,7 +1928,7 @@ export default function AdminApp() {
                           if (Array.isArray(s.treatmentSteps)) {
                             steps = s.treatmentSteps;
                           } else if (typeof s.steps_json === 'string') {
-                            try { steps = JSON.parse(s.steps_json); } catch {}
+                            try { steps = JSON.parse(s.steps_json); } catch { }
                           }
                           setEditingService({
                             ...s,
@@ -2085,11 +2058,10 @@ export default function AdminApp() {
                       <td className="py-3.5 px-4 text-center">
                         <button
                           onClick={() => handleTogglePackagePublish(pkg)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                            pkg.is_published === 1
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${pkg.is_published === 1
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
                         >
                           {pkg.is_published === 1 ? 'Published' : 'Draft'}
                         </button>
@@ -2099,7 +2071,7 @@ export default function AdminApp() {
                           onClick={() => {
                             setEditingPackage({
                               ...pkg,
-                              inclusions: (pkg.inclusions || []).map((inc: any) => 
+                              inclusions: (pkg.inclusions || []).map((inc: any) =>
                                 typeof inc === 'object' ? inc : { name: String(inc), is_free: String(inc).toLowerCase().includes('free') }
                               )
                             });
@@ -2164,9 +2136,8 @@ export default function AdminApp() {
                   <div>
                     <div className="flex items-center justify-between text-xs text-[#8C7A7C] mb-2">
                       <span className="font-mono text-[#4A0417] font-bold">#{h.display_order}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        h.is_single_use === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-[#FAF7F2] text-[#4A0417]'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.is_single_use === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-[#FAF7F2] text-[#4A0417]'
+                        }`}>
                         {h.is_single_use === 1 ? '100% Single-Use' : 'Protocol'}
                       </span>
                     </div>
@@ -2178,11 +2149,10 @@ export default function AdminApp() {
                   <div className="mt-4 pt-3 border-t border-[#F4EFEA] flex justify-between items-center text-xs">
                     <button
                       onClick={() => handleToggleHygieneActive(h.id, h.is_active)}
-                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
-                        h.is_active === 1
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${h.is_active === 1
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : 'bg-gray-100 text-gray-500'
+                        }`}
                     >
                       {h.is_active === 1 ? 'Active' : 'Disabled'}
                     </button>
@@ -2310,9 +2280,8 @@ export default function AdminApp() {
                           {log.timestamp ? new Date(log.timestamp).toLocaleString('en-IN') : '—'}
                         </td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            log.item_type === 'package' ? 'bg-purple-50 text-purple-800' : 'bg-blue-50 text-blue-800'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.item_type === 'package' ? 'bg-purple-50 text-purple-800' : 'bg-blue-50 text-blue-800'
+                            }`}>
                             {log.item_type}
                           </span>
                         </td>
@@ -2384,9 +2353,8 @@ export default function AdminApp() {
                       </div>
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                      c.is_published === 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
-                    }`}>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${c.is_published === 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                      }`}>
                       {c.is_published === 1 ? 'Published' : 'Draft'}
                     </span>
                   </div>
@@ -2399,11 +2367,10 @@ export default function AdminApp() {
                   <div className="pt-2 border-t border-[#F4EFEA] flex justify-end gap-2 text-xs">
                     <button
                       onClick={() => handleToggleCampaignPublish(c.id, c.is_published === 1)}
-                      className={`px-3 py-1 rounded font-semibold border ${
-                        c.is_published === 1
-                          ? 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                          : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                      }`}
+                      className={`px-3 py-1 rounded font-semibold border ${c.is_published === 1
+                        ? 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                        }`}
                     >
                       {c.is_published === 1 ? 'Unpublish' : 'Publish'}
                     </button>
@@ -2476,11 +2443,10 @@ export default function AdminApp() {
                           <h4 className="font-bold text-sm text-[#1F1A1C]">{b.name}</h4>
                           <p className="text-xs text-[#7A6B6D] tabular-nums font-mono">{b.phone}</p>
                         </div>
-                        <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${
-                          b.status === 'available'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : 'bg-red-50 text-red-800 border-red-200'
-                        }`}>
+                        <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${b.status === 'available'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-red-50 text-red-800 border-red-200'
+                          }`}>
                           {b.status === 'available' ? 'Available' : 'On Leave'}
                         </span>
                       </div>
@@ -2496,11 +2462,10 @@ export default function AdminApp() {
                     <div className="pt-3 border-t border-[#F4EFEA] flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleToggleBeauticianStatus(b.id, b.status)}
-                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border transition-colors ${
-                          b.status === 'available'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                            : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                        }`}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border transition-colors ${b.status === 'available'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                          }`}
                       >
                         {b.status === 'available' ? 'Set On Leave' : 'Set Available'}
                       </button>
@@ -2619,9 +2584,8 @@ export default function AdminApp() {
                         <td className="py-3 px-4 text-center">
                           <button
                             onClick={() => handleToggleTerritory(t.id, t.is_active)}
-                            className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              t.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
-                            }`}
+                            className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${t.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+                              }`}
                           >
                             {t.is_active === 1 ? 'Active' : 'Disabled'}
                           </button>
@@ -2730,11 +2694,10 @@ export default function AdminApp() {
                         <td className="py-3 px-4 text-center">
                           <button
                             onClick={() => handleModerateReview(r.id, { isApproved: r.is_approved === 1 ? false : true })}
-                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
-                              r.is_approved === 1 
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100' 
-                                : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                            }`}
+                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${r.is_approved === 1
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                              }`}
                           >
                             {r.is_approved === 1 ? 'Approved' : 'Pending Approval'}
                           </button>
@@ -2742,11 +2705,10 @@ export default function AdminApp() {
                         <td className="py-3 px-4 text-center">
                           <button
                             onClick={() => handleModerateReview(r.id, { isFeatured: r.is_featured === 1 ? false : true })}
-                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
-                              r.is_featured === 1 
-                                ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold hover:bg-amber-200' 
-                                : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
-                            }`}
+                            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${r.is_featured === 1
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold hover:bg-amber-200'
+                              : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                              }`}
                           >
                             {r.is_featured === 1 ? '⭐ Featured' : 'Normal'}
                           </button>
@@ -2844,18 +2806,16 @@ export default function AdminApp() {
                       <td className="py-3 px-4 font-mono text-[#6B5A5C]">{c.slug}</td>
                       <td className="py-3 px-4 text-[#6B5A5C] max-w-xs truncate">{c.description || '—'}</td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          c.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${c.is_active === 1 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700'
+                          }`}>
                           {c.is_active === 1 ? 'Active' : 'Disabled'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button
                           onClick={() => handleToggleCategory(c.id, c.is_active)}
-                          className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors ${
-                            c.is_active === 1 ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          }`}
+                          className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors ${c.is_active === 1 ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            }`}
                         >
                           {c.is_active === 1 ? 'Disable' : 'Enable'}
                         </button>
@@ -3216,7 +3176,7 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">Razorpay Key ID</label>
                     <input
                       type="text"
-                      value={settings.razorpay_key_id || 'rzp_test_beautydoor_mock'}
+                      value={settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6'}
                       onChange={(e) => setSettings({ ...settings, razorpay_key_id: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono"
                     />
@@ -3244,7 +3204,7 @@ export default function AdminApp() {
                   <span>Private Restricted Service Locations (Internal Blacklist)</span>
                 </h4>
                 <p className="text-xs text-[#5C4D4F] leading-relaxed">
-                  Enter comma-separated keywords or area names that BeautyDoor does not serve. When a customer enters an address matching any of these keywords, the booking engine will safely reject the order with: 
+                  Enter comma-separated keywords or area names that BeautyDoor does not serve. When a customer enters an address matching any of these keywords, the booking engine will safely reject the order with:
                   <span className="font-semibold text-[#4A0417] ml-1">"Sorry, BeautyDoor is currently unavailable at this location."</span> (This list is strictly internal and never exposed in customer-facing source code or public APIs).
                 </p>
 
@@ -3295,7 +3255,7 @@ export default function AdminApp() {
         {/* 13. CHATBOT FAQ KNOWLEDGEBASE & RULE ENGINE */}
         {activeTab === 'faqs' && (
           <div className="space-y-6">
-            
+
             {/* Top Bar with stats and actions */}
             <div className="bg-white p-5 rounded-xl border border-[#E8DDD3] shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
@@ -3339,31 +3299,28 @@ export default function AdminApp() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setFaqAudienceFilter('all')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    faqAudienceFilter === 'all'
-                      ? 'bg-[#1F1A1C] text-white shadow-xs'
-                      : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${faqAudienceFilter === 'all'
+                    ? 'bg-[#1F1A1C] text-white shadow-xs'
+                    : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
+                    }`}
                 >
                   All Knowledgebase ({faqsList.length})
                 </button>
                 <button
                   onClick={() => setFaqAudienceFilter('customer')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                    faqAudienceFilter === 'customer'
-                      ? 'bg-[#4A0417] text-white shadow-xs'
-                      : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${faqAudienceFilter === 'customer'
+                    ? 'bg-[#4A0417] text-white shadow-xs'
+                    : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
+                    }`}
                 >
                   <span>Customer Storefront ({faqsList.filter(f => f.audience === 'customer').length})</span>
                 </button>
                 <button
                   onClick={() => setFaqAudienceFilter('admin')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                    faqAudienceFilter === 'admin'
-                      ? 'bg-slate-800 text-white shadow-xs'
-                      : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${faqAudienceFilter === 'admin'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-white border border-[#E8DDD3] text-[#6B5A5C] hover:bg-stone-50'
+                    }`}
                 >
                   <span>Admin Console Help ({faqsList.filter(f => f.audience === 'admin').length})</span>
                 </button>
@@ -3383,7 +3340,7 @@ export default function AdminApp() {
 
             {/* Main Grid: Knowledgebase Table & Test Bench */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
               {/* FAQ Table (2 Columns) */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="bg-white rounded-xl border border-[#E8DDD3] overflow-hidden shadow-xs">
@@ -3413,11 +3370,10 @@ export default function AdminApp() {
                           <div key={faq.id} className="p-4 hover:bg-stone-50/80 transition-colors flex flex-col sm:flex-row justify-between gap-3 items-start">
                             <div className="space-y-1.5 flex-1 pr-2">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                  faq.audience === 'customer'
-                                    ? 'bg-[#4A0417]/10 text-[#4A0417] border border-[#4A0417]/20'
-                                    : 'bg-slate-100 text-slate-800 border border-slate-300'
-                                }`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${faq.audience === 'customer'
+                                  ? 'bg-[#4A0417]/10 text-[#4A0417] border border-[#4A0417]/20'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-300'
+                                  }`}>
                                   {faq.audience === 'customer' ? 'Customer' : 'Admin Help'}
                                 </span>
 
@@ -3461,11 +3417,10 @@ export default function AdminApp() {
                             <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                               <button
                                 onClick={() => handleToggleFaqActive(faq.id, faq.is_active)}
-                                className={`text-[11px] px-2.5 py-1 rounded font-semibold transition-colors cursor-pointer ${
-                                  faq.is_active === 1
-                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                                    : 'bg-gray-100 text-gray-500 border border-gray-300 hover:bg-gray-200'
-                                }`}
+                                className={`text-[11px] px-2.5 py-1 rounded font-semibold transition-colors cursor-pointer ${faq.is_active === 1
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                  : 'bg-gray-100 text-gray-500 border border-gray-300 hover:bg-gray-200'
+                                  }`}
                               >
                                 {faq.is_active === 1 ? 'Active' : 'Disabled'}
                               </button>
@@ -3563,11 +3518,10 @@ export default function AdminApp() {
                     <div className="mt-4 p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-stone-700">Evaluation Result:</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          testResult.matched
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : 'bg-amber-100 text-amber-900 border border-amber-300'
-                        }`}>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${testResult.matched
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}>
                           {testResult.matched ? '✓ Exact Intent Match' : '⚠ Fallback Triggered'}
                         </span>
                       </div>
@@ -3698,11 +3652,10 @@ export default function AdminApp() {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
-                              n.status === 'sent' || n.status === 'simulated'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-red-50 text-red-800 border-red-200'
-                            }`}>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${n.status === 'sent' || n.status === 'simulated'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-red-50 text-red-800 border-red-200'
+                              }`}>
                               {n.status}
                             </span>
                           </td>
@@ -4242,9 +4195,8 @@ export default function AdminApp() {
                     <AlertCircle className="w-4 h-4 text-red-600" />
                     <span>Cancellation Audit & Refund Record</span>
                   </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
-                    selectedBookingForDispatch.cancellation_window_breached ? 'bg-red-200 text-red-900' : 'bg-emerald-100 text-emerald-800'
-                  }`}>
+                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${selectedBookingForDispatch.cancellation_window_breached ? 'bg-red-200 text-red-900' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
                     {selectedBookingForDispatch.cancellation_window_breached ? 'Within 2 Hours (< 2h)' : 'Eligible (> 2h Free)'}
                   </span>
                 </div>
@@ -5050,8 +5002,8 @@ export default function AdminApp() {
                   {isNewFaq ? 'Create New FAQ Rule' : 'Edit FAQ & Keyword Aliases'}
                 </h4>
               </div>
-              <button 
-                onClick={() => { setEditingFaq(null); setIsNewFaq(false); }} 
+              <button
+                onClick={() => { setEditingFaq(null); setIsNewFaq(false); }}
                 className="p-1 text-[#6B5A5C] hover:text-stone-800"
               >
                 <XCircle className="w-5 h-5" />
@@ -5209,8 +5161,8 @@ export default function AdminApp() {
                   {isNewPackage ? 'Create Official BeautyDoor Package' : 'Edit Package & Inclusions'}
                 </h4>
               </div>
-              <button 
-                onClick={() => { setEditingPackage(null); setIsNewPackage(false); }} 
+              <button
+                onClick={() => { setEditingPackage(null); setIsNewPackage(false); }}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5430,8 +5382,8 @@ export default function AdminApp() {
                   {isNewHygiene ? 'Add Hygiene Commitment' : 'Edit Hygiene Commitment'}
                 </h4>
               </div>
-              <button 
-                onClick={() => { setEditingHygiene(null); setIsNewHygiene(false); }} 
+              <button
+                onClick={() => { setEditingHygiene(null); setIsNewHygiene(false); }}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5519,8 +5471,8 @@ export default function AdminApp() {
                   Authorize Owner Price & Publish
                 </h4>
               </div>
-              <button 
-                onClick={() => setConfirmingPriceService(null)} 
+              <button
+                onClick={() => setConfirmingPriceService(null)}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5600,8 +5552,8 @@ export default function AdminApp() {
                   {isNewCoupon ? 'Create New Promo Coupon' : 'Edit Coupon Settings'}
                 </h4>
               </div>
-              <button 
-                onClick={() => { setEditingCoupon(null); setIsNewCoupon(false); }} 
+              <button
+                onClick={() => { setEditingCoupon(null); setIsNewCoupon(false); }}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5737,8 +5689,8 @@ export default function AdminApp() {
                   {isNewTerritory ? 'Add New Service Territory' : 'Edit Territory Settings'}
                 </h4>
               </div>
-              <button 
-                onClick={() => { setEditingTerritory(null); setIsNewTerritory(false); }} 
+              <button
+                onClick={() => { setEditingTerritory(null); setIsNewTerritory(false); }}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5858,8 +5810,8 @@ export default function AdminApp() {
                   Cancel Appointment {cancellingBooking.id}
                 </h4>
               </div>
-              <button 
-                onClick={() => setCancellingBooking(null)} 
+              <button
+                onClick={() => setCancellingBooking(null)}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -5986,11 +5938,10 @@ export default function AdminApp() {
                       key={m}
                       type="button"
                       onClick={() => setCollectPaymentMethod(m)}
-                      className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${
-                        collectPaymentMethod === m
-                          ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
-                          : 'bg-[#FAF7F2] text-[#4A0417] border-[#E8DDD3] hover:bg-gray-100'
-                      }`}
+                      className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${collectPaymentMethod === m
+                        ? 'bg-[#4A0417] text-white border-[#4A0417] shadow-xs'
+                        : 'bg-[#FAF7F2] text-[#4A0417] border-[#E8DDD3] hover:bg-gray-100'
+                        }`}
                     >
                       {m}
                     </button>
@@ -6082,8 +6033,8 @@ export default function AdminApp() {
                 </h4>
                 <p className="text-xs text-[#7A6B6D]">Phone: {viewingBeauticianAppointments.phone} · Rating: ★ {viewingBeauticianAppointments.rating}</p>
               </div>
-              <button 
-                onClick={() => setViewingBeauticianAppointments(null)} 
+              <button
+                onClick={() => setViewingBeauticianAppointments(null)}
                 className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C]"
               >
                 <XCircle className="w-5 h-5" />
@@ -6102,9 +6053,8 @@ export default function AdminApp() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-[#4A0417]">{apt.id}</span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            apt.booking_status === 'completed' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${apt.booking_status === 'completed' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+                            }`}>
                             {apt.booking_status}
                           </span>
                         </div>

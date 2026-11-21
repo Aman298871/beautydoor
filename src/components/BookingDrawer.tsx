@@ -81,7 +81,7 @@ export const BookingDrawer: React.FC<Props> = ({
   // Payment & Submission state
   const [paymentMethodChoice, setPaymentMethodChoice] = useState<'COD' | 'RAZORPAY'>('COD');
   const [razorpayAvailable, setRazorpayAvailable] = useState<boolean>(true);
-  const [razorpayKeyId, setRazorpayKeyId] = useState<string>('rzp_test_U2q0K87YAXQ6ne');
+  const [razorpayKeyId, setRazorpayKeyId] = useState<string>('rzp_live_U2rRiMqcCnXRk6');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -330,7 +330,7 @@ export const BookingDrawer: React.FC<Props> = ({
         const sdkLoaded = await loadRazorpayScript();
         if (sdkLoaded && (window as any).Razorpay) {
           const rzpInstance = new (window as any).Razorpay({
-            key: data.razorpayOrder.keyId || razorpayKeyId || 'rzp_test_U2q0K87YAXQ6ne',
+            key: data.razorpayOrder.keyId || razorpayKeyId || 'rzp_live_U2rRiMqcCnXRk6',
             amount: data.razorpayOrder.amount,
             currency: data.razorpayOrder.currency || 'INR',
             name: 'BeautyDoor',

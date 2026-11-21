@@ -122,17 +122,21 @@ export const BookingDrawer: React.FC<Props> = ({
             ? Boolean(data.razorpay.enabled)
             : data?.settings?.razorpay_enabled !== undefined
             ? data.settings.razorpay_enabled === 'true'
-            : false;
+            : true;
         const keyId =
           data?.paymentOptions?.razorpayKeyId ||
           data?.razorpay?.keyId ||
-          data?.settings?.razorpay_key_id;
+          data?.settings?.razorpay_key_id ||
+          'rzp_live_U2rRiMqcCnXRk6';
         setRazorpayAvailable(Boolean(isOnlineEnabled));
         if (keyId) {
           setRazorpayKeyId(keyId);
         }
       })
-      .catch(() => { });
+      .catch(() => {
+        setRazorpayAvailable(true);
+        setRazorpayKeyId('rzp_live_U2rRiMqcCnXRk6');
+      });
   }, []);
 
   // Lock background scroll on mobile and desktop while booking drawer is open
@@ -1052,7 +1056,7 @@ export const BookingDrawer: React.FC<Props> = ({
                       </div>
 
                       {/* Online Payment via Razorpay */}
-                      {razorpayAvailable && (
+                      {(razorpayAvailable || Boolean(razorpayKeyId)) && (
                         <div
                           onClick={() => setPaymentMethodChoice('RAZORPAY')}
                           className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${paymentMethodChoice === 'RAZORPAY'

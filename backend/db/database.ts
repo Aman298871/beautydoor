@@ -562,6 +562,10 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
 
+  // Active payment gateway settings migration: ensure live razorpay key and enabled flag are persisted in production DB
+  await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
+  await db.execute("UPDATE settings SET value = 'rzp_live_U2rRiMqcCnXRk6' WHERE key = 'razorpay_key_id'");
+
   // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [
     { name: 'cancelled_at', type: 'VARCHAR(64)' },

@@ -23,10 +23,10 @@ export class RazorpayService {
   private isTestMode: boolean;
 
   constructor() {
-    this.keyId = process.env.RAZORPAY_KEY_ID || '';
-    this.keySecret = process.env.RAZORPAY_KEY_SECRET || (process.env.NODE_ENV !== 'production' ? 'test_secret_for_automated_suite_123' : '');
+    this.keyId = process.env.RAZORPAY_KEY_ID || 'rzp_live_U2rRiMqcCnXRk6';
+    this.keySecret = process.env.RAZORPAY_KEY_SECRET || 'mep2sWSV6gGt2vqXBf049v9Z';
     this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || this.keySecret;
-    this.isTestMode = process.env.NODE_ENV === 'test' || !this.keyId || this.keyId.includes('placeholder');
+    this.isTestMode = this.keyId.startsWith('rzp_test_');
   }
 
   /**

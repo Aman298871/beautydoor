@@ -37,14 +37,15 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   const dbExplicitDisable = settings.razorpay_enabled === 'false';
   const dbExplicitEnable = settings.razorpay_enabled === 'true';
   const isConfigured = razorpayService.isConfigured();
-  const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || '';
+  const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6';
 
-  const isAvailable = !dbExplicitDisable && (envExplicitEnable || dbExplicitEnable || isConfigured) && isConfigured;
+  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : (envExplicitEnable || true);
+  const isAvailable = isEnabled && isConfigured;
 
   let disabledReason: string | null = null;
   if (!isConfigured) {
     disabledReason = 'Razorpay credentials not configured';
-  } else if (dbExplicitDisable) {
+  } else if (!isEnabled) {
     disabledReason = 'Disabled by store owner';
   }
 

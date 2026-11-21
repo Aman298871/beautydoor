@@ -460,6 +460,17 @@ async function initPostgresSchema(pool: pg.Pool) {
       created_at VARCHAR(64) NOT NULL,
       updated_at VARCHAR(64) NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS contact_enquiries (
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      phone VARCHAR(64) NOT NULL,
+      email VARCHAR(255),
+      topic VARCHAR(128) NOT NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(64) NOT NULL DEFAULT 'unread',
+      created_at VARCHAR(64) NOT NULL
+    );
   `);
 
   // Safely remove single-column UNIQUE constraint on pincode to allow multiple localities under one PIN code
@@ -521,7 +532,14 @@ async function seedEssentialData() {
     min_order_policy_text: 'Minimum booking amount: Delhi – ₹1,000 | Haryana – ₹1,500 | Noida – ₹1,500. Your cart must meet the minimum order amount for your selected service location before you can confirm your booking.',
     hygiene_heading: 'Your Beauty. Your Comfort. Our Hygiene Promise.',
     hygiene_subheading: 'Salon-quality rituals brought safely to your home with single-use protective disposables, sanitized tools, and verified female specialists.',
-    restricted_locations: '["TEST_RESTRICTED_ZONE"]'
+    restricted_locations: '["TEST_RESTRICTED_ZONE"]',
+    legal_business_name: '',
+    operational_address: 'BeautyDoor Hub Network (DLF Phase 2, Gurugram & Greater Kailash II, New Delhi)',
+    registered_office_address: '',
+    gst_number: '',
+    policies_published: 'true',
+    policies_last_updated: 'November 2026',
+    pricing_intro_note: 'Authoritative service menu & transparent pricing for Delhi NCR. No hidden travel fees. Pay after service at your doorstep.'
   };
 
   for (const [k, v] of Object.entries(defaultSettings)) {

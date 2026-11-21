@@ -85,6 +85,7 @@ export const BookingDrawer: React.FC<Props> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Dynamically load Razorpay SDK when needed
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -1086,18 +1087,53 @@ export const BookingDrawer: React.FC<Props> = ({
                       </div>
                     )}
 
-                    {/* Cancellation & Refund Policy Notice */}
-                    <div className="p-3 bg-[#FAF7F2] border border-[#E8DDD3] rounded-xl text-xs space-y-1.5 text-[#554749]">
-                      <div className="flex items-center gap-1.5 font-bold text-[#4A0417] text-[11px] uppercase tracking-wider">
-                        <Clock className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
-                        <span>Cancellation & Refund Policy</span>
+                    {/* Cancellation & Refund Policy Notice & Terms Acceptance Checkbox */}
+                    <div className="p-3 bg-[#FAF7F2] border border-[#E8DDD3] rounded-xl text-xs space-y-2 text-[#554749]">
+                      <div className="flex items-center justify-between font-bold text-[#4A0417] text-[11px] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                          <span>Cancellation & Refund Policy</span>
+                        </div>
+                        <a
+                          href="/refund-cancellation-policy"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] lowercase font-normal underline hover:text-[#1F1A1C]"
+                        >
+                          full policy &rarr;
+                        </a>
                       </div>
                       <p className="text-[11px] leading-relaxed text-[#554749]">
                         • <strong>Free Cancellation:</strong> 100% free (₹0 fee) if cancelled at least <strong>2 hours</strong> before your appointment.<br />
-                        • <strong>Late Cancellation:</strong> Cancellations made less than 2 hours before the slot incur a <strong>₹200 convenience fee</strong>.<br />
-                        • <strong>Refunds:</strong> For online-paid orders, balance is refunded to source account. For Cash-on-Delivery, ₹200 late fee is recorded on your account.
+                        • <strong>Late Cancellation:</strong> Within 2 hours of slot, a <strong>₹200 convenience fee</strong> applies.<br />
+                        • <strong>Payment Mode:</strong> Pay cash or UPI QR after service. No advance required for Cash-on-Delivery.
                       </p>
                     </div>
+
+                    {/* Explicit Policy Agreement Checkbox */}
+                    <label className="flex items-start gap-2.5 p-3 rounded-lg border border-[#E8DDD3] bg-white cursor-pointer hover:bg-[#FAF7F2]/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-[#4A0417] rounded border-stone-300 focus:ring-[#4A0417] cursor-pointer"
+                      />
+                      <span className="text-xs text-[#554749] leading-relaxed">
+                        I agree to BeautyDoor's{' '}
+                        <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#4A0417] underline hover:text-[#36020F]">
+                          Terms & Conditions
+                        </a>
+                        {', '}
+                        <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#4A0417] underline hover:text-[#36020F]">
+                          Privacy Policy
+                        </a>
+                        {' and '}
+                        <a href="/refund-cancellation-policy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#4A0417] underline hover:text-[#36020F]">
+                          Refund & Cancellation Policy
+                        </a>
+                        . All bookings start as pending until confirmed by admin.
+                      </span>
+                    </label>
 
                     {submitError && (
                       <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
@@ -1226,10 +1262,24 @@ export const BookingDrawer: React.FC<Props> = ({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.48, duration: 0.3 }}
                       onClick={onClose}
-                      className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
+                      className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer"
                     >
                       Return to Storefront
                     </motion.button>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-[11px] text-[#8C7A7C]">
+                      <a href="/refund-cancellation-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#4A0417]">
+                        Cancellation Policy
+                      </a>
+                      <span>·</span>
+                      <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#4A0417]">
+                        Terms of Service
+                      </a>
+                      <span>·</span>
+                      <a href="/contact-us" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#4A0417]">
+                        Customer Support
+                      </a>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -1320,7 +1370,7 @@ export const BookingDrawer: React.FC<Props> = ({
                   {step === 4 && (
                     <button
                       type="button"
-                      disabled={isSubmitting || !customerName.trim() || !customerPhone.trim() || isBelowMin}
+                      disabled={isSubmitting || !customerName.trim() || !customerPhone.trim() || isBelowMin || !agreedToTerms}
                       onClick={handleConfirmBooking}
                       className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-md cursor-pointer"
                     >
@@ -1330,6 +1380,8 @@ export const BookingDrawer: React.FC<Props> = ({
                           ? 'Confirming...'
                           : isBelowMin
                           ? `Min Order ₹${activeMinOrder}`
+                          : !agreedToTerms
+                          ? 'Accept Terms to Continue'
                           : paymentMethodChoice === 'RAZORPAY'
                           ? `Pay Online via Razorpay (₹${finalTotal.toLocaleString('en-IN')})`
                           : 'Place Booking (Pay After Service)'}

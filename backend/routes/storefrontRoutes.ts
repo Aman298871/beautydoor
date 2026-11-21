@@ -1825,3 +1825,73 @@ storefrontRouter.get('/coupons', async (_req: Request, res: Response): Promise<v
     res.status(500).json({ error: err.message || 'Failed to load coupons' });
   }
 });
+
+// Customer Contact & Enquiry Submission Endpoint
+const handleContactEnquiry = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, phone, email, topic, message } = req.body;
+
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: 'Please enter your full name.' });
+      return;
+    }
+
+    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      res.status(400).json({ error: 'Please provide a valid 10-digit Indian mobile number.' });
+      return;
+    }
+
+    if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      res.status(400).json({ error: 'Please provide a valid email address.' });
+      return;
+    }
+
+    if (!message || message.trim().length < 5) {
+      res.status(400).json({ error: 'Please enter your message (at least 5 characters).' });
+      return;
+    }
+
+    const enquiryId = `enq-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const nowIso = new Date().toISOString();
+    const cleanTopic = (topic || 'General Enquiry').trim().slice(0, 128);
+
+    await db.execute(`
+      INSERT INTO contact_enquiries (id, name, phone, email, topic, message, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'unread', ?)
+    `, [
+      enquiryId,
+      name.trim(),
+      `+91 ${cleanPhone}`,
+      email ? email.trim() : null,
+      cleanTopic,
+      message.trim(),
+      nowIso
+    ]);
+
+    // Record in audit log
+    await db.execute(`
+      INSERT INTO audit_logs (id, admin_username, action, resource_type, resource_id, details_json, timestamp, ip_address)
+      VALUES (?, 'system', 'contact_enquiry_submitted', 'contact_enquiry', ?, ?, ?, ?)
+    `, [
+      `audit-enq-${Date.now()}`,
+      enquiryId,
+      JSON.stringify({ name: name.trim(), phone: `+91 ${cleanPhone}`, topic: cleanTopic }),
+      nowIso,
+      req.ip || 'storefront'
+    ]);
+
+    console.log(`[CONTACT ENQUIRY] Received enquiry ${enquiryId} from ${name.trim()} (+91 ${cleanPhone}): "${cleanTopic}"`);
+
+    res.json({
+      success: true,
+      enquiryId,
+      message: 'Thank you for contacting BeautyDoor. Our client support team led by Preeti Singh will respond within 2 business hours.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to submit contact enquiry' });
+  }
+};
+
+storefrontRouter.post('/contact', handleContactEnquiry);
+storefrontRouter.post('/enquiries', handleContactEnquiry);

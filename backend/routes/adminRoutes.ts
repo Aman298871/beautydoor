@@ -1745,3 +1745,24 @@ adminRouter.get('/export/services.csv', async (_req: Request, res: Response): Pr
   res.setHeader('Content-Disposition', `attachment; filename=beautydoor-services-${new Date().toISOString().split('T')[0]}.csv`);
   res.send(csv);
 });
+
+// 19. Contact Enquiries Management
+adminRouter.get('/enquiries', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const raw = (await db.query('SELECT * FROM contact_enquiries ORDER BY created_at DESC', [])) as any[];
+    res.json({ enquiries: raw });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to load customer enquiries' });
+  }
+});
+
+adminRouter.patch('/enquiries/:id/status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    await db.execute('UPDATE contact_enquiries SET status = ? WHERE id = ?', [status || 'read', id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update enquiry status' });
+  }
+});

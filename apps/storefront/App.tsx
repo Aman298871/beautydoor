@@ -9,7 +9,15 @@ import { ServiceDetailPage } from './pages/ServiceDetailPage.tsx';
 import { OffersPage } from './pages/OffersPage.tsx';
 import { HowItWorksPage } from './pages/HowItWorksPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
-import { AboutPage, ContactPage, FAQPage, PolicyPage } from './pages/InfoPages.tsx';
+import {
+  AboutUsPage,
+  ContactUsPage,
+  PricingPage,
+  TermsPage,
+  PrivacyPage,
+  RefundCancellationPage,
+  FAQPage
+} from './pages/InfoPages.tsx';
 import { PackagesPage } from './pages/PackagesPage.tsx';
 import { RateCardPage } from './pages/RateCardPage.tsx';
 import { PackageBuilderSection } from '../../src/components/PackageBuilderSection.tsx';
@@ -307,20 +315,22 @@ function StorefrontContent() {
     );
   } else if (path === '/how-it-works') {
     pageContent = <HowItWorksPage />;
-  } else if (path === '/about') {
-    pageContent = <AboutPage />;
-  } else if (path === '/contact') {
-    pageContent = <ContactPage />;
+  } else if (path === '/about-us' || path === '/about') {
+    pageContent = <AboutUsPage settings={settings} />;
+  } else if (path === '/contact-us' || path === '/contact') {
+    pageContent = <ContactUsPage settings={settings} />;
+  } else if (path === '/pricing' || path === '/rate-card') {
+    pageContent = <PricingPage settings={settings} onAddToCart={handleAddToCart} />;
+  } else if (path === '/terms-and-conditions' || path === '/terms') {
+    pageContent = <TermsPage settings={settings} />;
+  } else if (path === '/privacy-policy') {
+    pageContent = <PrivacyPage settings={settings} />;
+  } else if (path === '/refund-cancellation-policy' || path === '/cancellation-policy') {
+    pageContent = <RefundCancellationPage settings={settings} />;
   } else if (path === '/faq') {
     pageContent = <FAQPage />;
   } else if (path === '/account' || path === '/login' || path === '/account/bookings' || path === '/account/addresses') {
     pageContent = <AccountPage />;
-  } else if (path === '/privacy-policy') {
-    pageContent = <PolicyPage type="privacy" />;
-  } else if (path === '/terms') {
-    pageContent = <PolicyPage type="terms" />;
-  } else if (path === '/cancellation-policy') {
-    pageContent = <PolicyPage type="cancellation" />;
   } else {
     // Fallback to Home
     pageContent = (

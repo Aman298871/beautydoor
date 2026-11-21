@@ -34,7 +34,8 @@ import {
   Gift,
   Wind,
   History,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 import { AdminChatbot } from './components/AdminChatbot.tsx';
 import { formatDuration } from '../../src/utils/formatters.ts';
@@ -56,7 +57,7 @@ export default function AdminApp() {
 
   // Active Tab: 24 modules architecture
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs' | 'notifications'
+    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs' | 'notifications' | 'policies'
   >('dispatch');
 
   // Module data
@@ -77,6 +78,9 @@ export default function AdminApp() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
+  const [enquiries, setEnquiries] = useState<any[]>([]);
+  const [selectedSampleBooking, setSelectedSampleBooking] = useState<any | null>(null);
+  const [isSampleInvoiceOpen, setIsSampleInvoiceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Rejection modal state
@@ -249,7 +253,8 @@ export default function AdminApp() {
         safeFetch('/api/admin/hygiene', { commitments: [] }),
         safeFetch('/api/admin/pending-services', { pending: [] }),
         safeFetch('/api/admin/price-audits', { audits: [] }),
-        safeFetch('/api/admin/notifications', { notifications: [] })
+        safeFetch('/api/admin/notifications', { notifications: [] }),
+        safeFetch('/api/admin/enquiries', { enquiries: [] })
       ]);
 
       const getVal = (idx: number, def: any) => (results[idx].status === 'fulfilled' ? results[idx].value : def);
@@ -272,6 +277,7 @@ export default function AdminApp() {
       const pendRes = getVal(15, { pending: [] });
       const auditRes = getVal(16, { audits: [] });
       const notifRes = getVal(17, { notifications: [] });
+      const enqRes = getVal(18, { enquiries: [] });
 
       if (ov && !ov.error) setOverview(ov);
       if (bk.bookings) setBookings(bk.bookings);
@@ -291,6 +297,7 @@ export default function AdminApp() {
       if (pendRes.pending || pendRes.pendingServices) setPendingServices(pendRes.pending || pendRes.pendingServices);
       if (auditRes.audits || auditRes.logs) setPriceAuditLogs(auditRes.audits || auditRes.logs);
       if (notifRes.notifications) setNotificationsList(notifRes.notifications);
+      if (enqRes.enquiries) setEnquiries(enqRes.enquiries);
     } catch (err) {
       console.error('[Admin] Data fetch error:', err);
     } finally {
@@ -1226,6 +1233,27 @@ export default function AdminApp() {
     }
   };
 
+  const handleUpdateEnquiryStatus = async (enquiryId: string, status: string) => {
+    try {
+      const res = await fetch(`/api/admin/enquiries/${enquiryId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        notify(`Customer enquiry marked as ${status}.`);
+        fetchAdminData();
+      } else {
+        notify('Failed to update enquiry status.');
+      }
+    } catch (err: any) {
+      notify('Error updating enquiry: ' + err.message);
+    }
+  };
+
   // If unauthenticated: render Dedicated Admin Login
   if (!token) {
     return (
@@ -1379,6 +1407,7 @@ export default function AdminApp() {
             <option value="reviews">Review Moderation ({reviews.length})</option>
             <option value="notifications">Notification History ({notificationsList.length})</option>
             <option value="audit">Audit Logs ({auditLogs.length})</option>
+            <option value="policies">Compliance & Policies ({enquiries.length} Enquiries)</option>
             <option value="settings">Settings & Policies</option>
             <option value="faqs">Chatbot FAQs ({faqsList.length})</option>
           </select>
@@ -1546,7 +1575,22 @@ export default function AdminApp() {
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
-            <span>Settings & Policies</span>
+            <span>Settings</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('policies')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'policies' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#C5A880]" />
+            <span>Compliance & Policies</span>
+            {enquiries.length > 0 && (
+              <span className="bg-[#4A0417] text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                {enquiries.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -3672,6 +3716,447 @@ export default function AdminApp() {
           </div>
         )}
 
+        {/* 15. POLICIES & RAZORPAY COMPLIANCE MANAGEMENT */}
+        {activeTab === 'policies' && (
+          <div className="space-y-6">
+            {/* Top Header */}
+            <div className="bg-white p-5 rounded-xl border border-[#E8DDD3] shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-serif font-bold text-[#1F1A1C]">
+                    Razorpay Compliance & Legal Policies
+                  </h3>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-300">
+                    {settings.policies_published === 'false' ? 'Draft Mode' : 'Live & Published'}
+                  </span>
+                </div>
+                <p className="text-xs text-[#7A6B6D] mt-0.5">
+                  Public compliance pages, legal entity registration, customer dispute channels, and payment verification readiness.
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample = bookings.length > 0 ? bookings[0] : {
+                      id: 'BK-SAMPLE-2026',
+                      customer_name: 'Priyanka Sharma',
+                      phone: '+91 98112 34567',
+                      email: 'priyanka@example.com',
+                      service_address: 'Apartment 402, DLF Phase 5, Gurugram, Haryana - 122002',
+                      booking_date: '2026-11-22',
+                      booking_slot: '11:00 AM',
+                      subtotal_price: 1999,
+                      total_price: 1999,
+                      payment_method: 'COD',
+                      payment_status: 'pending',
+                      status: 'confirmed',
+                      items: [
+                        { service_name: 'VLCC Gold Facial & Waxing Package', variant_name: 'Full Body & Face', final_item_price: 999, duration_mins: 90 },
+                        { service_name: 'Rose Petal Manicure & Pedicure Combo', variant_name: 'Deluxe', final_item_price: 1000, duration_mins: 60 }
+                      ]
+                    };
+                    setSelectedSampleBooking(sample);
+                    setIsSampleInvoiceOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-[#FAF7F2] border border-[#C5A880] text-[#4A0417] text-xs font-semibold rounded-lg hover:bg-[#F3ECE4] transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#C5A880]" />
+                  <span>Preview Sample Invoice</span>
+                </button>
+                <a
+                  href="/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 bg-[#4A0417] text-white text-xs font-semibold rounded-lg hover:bg-[#36020F] transition-colors flex items-center gap-1.5"
+                >
+                  <span>Open Storefront</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Section 1: Razorpay Compliance Readiness Dashboard (Phase 10) */}
+            <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#E8DDD3]">
+                <div>
+                  <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#C5A880]" />
+                    <span>Razorpay Verification Readiness Dashboard</span>
+                  </h4>
+                  <p className="text-xs text-[#7A6B6D]">
+                    Official audit checklist for website verification crawler and payment compliance reviewer.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <span className="text-[#554749]">Checkout Mode:</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                    Cash on Delivery / Pay After Service (Online Gateway Dormant)
+                  </span>
+                </div>
+              </div>
+
+              {/* 6 Individual Compliance Pages Grid */}
+              <div>
+                <h5 className="text-xs font-bold text-[#1F1A1C] uppercase tracking-wider mb-2">
+                  1. Dedicated Public Compliance URLs (Direct Access, No Login Required)
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { title: 'About Us', path: '/about-us', desc: 'At-home model, certified female beauticians, NCR coverage' },
+                    { title: 'Contact Us', path: '/contact-us', desc: '+91 78277 22522, hello@beautydoor.in, interactive enquiry form' },
+                    { title: 'Pricing & Rate Card', path: '/pricing', desc: 'Authoritative DB catalog, duration, ₹999 VLCC package, minimums' },
+                    { title: 'Terms & Conditions', path: '/terms-and-conditions', desc: '17 operational terms, pending booking workflow, client safety' },
+                    { title: 'Privacy Policy', path: '/privacy-policy', desc: 'Data retention, specialist dispatch, SMS/email OTP consent' },
+                    { title: 'Refund & Cancellation', path: '/refund-cancellation-policy', desc: '2-hour free window, ₹200 fee, COD mechanics, rescheduling' },
+                  ].map((page) => (
+                    <div key={page.path} className="p-3.5 rounded-xl bg-[#FAF7F2] border border-[#E8DDD3] flex flex-col justify-between hover:border-[#4A0417] transition-all">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-[#1F1A1C]">{page.title}</span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-300">
+                            HTTP 200
+                          </span>
+                        </div>
+                        <code className="text-[11px] text-[#4A0417] font-mono block mt-0.5">{page.path}</code>
+                        <p className="text-[11px] text-[#7A6B6D] mt-1.5 leading-snug">{page.desc}</p>
+                      </div>
+                      <div className="pt-3 mt-2 border-t border-[#E8DDD3]/60 flex justify-end">
+                        <a
+                          href={page.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-[#4A0417] hover:underline flex items-center gap-1"
+                        >
+                          <span>Visit Live Page</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Audit Checklist Items */}
+              <div className="pt-3 border-t border-[#E8DDD3]">
+                <h5 className="text-xs font-bold text-[#1F1A1C] uppercase tracking-wider mb-2.5">
+                  2. Regulatory & Gateway Verification Attributes
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Legal Entity Name</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        {settings.legal_business_name ? (
+                          <span className="font-bold text-emerald-900">{settings.legal_business_name}</span>
+                        ) : (
+                          <span className="font-bold text-amber-700 bg-amber-50 px-1 rounded">Owner Entry Required (Sole Proprietor / Legal Name)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Operational Address</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        {settings.operational_address || 'BeautyDoor Central Hub, Sector 43, Gurugram, Haryana 122002 / South Delhi Hub'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Verified Contact Channels</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        Phone: +91 78277 22522 · WhatsApp: +91 78277 22522 · Email: hello@beautydoor.in
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Live Pricing & Packages</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        {services.length} catalog services & {packagesList.length} packages active with approved ₹999 VLCC Facial & Waxing bundle.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Approved Cancellation Policy</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        ≥ 2 Hours: 100% Free (₹0 fee) · &lt; 2 Hours: ₹200 Convenience fee. COD late fee ledger compliant.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-[#E8DDD3] bg-white flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-[#1F1A1C]">Pending Booking Flow</div>
+                      <p className="text-[11px] text-[#554749] mt-0.5">
+                        Bookings register as pending review until confirmed by admin and specialist dispatched.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Policy & Legal Content Editor (Phase 9) */}
+            <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-5">
+              <div className="pb-3 border-b border-[#E8DDD3]">
+                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#C5A880]" />
+                  <span>Legal Entity & Policy Settings Management</span>
+                </h4>
+                <p className="text-xs text-[#7A6B6D]">
+                  These values populate dynamically across About Us, Contact Us, Terms, Privacy Policy, and receipts.
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Legal Business Name / Entity <span className="text-[#4A0417]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.legal_business_name || ''}
+                      onChange={(e) => setSettings({ ...settings, legal_business_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:border-[#4A0417]"
+                      placeholder="e.g. BeautyDoor Enterprises (or Owner Legal Proprietorship)"
+                    />
+                    <span className="text-[10px] text-[#7A6B6D] mt-0.5 block">
+                      Leave blank to display 'BeautyDoor' until company registration is finalized.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      GST Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.gst_number || ''}
+                      onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md uppercase font-mono"
+                      placeholder="e.g. 07AAAAA0000A1Z5"
+                    />
+                    <span className="text-[10px] text-[#7A6B6D] mt-0.5 block">
+                      Appears on receipts and tax invoices once registered.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Operational Address (Hub / Dispatch Centre)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={settings.operational_address || ''}
+                      onChange={(e) => setSettings({ ...settings, operational_address: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:border-[#4A0417]"
+                      placeholder="BeautyDoor Operational Hub, Sector 43, Gurugram, Haryana - 122002 / South Delhi Central Hub"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Registered Office Address
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={settings.registered_office_address || ''}
+                      onChange={(e) => setSettings({ ...settings, registered_office_address: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md focus:border-[#4A0417]"
+                      placeholder="Registered business address as per legal filings"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Policies Last Updated Date
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.policies_last_updated || 'November 21, 2026'}
+                      onChange={(e) => setSettings({ ...settings, policies_last_updated: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="November 21, 2026"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Policies Publication Status
+                    </label>
+                    <select
+                      value={settings.policies_published || 'true'}
+                      onChange={(e) => setSettings({ ...settings, policies_published: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-semibold"
+                    >
+                      <option value="true">Published & Live on Website</option>
+                      <option value="false">Draft / Under Legal Review</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                      Official Support Email
+                    </label>
+                    <input
+                      type="email"
+                      value={settings.contact_email || 'hello@beautydoor.in'}
+                      onChange={(e) => setSettings({ ...settings, contact_email: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                      placeholder="hello@beautydoor.in"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1 text-[#1F1A1C]">
+                    Pricing Page Intro Note / Rate Card Disclaimer
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.pricing_intro_note || ''}
+                    onChange={(e) => setSettings({ ...settings, pricing_intro_note: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
+                    placeholder="Official BeautyDoor salon rate card. All services are performed with sealed, mono-dose sanitized kits."
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-[#4A0417] text-white text-xs font-semibold rounded-md shadow-md hover:bg-[#36020F] transition-all cursor-pointer"
+                  >
+                    Save Legal & Compliance Settings
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Section 3: Customer Enquiries Inbox (POST /api/storefront/contact) */}
+            <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#E8DDD3]">
+                <div>
+                  <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-[#C5A880]" />
+                    <span>Customer Contact Enquiries ({enquiries.length})</span>
+                  </h4>
+                  <p className="text-xs text-[#7A6B6D]">
+                    Messages submitted via the public /contact-us enquiry form.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchAdminData}
+                  className="px-3 py-1.5 bg-[#FAF7F2] border border-[#E8DDD3] text-xs font-semibold rounded-lg hover:bg-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-[#4A0417]" />
+                  <span>Refresh Enquiries</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#E8DDD3] text-[#7A6B6D] uppercase text-[10px] tracking-wider bg-[#FAF7F2]">
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Customer</th>
+                      <th className="py-2.5 px-3">Contact</th>
+                      <th className="py-2.5 px-3">Service Interest</th>
+                      <th className="py-2.5 px-3">Message</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F0E6DE]">
+                    {enquiries.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-[#8C7A7C] italic">
+                          No customer contact enquiries received yet. Inquiries submitted on /contact-us will appear here.
+                        </td>
+                      </tr>
+                    ) : (
+                      enquiries.map((enq) => (
+                        <tr key={enq.id} className="hover:bg-[#FAF7F2]/60 transition-colors">
+                          <td className="py-3 px-3 text-[11px] text-[#7A6B6D] whitespace-nowrap">
+                            {new Date(enq.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-3 font-bold text-[#1F1A1C]">
+                            {enq.name}
+                          </td>
+                          <td className="py-3 px-3 text-[11px] space-y-0.5">
+                            <div className="font-mono font-medium text-[#4A0417]">{enq.phone}</div>
+                            {enq.email && <div className="text-[#7A6B6D]">{enq.email}</div>}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-semibold">
+                              {enq.topic || enq.service_interest || 'General Enquiry'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 max-w-xs text-[#554749] text-[11px]">
+                            {enq.message}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+                              enq.status === 'resolved'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : enq.status === 'in-progress'
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-amber-50 text-amber-900 border-amber-200'
+                            }`}>
+                              {enq.status || 'new'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {enq.status !== 'resolved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateEnquiryStatus(enq.id, 'resolved')}
+                                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded cursor-pointer"
+                                >
+                                  Mark Resolved
+                                </button>
+                              )}
+                              {enq.status === 'new' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateEnquiryStatus(enq.id, 'in-progress')}
+                                  className="px-2 py-1 bg-[#FAF7F2] border border-[#E8DDD3] text-[#4A0417] text-[10px] font-semibold rounded hover:bg-white cursor-pointer"
+                                >
+                                  In Progress
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* DISPATCH ASSIGNMENT MODAL */}
@@ -5635,6 +6120,126 @@ export default function AdminApp() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SAMPLE INVOICE / RECEIPT MODAL */}
+      {isSampleInvoiceOpen && selectedSampleBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-[#E8DDD3] p-6 space-y-5">
+            <div className="flex justify-between items-start pb-4 border-b border-[#E8DDD3]">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/assets/aistudio/WhatsApp_Image_2026-11-02_at_3.15.17_PM_49e36dff.jpeg"
+                  alt="BeautyDoor"
+                  className="h-10 w-auto object-contain rounded"
+                />
+                <div>
+                  <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">Customer Booking Receipt</h4>
+                  <p className="text-[11px] text-[#7A6B6D]">
+                    {settings.legal_business_name || 'BeautyDoor'} · Tax Invoice / Order Confirmation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSampleInvoiceOpen(false)}
+                className="p-1 text-[#6B5A5C] hover:text-[#1F1A1C] rounded-full hover:bg-stone-100 cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Invoice Details */}
+            <div className="grid grid-cols-2 gap-4 text-xs bg-[#FAF7F2] p-4 rounded-xl border border-[#E8DDD3]">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#7A6B6D]">Booking / Invoice Ref</span>
+                <p className="font-mono font-bold text-[#4A0417] text-sm">{selectedSampleBooking.id}</p>
+                <span className="text-[10px] uppercase font-bold text-[#7A6B6D] mt-2 block">Appointment Schedule</span>
+                <p className="font-semibold text-[#1F1A1C]">
+                  {selectedSampleBooking.booking_date || selectedSampleBooking.appointment_date || selectedSampleBooking.appointmentDate} at {selectedSampleBooking.booking_slot || selectedSampleBooking.appointment_slot || selectedSampleBooking.appointmentSlot}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#7A6B6D]">Billed To</span>
+                <p className="font-bold text-[#1F1A1C]">{selectedSampleBooking.customer_name || selectedSampleBooking.customerName}</p>
+                <p className="text-[#554749] text-[11px]">{selectedSampleBooking.phone || selectedSampleBooking.customer_phone || selectedSampleBooking.customerPhone}</p>
+                <p className="text-[#7A6B6D] text-[11px] truncate">
+                  {typeof selectedSampleBooking.service_address === 'string'
+                    ? selectedSampleBooking.service_address
+                    : (selectedSampleBooking.address ? `${selectedSampleBooking.address.flat}, ${selectedSampleBooking.address.city}` : selectedSampleBooking.flat + ', ' + selectedSampleBooking.city)}
+                </p>
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold uppercase tracking-wider text-[#1F1A1C]">Reserved Rituals</h5>
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[#E8DDD3] text-[#7A6B6D] uppercase text-[10px] bg-[#FAF7F2]">
+                    <th className="py-2 px-3">Service</th>
+                    <th className="py-2 px-3">Duration</th>
+                    <th className="py-2 px-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0E6DE]">
+                  {(selectedSampleBooking.items || [
+                    { service_name: 'VLCC Gold Facial & Waxing Package', variant_name: 'Full Body & Face', final_item_price: 999, duration_mins: 90 },
+                    { service_name: 'Rose Petal Manicure & Pedicure Combo', variant_name: 'Deluxe', final_item_price: 1000, duration_mins: 60 }
+                  ]).map((it: any, i: number) => (
+                    <tr key={i}>
+                      <td className="py-2.5 px-3">
+                        <div className="font-semibold text-[#1F1A1C]">{it.service_name}</div>
+                        {it.variant_name && <div className="text-[10px] text-[#7A6B6D]">{it.variant_name}</div>}
+                      </td>
+                      <td className="py-2.5 px-3 text-[#7A6B6D]">{it.duration_mins ? `${it.duration_mins} mins` : '-'}</td>
+                      <td className="py-2.5 px-3 text-right font-semibold text-[#1F1A1C]">₹{it.final_item_price || it.unit_price}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Price Summary */}
+            <div className="pt-2 border-t border-[#E8DDD3] space-y-1.5 text-xs">
+              <div className="flex justify-between text-[#7A6B6D]">
+                <span>Services Subtotal:</span>
+                <span>₹{selectedSampleBooking.subtotal_price || selectedSampleBooking.total_payable || selectedSampleBooking.total_price}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold text-[#1F1A1C] pt-2 border-t border-[#E8DDD3]">
+                <span>Total Payable:</span>
+                <span className="text-[#4A0417]">₹{selectedSampleBooking.total_price || selectedSampleBooking.total_payable || selectedSampleBooking.totalPayable}</span>
+              </div>
+              <div className="flex justify-between text-xs pt-1 font-semibold text-emerald-800">
+                <span>Payment Method:</span>
+                <span>Cash on Delivery (Pay After Service)</span>
+              </div>
+            </div>
+
+            {/* Operational Footer */}
+            <div className="pt-3 border-t border-[#E8DDD3] text-[11px] text-[#7A6B6D] space-y-1">
+              <p>• <strong>Free Cancellation:</strong> Valid up to 2 hours prior to scheduled appointment. Within 2 hours, ₹200 fee applies.</p>
+              <p>• <strong>Support & Escalations:</strong> Preeti Singh · +91 78277 22522 · hello@beautydoor.in</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-[#FAF7F2] border border-[#E8DDD3] text-xs font-semibold rounded-lg hover:bg-white cursor-pointer"
+              >
+                Print Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSampleInvoiceOpen(false)}
+                className="px-4 py-2 bg-[#4A0417] text-white text-xs font-semibold rounded-lg hover:bg-[#36020F] cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

@@ -39,7 +39,7 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   const isConfigured = razorpayService.isConfigured();
   const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6';
 
-  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : (envExplicitEnable || true);
+  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : envExplicitEnable;
   const isAvailable = isEnabled && isConfigured;
 
   let disabledReason: string | null = null;
@@ -1025,6 +1025,13 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
     const paymentOptions = await getAuthoritativePaymentOptions();
+    if (paymentMethod === 'RAZORPAY' && !paymentOptions.razorpayAvailable) {
+      res.status(400).json({
+        error: paymentOptions.disabledReason || 'Online payment via Razorpay is currently disabled. Please select Cash on Delivery (Pay After Service).',
+        code: 'RAZORPAY_DISABLED'
+      });
+      return;
+    }
     const chosenPaymentMethod = (paymentOptions.razorpayAvailable && paymentMethod === 'RAZORPAY') ? 'RAZORPAY' : 'COD';
     // Payments start as pending until verified through gateway webhook / signature or collected on doorstep
     const paymentStatus = 'pending';
@@ -1290,6 +1297,7 @@ const createRazorpayOrderHandler = async (req: Request, res: Response): Promise<
 
 storefrontRouter.post('/payments/create-razorpay-order', createRazorpayOrderHandler);
 storefrontRouter.post('/payment/razorpay/order', createRazorpayOrderHandler);
+storefrontRouter.post('/payment/razorpay/create-order', createRazorpayOrderHandler);
 
 const verifyRazorpayHandler = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1557,7 +1565,7 @@ const cancelPreviewHandler = async (req: Request, res: Response): Promise<void> 
     const diffMinutes = scheduledTime ? Math.floor((scheduledTime - now) / (60 * 1000)) : -1;
     const isWithin2Hours = diffMinutes < 120;
     const cancellationFee = isWithin2Hours ? 200 : 0;
-    
+
     // Only verified captured payments qualify as prepaid refundable
     const isRazorpay = booking.payment_method === 'RAZORPAY';
     const isVerifiedCaptured = (booking.payment_status === 'verified' || booking.payment_status === 'paid');

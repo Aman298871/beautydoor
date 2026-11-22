@@ -30,11 +30,13 @@ services:
         generateValue: true
       - key: ADMIN_EMAIL
         value: admin@beautydoor.in
+      - key: OWNER_NOTIFICATION_EMAIL
+        value: hello@beautydoor.in
       - key: ENABLE_DEV_OTP
         value: "false"
       - key: ENABLE_RAZORPAY
-        value: "true"
+        value: "false"
       - key: RAZORPAY_ENABLED
-        value: "true"
+        value: "false"
       - key: RAZORPAY_KEY_ID
         value: rzp_live_U2rRiMqcCnXRk6

@@ -1424,6 +1424,21 @@ adminRouter.get('/packages', async (_req: Request, res: Response): Promise<void>
 adminRouter.post('/packages', async (req: Request, res: Response): Promise<void> => {
   const p = req.body;
   const adminUser = req.adminUser?.username || 'admin';
+  if (!p.name || typeof p.name !== 'string' || !p.name.trim()) {
+    res.status(400).json({ error: 'Package name is required.' });
+    return;
+  }
+  const sellingPrice = Number(p.selling_price);
+  if (isNaN(sellingPrice) || sellingPrice <= 0) {
+    res.status(400).json({ error: 'Selling price must be greater than zero.' });
+    return;
+  }
+  const durationMins = Number(p.duration_mins || 60);
+  if (isNaN(durationMins) || durationMins <= 0) {
+    res.status(400).json({ error: 'Duration in minutes must be greater than zero.' });
+    return;
+  }
+
   const id = p.id || `pkg-${Date.now()}`;
   const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
@@ -1434,15 +1449,15 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
       benefits_json, category_ids_json, is_published, badge, image_url, display_order, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [id,
-    p.name,
+    p.name.trim(),
     slug,
     p.subtitle || null,
     p.description || '',
     p.original_price ? Number(p.original_price) : null,
-    Number(p.selling_price),
+    sellingPrice,
     Number(p.discount_percent || 0),
-    Number(p.duration_mins || 60),
-    p.duration_display || `${p.duration_mins} mins`,
+    durationMins,
+    p.duration_display || `${durationMins} mins`,
     JSON.stringify(p.inclusions || []),
     JSON.stringify(p.benefits || []),
     JSON.stringify(p.category_ids || []),
@@ -1456,9 +1471,9 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
   (await db.execute(`
     INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
     VALUES (?, 'package', ?, ?, null, ?, ?, ?)
-  `, [`log-${Date.now()}`, id, p.name, Number(p.selling_price), adminUser, new Date().toISOString()]));
+  `, [`log-${Date.now()}`, id, p.name, sellingPrice, adminUser, new Date().toISOString()]));
 
-  recordAuditLog(adminUser, 'CREATE_PACKAGE', 'CATALOG', id, { name: p.name, price: p.selling_price }, req.ip);
+  recordAuditLog(adminUser, 'CREATE_PACKAGE', 'CATALOG', id, { name: p.name, price: sellingPrice }, req.ip);
   res.status(201).json({ success: true, packageId: id });
 });
 
@@ -1467,47 +1482,74 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
   const p = req.body;
   const adminUser = req.adminUser?.username || 'admin';
 
-  // begin transaction block
-    const current = (await db.queryRow('SELECT selling_price, name FROM packages WHERE id = ?', [id])) as any;
-    if (current && Number(p.selling_price) !== current.selling_price) {
-      (await db.execute(`
-        INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
-        VALUES (?, 'package', ?, ?, ?, ?, ?, ?)
-      `, [`log-${Date.now()}`, id, current.name, current.selling_price, Number(p.selling_price), adminUser, new Date().toISOString()]));
+  if (p.name !== undefined && (!p.name || typeof p.name !== 'string' || !p.name.trim())) {
+    res.status(400).json({ error: 'Package name cannot be empty.' });
+    return;
+  }
+  if (p.selling_price !== undefined) {
+    const sp = Number(p.selling_price);
+    if (isNaN(sp) || sp <= 0) {
+      res.status(400).json({ error: 'Selling price must be greater than zero.' });
+      return;
     }
+  }
+  if (p.duration_mins !== undefined) {
+    const dm = Number(p.duration_mins);
+    if (isNaN(dm) || dm <= 0) {
+      res.status(400).json({ error: 'Duration in minutes must be greater than zero.' });
+      return;
+    }
+  }
 
+  const current = (await db.queryRow('SELECT selling_price, name, image_url FROM packages WHERE id = ?', [id])) as any;
+  if (!current) {
+    res.status(404).json({ error: 'Package not found.' });
+    return;
+  }
+
+  if (p.selling_price !== undefined && Number(p.selling_price) !== current.selling_price) {
     (await db.execute(`
-      UPDATE packages 
-      SET name = ?, slug = ?, subtitle = ?, description = ?, original_price = ?,
-          selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
-          inclusions_json = ?, benefits_json = ?,
-          category_ids_json = CASE WHEN ? IS NOT NULL THEN ? ELSE category_ids_json END,
-          is_published = ?, badge = ?, image_url = CASE WHEN ? IS NOT NULL THEN ? ELSE image_url END,
-          display_order = ?, updated_at = ?
-      WHERE id = ?
-    `, [p.name,
-      p.slug,
-      p.subtitle || null,
-      p.description || '',
-      p.original_price ? Number(p.original_price) : null,
-      Number(p.selling_price),
-      Number(p.discount_percent || 0),
-      Number(p.duration_mins || 60),
-      p.duration_display || `${p.duration_mins} mins`,
-      JSON.stringify(p.inclusions || []),
-      JSON.stringify(p.benefits || []),
-      p.category_ids ? JSON.stringify(p.category_ids) : null,
-      p.category_ids ? JSON.stringify(p.category_ids) : null,
-      p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
-      p.badge || null,
-      p.image_url !== undefined ? p.image_url : null,
-      p.image_url !== undefined ? p.image_url : null,
-      Number(p.display_order || 0),
-      new Date().toISOString(),
-      id]));
-  // end transaction block
+      INSERT INTO price_audit_logs (id, item_type, item_id, item_name, old_price, new_price, changed_by, timestamp)
+      VALUES (?, 'package', ?, ?, ?, ?, ?, ?)
+    `, [`log-${Date.now()}`, id, current.name, current.selling_price, Number(p.selling_price), adminUser, new Date().toISOString()]));
+  }
 
-  recordAuditLog(adminUser, 'UPDATE_PACKAGE', 'CATALOG', id, { name: p.name, price: p.selling_price }, req.ip);
+  const finalName = p.name ? p.name.trim() : current.name;
+  const finalSlug = p.slug || finalName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const finalSellingPrice = p.selling_price !== undefined ? Number(p.selling_price) : current.selling_price;
+  const finalDurationMins = p.duration_mins !== undefined ? Number(p.duration_mins) : 60;
+  const finalImageUrl = p.image_url !== undefined ? (p.image_url || null) : current.image_url;
+
+  (await db.execute(`
+    UPDATE packages 
+    SET name = ?, slug = ?, subtitle = ?, description = ?, original_price = ?,
+        selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
+        inclusions_json = ?, benefits_json = ?,
+        category_ids_json = CASE WHEN ? IS NOT NULL THEN ? ELSE category_ids_json END,
+        is_published = ?, badge = ?, image_url = ?,
+        display_order = ?, updated_at = ?
+    WHERE id = ?
+  `, [finalName,
+    finalSlug,
+    p.subtitle || null,
+    p.description || '',
+    p.original_price ? Number(p.original_price) : null,
+    finalSellingPrice,
+    Number(p.discount_percent || 0),
+    finalDurationMins,
+    p.duration_display || `${finalDurationMins} mins`,
+    JSON.stringify(p.inclusions || []),
+    JSON.stringify(p.benefits || []),
+    p.category_ids ? JSON.stringify(p.category_ids) : null,
+    p.category_ids ? JSON.stringify(p.category_ids) : null,
+    p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
+    p.badge || null,
+    finalImageUrl,
+    Number(p.display_order || 0),
+    new Date().toISOString(),
+    id]));
+
+  recordAuditLog(adminUser, 'UPDATE_PACKAGE', 'CATALOG', id, { name: finalName, price: finalSellingPrice }, req.ip);
   res.json({ success: true });
 });
 
@@ -1515,9 +1557,26 @@ adminRouter.delete('/packages/:id', async (req: Request, res: Response): Promise
   const { id } = req.params;
   const adminUser = req.adminUser?.username || 'admin';
 
+  // Check if package is referenced in past customer bookings
+  const existingUsage = (await db.queryRow(
+    'SELECT id FROM booking_items WHERE service_id = ? LIMIT 1',
+    [id]
+  )) as any;
+
+  if (existingUsage) {
+    // Soft delete / archive to protect past customer booking history
+    (await db.execute(
+      "UPDATE packages SET is_published = 0, badge = 'Archived', updated_at = ? WHERE id = ?",
+      [new Date().toISOString(), id]
+    ));
+    recordAuditLog(adminUser, 'ARCHIVE_PACKAGE', 'CATALOG', id, { reason: 'Referenced in past booking items' }, req.ip);
+    res.json({ success: true, archived: true, message: 'Package has existing booking history and was safely archived rather than deleted.' });
+    return;
+  }
+
   (await db.execute('DELETE FROM packages WHERE id = ?', [id]));
   recordAuditLog(adminUser, 'DELETE_PACKAGE', 'CATALOG', id, {}, req.ip);
-  res.json({ success: true });
+  res.json({ success: true, deleted: true });
 });
 
 // 14. Hygiene Commitments CRUD

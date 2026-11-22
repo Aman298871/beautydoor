@@ -14,7 +14,7 @@ export class EmailService {
   private fromAddress: string;
 
   constructor() {
-    this.fromAddress = process.env.EMAIL_FROM || 'BeautyDoor Salon <appointments@beautydoor.in>';
+    this.fromAddress = process.env.EMAIL_FROM || `${process.env.EMAIL_FROM_NAME || 'BeautyDoor Salon'} <${process.env.EMAIL_FROM_ADDRESS || 'appointments@beautydoor.in'}>`;
 
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
@@ -107,6 +107,15 @@ export class EmailService {
     }
 
     // 3. Fallback: Simulated Delivery (Local development, test environments, or missing production credentials)
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`[EmailService:UNCONFIGURED] Production email dispatch blocked to ${to}: No Resend or SMTP credentials configured.`);
+      return {
+        success: false,
+        provider: 'simulated',
+        error: 'Email service credentials (RESEND_API_KEY or SMTP_HOST) not configured in production environment.'
+      };
+    }
+
     console.log(`[EmailService:Simulated] To: ${to} | Subject: "${subject}" | Delivered successfully to simulated inbox.`);
     return {
       success: true,
@@ -760,7 +769,7 @@ export class EmailService {
    * Mandated Subject: BEAUTYDOOR — NEW BOOKING RECEIVED — [BOOKING ID]
    */
   public async sendNewBookingAlertToOwner(booking: any): Promise<EmailDispatchResult> {
-    const ownerEmail = (process.env.ADMIN_EMAIL || process.env.OWNER_EMAIL || 'hello@beautydoor.in').trim();
+    const ownerEmail = (process.env.OWNER_NOTIFICATION_EMAIL || process.env.OWNER_EMAIL || 'hello@beautydoor.in').trim();
     const bookingId = booking.id || booking.bookingId || 'BD-APPT';
     const customerName = booking.customer_name || booking.customerName || 'Customer';
     const customerPhone = booking.customer_phone || booking.customerPhone || 'Not provided';

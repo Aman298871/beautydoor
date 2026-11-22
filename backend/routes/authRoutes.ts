@@ -93,8 +93,15 @@ authRouter.get('/admin/me', requireAdminAuth, (req: Request, res: Response): voi
   res.json({ user: req.adminUser });
 });
 
-// Customer OTP Send
+// Customer OTP Send (Deprecated: strictly disabled in production in favor of official Firebase Phone Authentication)
 authRouter.post('/customer/otp/send', async (req: Request, res: Response): Promise<void> => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(403).json({
+      error: 'Direct server OTP generation is disabled in production. Please use the official Firebase Phone Authentication flow.'
+    });
+    return;
+  }
+
   const { phone } = req.body;
   if (!phone || typeof phone !== 'string') {
     res.status(400).json({ error: 'A valid 10-digit Indian mobile number is required.' });
@@ -179,8 +186,15 @@ authRouter.post('/customer/otp/send', async (req: Request, res: Response): Promi
   res.json(responsePayload);
 });
 
-// Customer OTP Verify
+// Customer OTP Verify (Deprecated: strictly disabled in production in favor of official Firebase Phone Authentication)
 authRouter.post('/customer/otp/verify', (req: Request, res: Response): void => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(403).json({
+      error: 'Direct server OTP verification is disabled in production. Please use the official Firebase Phone Authentication flow.'
+    });
+    return;
+  }
+
   const { phone, otp } = req.body;
   if (!phone || !otp) {
     res.status(400).json({ error: 'Phone number and 6-digit verification code are required.' });
@@ -248,30 +262,28 @@ authRouter.post('/customer/otp/verify', (req: Request, res: Response): void => {
 });
 
 // Customer Firebase ID Token Exchange / Login
+// Cryptographically verifies Firebase ID token signature via Firebase Admin SDK
 authRouter.post('/customer/firebase-login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { idToken, phone } = req.body;
-    if (!idToken && !phone) {
-      res.status(400).json({ error: 'idToken or verified phone number is required.' });
-      return;
-    }
 
     let verifiedPhone = '';
     let customerUid = '';
 
     if (idToken) {
-      const verifyRes = await firebaseAuthService.verifyToken(idToken);
-      if (!verifyRes.valid || !verifyRes.customer) {
-        res.status(401).json({ error: verifyRes.error || 'Invalid Firebase ID token.' });
+      const verifyRes = await firebaseAuthService.verifyFirebaseIdToken(idToken);
+      if (!verifyRes.valid || !verifyRes.phone || !verifyRes.uid) {
+        res.status(401).json({ error: verifyRes.error || 'Invalid or unverified Firebase ID token.' });
         return;
       }
-      verifiedPhone = verifyRes.customer.phone;
-      customerUid = verifyRes.customer.uid;
-    } else if (process.env.ENABLE_DEV_OTP === 'true' && phone) {
+      verifiedPhone = verifyRes.phone;
+      customerUid = verifyRes.uid;
+    } else if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_OTP === 'true' && phone) {
+      // Strictly non-production development bypass for automated local testing:
       verifiedPhone = phone.replace(/\D/g, '').slice(-10);
       customerUid = `cust-${verifiedPhone}`;
     } else {
-      res.status(401).json({ error: 'Valid Firebase ID token is required in production.' });
+      res.status(401).json({ error: 'Valid Firebase ID token with phone verification is required.' });
       return;
     }
 

@@ -46,7 +46,11 @@ export function lockScroll(): void {
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overscrollBehavior = 'contain';
     document.documentElement.style.overscrollBehavior = 'contain';
+    if (!document.body.dataset) {
+      document.body.dataset = {} as DOMStringMap;
+    }
     document.body.dataset.scrollLocked = 'true';
+    document.body.setAttribute('data-scroll-locked', 'true');
   }
 }
 
@@ -67,7 +71,10 @@ export function unlockScroll(): void {
     document.documentElement.style.overscrollBehavior = previousHtmlOverscroll || '';
     document.body.style.overscrollBehavior = previousBodyOverscroll || '';
     document.body.style.touchAction = '';
-    delete document.body.dataset.scrollLocked;
+    if (document.body.dataset) {
+      delete document.body.dataset.scrollLocked;
+    }
+    document.body.removeAttribute('data-scroll-locked');
 
     window.scrollTo(0, scrollY);
   }

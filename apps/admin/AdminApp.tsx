@@ -36,7 +36,8 @@ import {
   History,
   ShieldCheck,
   ExternalLink,
-  BookOpen
+  BookOpen,
+  Upload
 } from 'lucide-react';
 import { AdminChatbot } from './components/AdminChatbot.tsx';
 import { formatDuration } from '../../src/utils/formatters.ts';
@@ -1089,12 +1090,20 @@ export default function AdminApp() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
+      const data = await res.json();
       if (res.ok) {
-        notify('Package deleted.');
+        if (data.archived) {
+          notify('Package is referenced by past customer bookings and was safely archived rather than deleted.');
+        } else {
+          notify('Package deleted.');
+        }
         fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to delete package.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert('Failed to delete package: ' + err.message);
     }
   };
 
@@ -5288,22 +5297,79 @@ export default function AdminApp() {
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">Package Cover Image URL</label>
-                <div className="flex gap-2.5 items-center">
-                  <input
-                    type="text"
-                    value={editingPackage.image_url || ''}
-                    onChange={(e) => setEditingPackage({ ...editingPackage, image_url: e.target.value })}
-                    placeholder="https://images.unsplash.com/... or paste image URL"
-                    className="flex-1 px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-xs"
-                  />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-semibold block">Package Cover Image</label>
                   {editingPackage.image_url && (
-                    <img
-                      src={editingPackage.image_url}
-                      alt="Preview"
-                      className="w-9 h-9 rounded-md object-cover border border-[#E8DDD3] shrink-0"
-                      onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                    <button
+                      type="button"
+                      onClick={() => setEditingPackage({ ...editingPackage, image_url: null })}
+                      className="text-xs text-red-600 hover:underline cursor-pointer"
+                    >
+                      Remove Photo
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={editingPackage.image_url || ''}
+                      onChange={(e) => setEditingPackage({ ...editingPackage, image_url: e.target.value })}
+                      placeholder="https://... or choose photo from device"
+                      className="flex-1 px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-xs"
                     />
+                    <label className="px-3 py-2 bg-[#4A0417] text-white text-xs font-semibold rounded-md cursor-pointer hover:bg-[#36020F] transition-colors shrink-0 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert('File size exceeds 5MB limit.');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            const base64 = reader.result as string;
+                            try {
+                              const uploadRes = await fetch('/api/admin/upload-image', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  Authorization: `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ imageBase64: base64 })
+                              });
+                              const uploadData = await uploadRes.json();
+                              if (uploadRes.ok && uploadData.url) {
+                                setEditingPackage({ ...editingPackage, image_url: uploadData.url });
+                                notify('Image uploaded successfully.');
+                              } else {
+                                alert(uploadData.error || 'Failed to upload image.');
+                              }
+                            } catch (err: any) {
+                              alert('Image upload failed: ' + err.message);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {editingPackage.image_url && (
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={editingPackage.image_url}
+                        alt="Preview"
+                        className="w-12 h-12 rounded-md object-cover border border-[#E8DDD3]"
+                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                      />
+                      <span className="text-xs text-[#7A6B6D] font-mono break-all">{editingPackage.image_url}</span>
+                    </div>
                   )}
                 </div>
               </div>

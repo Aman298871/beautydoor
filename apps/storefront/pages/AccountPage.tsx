@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, Clock, MapPin, CheckCircle2, AlertCircle, LogOut, Award, RefreshCw, XCircle } from 'lucide-react';
 import { useRouter } from '../router.tsx';
+import {
+  isFirebaseConfigured,
+  setupRecaptcha,
+  sendFirebasePhoneOtp,
+  confirmFirebasePhoneOtp
+} from '../../../src/firebase.ts';
+import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
 
 export const AccountPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -13,6 +20,25 @@ export const AccountPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  // Restore authenticated customer session if available
+  useEffect(() => {
+    const existingToken = sessionStorage.getItem('beautydoor_customer_token');
+    const existingPhone = localStorage.getItem('beautydoor_customer_phone');
+    if (existingToken && existingPhone) {
+      setPhone(existingPhone);
+      setIsLoggedIn(true);
+      fetchBookings(existingPhone, existingToken);
+    }
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
 
   // Resend countdown timer
   useEffect(() => {
@@ -31,9 +57,14 @@ export const AccountPage: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('Schedule conflict');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const fetchBookings = async (cleanPhone: string) => {
+  const fetchBookings = async (cleanPhone: string, authToken?: string) => {
     try {
-      const res = await fetch(`/api/storefront/customer/bookings?phone=${cleanPhone}`);
+      const token = authToken || sessionStorage.getItem('beautydoor_customer_token');
+      const res = await fetch(`/api/storefront/customer/bookings?phone=${cleanPhone}`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       setBookings(data.bookings || []);
     } catch (err) {
@@ -54,6 +85,31 @@ export const AccountPage: React.FC = () => {
 
     setLoading(true);
     try {
+      // 1. Official Firebase Phone Authentication with reCAPTCHA
+      if (isFirebaseConfigured()) {
+        if (!recaptchaVerifierRef.current) {
+          recaptchaVerifierRef.current = setupRecaptcha('firebase-recaptcha-container', 'invisible');
+        }
+        if (!recaptchaVerifierRef.current) {
+          throw new Error('Unable to initialize reCAPTCHA security verifier. Please check your browser connection.');
+        }
+
+        const confirmation = await sendFirebasePhoneOtp(cleanPhone, recaptchaVerifierRef.current);
+        setConfirmationResult(confirmation);
+        setIsOtpSent(true);
+        setOtp('');
+        setInfoMessage(`Firebase verification code sent via SMS to +91 ${cleanPhone}.`);
+        setResendCooldown(60);
+        return;
+      }
+
+      // 2. Fallback for non-production development environments
+      const isDevOrTest = process.env.NODE_ENV !== 'production';
+      if (!isDevOrTest) {
+        setErrorMessage('Firebase Phone Authentication is not configured on this environment. Please configure VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, and VITE_FIREBASE_APP_ID in your hosting environment.');
+        return;
+      }
+
       const res = await fetch('/api/auth/customer/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,8 +125,12 @@ export const AccountPage: React.FC = () => {
         setErrorMessage(data.error || 'Failed to dispatch verification code.');
         if (data.cooldownSeconds) setResendCooldown(data.cooldownSeconds);
       }
-    } catch (err) {
-      setErrorMessage('Unable to reach authentication server. Please check your connection.');
+    } catch (err: any) {
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+      setErrorMessage(err.message || 'Unable to reach authentication server. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -89,20 +149,43 @@ export const AccountPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/customer/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: cleanOtp })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setIsLoggedIn(true);
-        await fetchBookings(phone);
+      let sessionToken = '';
+      const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+      if (confirmationResult) {
+        const { idToken } = await confirmFirebasePhoneOtp(confirmationResult, cleanOtp);
+
+        const exchangeRes = await fetch('/api/auth/customer/firebase-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, phone: cleanPhone })
+        });
+        const exchangeData = await exchangeRes.json();
+        if (!exchangeRes.ok || !exchangeData.token) {
+          throw new Error(exchangeData.error || 'Failed to authenticate verified Firebase session on backend.');
+        }
+        sessionToken = exchangeData.token;
       } else {
-        setErrorMessage(data.error || 'Invalid or expired verification code.');
+        const res = await fetch('/api/auth/customer/otp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: cleanPhone, otp: cleanOtp })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.token) {
+          throw new Error(data.error || 'Invalid or expired verification code.');
+        }
+        sessionToken = data.token;
       }
-    } catch (err) {
-      setErrorMessage('Verification failed. Please try again.');
+
+      if (sessionToken) {
+        sessionStorage.setItem('beautydoor_customer_token', sessionToken);
+        localStorage.setItem('beautydoor_customer_phone', cleanPhone);
+        setIsLoggedIn(true);
+        await fetchBookings(cleanPhone, sessionToken);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -210,6 +293,8 @@ export const AccountPage: React.FC = () => {
                   </div>
                 </div>
 
+                <div id="firebase-recaptcha-container"></div>
+
                 <button
                   type="submit"
                   disabled={loading || phone.replace(/\D/g, '').length < 10}
@@ -293,8 +378,14 @@ export const AccountPage: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setIsLoggedIn(false)}
-                className="text-xs text-[#7A6B6D] hover:text-[#1F1A1C] flex items-center gap-1 font-semibold"
+                onClick={() => {
+                  sessionStorage.removeItem('beautydoor_customer_token');
+                  setIsLoggedIn(false);
+                  setIsOtpSent(false);
+                  setOtp('');
+                  setBookings([]);
+                }}
+                className="text-xs text-[#7A6B6D] hover:text-[#1F1A1C] flex items-center gap-1 font-semibold cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>

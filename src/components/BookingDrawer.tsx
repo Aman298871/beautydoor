@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BUSINESS_CONFIG } from '../config/businessConfig.ts';
 import { lockScroll, unlockScroll } from '../utils/scrollLock.ts';
@@ -66,10 +66,25 @@ export const BookingDrawer: React.FC<Props> = ({
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
-  // Customer info
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  // Customer info - Auto-prefilled from authenticated session / previous booking if available
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('beautydoor_customer_name') || '';
+    }
+    return '';
+  });
+  const [customerPhone, setCustomerPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('beautydoor_customer_phone') || '';
+    }
+    return '';
+  });
+  const [customerEmail, setCustomerEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('beautydoor_customer_email') || '';
+    }
+    return '';
+  });
   const [specialNotes, setSpecialNotes] = useState('');
 
   // Coupon state
@@ -78,11 +93,12 @@ export const BookingDrawer: React.FC<Props> = ({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
-  // Payment & Submission state - Defaults strictly to COD (Razorpay disabled until approved)
+  // Payment & Submission state
   const [paymentMethodChoice, setPaymentMethodChoice] = useState<'COD' | 'RAZORPAY'>('COD');
   const [razorpayAvailable, setRazorpayAvailable] = useState<boolean>(false);
   const [razorpayKeyId, setRazorpayKeyId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -154,12 +170,27 @@ export const BookingDrawer: React.FC<Props> = ({
     };
   }, [isOpen]);
 
-  // Reset step if reopening with items
+  // Reset step if reopening with items or if new items were added after previous booking
   useEffect(() => {
-    if (isOpen && step === 5 && !createdBooking) {
+    if (isOpen && cartItems.length > 0 && (step === 5 || createdBooking)) {
+      setCreatedBooking(null);
+      setStep(1);
+      setSubmitError(null);
+      setAgreedToTerms(false);
+    } else if (isOpen && step === 5 && !createdBooking) {
       setStep(1);
     }
-  }, [isOpen]);
+  }, [isOpen, cartItems.length]);
+
+  const handleCloseDrawer = () => {
+    if (step === 5 || createdBooking) {
+      setCreatedBooking(null);
+      setStep(1);
+      setSubmitError(null);
+      setAgreedToTerms(false);
+    }
+    onClose();
+  };
 
   // Fetch available slots on date change (completely independent of pincode)
   useEffect(() => {
@@ -278,6 +309,8 @@ export const BookingDrawer: React.FC<Props> = ({
 
   // Final submit
   const handleConfirmBooking = async () => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (!customerName || !customerPhone) {
       setSubmitError('Please enter your name and contact phone number.');
       return;
@@ -288,8 +321,21 @@ export const BookingDrawer: React.FC<Props> = ({
       return;
     }
 
+    if (paymentMethodChoice === 'RAZORPAY' && !razorpayAvailable) {
+      setSubmitError('Online payment via Razorpay is not configured or unavailable on the server. Please select Cash on Delivery (Pay After Service).');
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
+
+    // Save customer details to localStorage for repeat bookings
+    try {
+      localStorage.setItem('beautydoor_customer_name', customerName);
+      localStorage.setItem('beautydoor_customer_phone', customerPhone);
+      if (customerEmail) localStorage.setItem('beautydoor_customer_email', customerEmail);
+    } catch {}
 
     const bookingPayload = {
       customerName,
@@ -422,6 +468,7 @@ export const BookingDrawer: React.FC<Props> = ({
     } catch (err: any) {
       setSubmitError(err.message || 'Error creating booking. Please try again.');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -436,7 +483,7 @@ export const BookingDrawer: React.FC<Props> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            onClick={onClose}
+            onClick={handleCloseDrawer}
             onTouchMove={(e) => e.preventDefault()}
             className="fixed inset-0 bg-black/60 backdrop-blur-xs overscroll-contain"
           />
@@ -486,7 +533,7 @@ export const BookingDrawer: React.FC<Props> = ({
 
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleCloseDrawer}
                 className="p-1.5 text-[#6B5A5C] hover:text-[#1F1A1C] hover:bg-[#EAE2D8] rounded-full transition-colors cursor-pointer"
                 aria-label="Close drawer"
               >
@@ -1037,7 +1084,10 @@ export const BookingDrawer: React.FC<Props> = ({
 
                       {/* Cash on Delivery / Pay After Service */}
                       <div
-                        onClick={() => setPaymentMethodChoice('COD')}
+                        onClick={() => {
+                          setPaymentMethodChoice('COD');
+                          setSubmitError(null);
+                        }}
                         className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                           paymentMethodChoice === 'COD'
                             ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
@@ -1068,38 +1118,43 @@ export const BookingDrawer: React.FC<Props> = ({
                       </div>
 
                       {/* Online Payment via Razorpay */}
-                      {razorpayAvailable && (
-                        <div
-                          onClick={() => setPaymentMethodChoice('RAZORPAY')}
-                          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                            paymentMethodChoice === 'RAZORPAY'
-                              ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
-                              : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              paymentMethodChoice === 'RAZORPAY' ? 'border-[#4A0417]' : 'border-stone-300'
-                            }`}>
-                              {paymentMethodChoice === 'RAZORPAY' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-xs sm:text-sm font-semibold text-[#1F1A1C]">
-                                  Pay Online via Razorpay
-                                </p>
-                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
-                                  UPI · Cards · NetBanking
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-[#6B5A5C]">
-                                Instant & secure payment confirmation via official Razorpay gateway.
-                              </p>
-                            </div>
+                      <div
+                        onClick={() => {
+                          setPaymentMethodChoice('RAZORPAY');
+                          if (!razorpayAvailable) {
+                            setSubmitError('Online payment via Razorpay is not configured on this server. Please select Cash on Delivery (Pay After Service).');
+                          } else {
+                            setSubmitError(null);
+                          }
+                        }}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                          paymentMethodChoice === 'RAZORPAY'
+                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
+                            : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            paymentMethodChoice === 'RAZORPAY' ? 'border-[#4A0417]' : 'border-stone-300'
+                          }`}>
+                            {paymentMethodChoice === 'RAZORPAY' && <div className="w-2 h-2 rounded-full bg-[#4A0417]" />}
                           </div>
-                          <CreditCard className="w-4 h-4 text-[#4A0417] shrink-0" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs sm:text-sm font-semibold text-[#1F1A1C]">
+                                Pay Online via Razorpay
+                              </p>
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                UPI · Cards · NetBanking
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[#6B5A5C]">
+                              Instant & secure payment confirmation via official Razorpay gateway.
+                            </p>
+                          </div>
                         </div>
-                      )}
+                        <CreditCard className="w-4 h-4 text-[#4A0417] shrink-0" />
+                      </div>
                     </div>
 
                     {isBelowMin ? (
@@ -1295,7 +1350,7 @@ export const BookingDrawer: React.FC<Props> = ({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.48, duration: 0.3 }}
-                      onClick={onClose}
+                      onClick={handleCloseDrawer}
                       className="w-full py-3 bg-[#4A0417] hover:bg-[#36020F] text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer"
                     >
                       Return to Storefront

@@ -525,7 +525,7 @@ async function seedEssentialData() {
     cancellation_policy: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
     announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
-    razorpay_enabled: 'false',
+    razorpay_enabled: 'true',
     razorpay_key_id: '',
     google_places_api_key: '',
     google_place_id: '',
@@ -565,10 +565,6 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '2' WHERE key = 'cancellation_window_hours' AND (value = '4' OR value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
-
-  // Active payment gateway settings migration: enforce COD-only default and strip any hardcoded gateway keys
-  await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
-  await db.execute("UPDATE settings SET value = '' WHERE key = 'razorpay_key_id'");
 
   // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [

@@ -56,7 +56,7 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   if (envExplicitDisable) {
     disabledReason = 'Online payments temporarily disabled via system environment configuration.';
   } else if (!isConfigured) {
-    disabledReason = 'Razorpay credentials not configured or incomplete.';
+    disabledReason = 'Razorpay online payment gateway credentials are not configured. Please select Cash on Delivery (Pay After Service).';
   } else if (!isAvailable) {
     disabledReason = 'Online payment via Razorpay is temporarily disabled. Please select Cash on Delivery (Pay After Service).';
   }
@@ -1032,9 +1032,20 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
     const totalPayable = Math.max(0, amountAfterPackage - couponDiscount + deliveryFee + slotCharge);
 
-    // Generate Unique Production Booking ID
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const bookingId = `BD-NCR-${randomSuffix}`;
+    // Generate Unique Collision-Free Production Booking ID
+    let bookingId = '';
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const candidateId = `BD-NCR-${rand}`;
+      const existing = await db.queryRow('SELECT id FROM bookings WHERE id = ?', [candidateId]);
+      if (!existing) {
+        bookingId = candidateId;
+        break;
+      }
+    }
+    if (!bookingId) {
+      bookingId = `BD-NCR-${Date.now().toString().slice(-6)}`;
+    }
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
     const paymentOptions = await getAuthoritativePaymentOptions();

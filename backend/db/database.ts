@@ -525,8 +525,8 @@ async function seedEssentialData() {
     cancellation_policy: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
     announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
-    razorpay_enabled: 'true',
-    razorpay_key_id: 'rzp_live_U2rRiMqcCnXRk6',
+    razorpay_enabled: 'false',
+    razorpay_key_id: '',
     google_places_api_key: '',
     google_place_id: '',
     min_order_amount: '1000',
@@ -566,14 +566,9 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
 
-  // Active payment gateway settings migration: ensure live razorpay key and enabled flag are persisted in production DB
-  try {
-    await db.execute("INSERT INTO settings (key, value) VALUES ('razorpay_enabled', 'true') ON CONFLICT (key) DO UPDATE SET value = 'true'");
-    await db.execute("INSERT INTO settings (key, value) VALUES ('razorpay_key_id', 'rzp_live_U2rRiMqcCnXRk6') ON CONFLICT (key) DO UPDATE SET value = 'rzp_live_U2rRiMqcCnXRk6'");
-  } catch {
-    await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
-    await db.execute("UPDATE settings SET value = 'rzp_live_U2rRiMqcCnXRk6' WHERE key = 'razorpay_key_id'");
-  }
+  // Active payment gateway settings migration: enforce COD-only default and strip any hardcoded gateway keys
+  await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
+  await db.execute("UPDATE settings SET value = '' WHERE key = 'razorpay_key_id'");
 
   // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [

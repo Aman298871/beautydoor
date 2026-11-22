@@ -823,12 +823,13 @@ adminRouter.put('/services/:id/restore', async (req: Request, res: Response): Pr
   const adminUser = req.adminUser?.username || 'admin';
   const nowIso = new Date().toISOString();
 
+  // Restore archived status without automatically publishing (restores as draft/unpublished)
   await db.execute(
-    'UPDATE services SET is_active = 1, is_published = 1, is_archived = 0, updated_at = ? WHERE id = ?',
+    'UPDATE services SET is_active = 1, is_published = 0, is_archived = 0, updated_at = ? WHERE id = ?',
     [nowIso, id]
   );
-  recordAuditLog(adminUser, 'RESTORE_SERVICE', 'CATALOG', id, { is_archived: 0 }, req.ip);
-  res.json({ success: true, restored: true, message: 'Service successfully restored and published to storefront.' });
+  recordAuditLog(adminUser, 'RESTORE_SERVICE', 'CATALOG', id, { is_archived: 0, is_published: 0 }, req.ip);
+  res.json({ success: true, restored: true, message: 'Service successfully restored as draft. Explicit publish required before storefront visibility.' });
 });
 
 adminRouter.put('/services/:id/toggle-publish', async (req: Request, res: Response): Promise<void> => {
@@ -1650,12 +1651,13 @@ adminRouter.put('/packages/:id/restore', async (req: Request, res: Response): Pr
   const adminUser = req.adminUser?.username || 'admin';
   const nowIso = new Date().toISOString();
 
+  // Restore package as draft/unpublished to prevent accidental immediate publication
   await db.execute(
-    "UPDATE packages SET is_published = 1, is_archived = 0, badge = CASE WHEN badge = 'Archived' THEN NULL ELSE badge END, updated_at = ? WHERE id = ?",
+    "UPDATE packages SET is_published = 0, is_archived = 0, badge = CASE WHEN badge = 'Archived' THEN 'Draft' ELSE badge END, updated_at = ? WHERE id = ?",
     [nowIso, id]
   );
-  recordAuditLog(adminUser, 'RESTORE_PACKAGE', 'CATALOG', id, { is_archived: 0 }, req.ip);
-  res.json({ success: true, restored: true, message: 'Package successfully restored and published to storefront.' });
+  recordAuditLog(adminUser, 'RESTORE_PACKAGE', 'CATALOG', id, { is_archived: 0, is_published: 0 }, req.ip);
+  res.json({ success: true, restored: true, message: 'Package successfully restored as draft. Explicit publish required before storefront visibility.' });
 });
 
 adminRouter.delete('/packages/:id', async (req: Request, res: Response): Promise<void> => {

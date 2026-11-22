@@ -24,43 +24,49 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
     });
   }
 
-  // Refresh credentials if DB or env has keys and service is not yet configured
-  if (!razorpayService.isConfigured() || !razorpayService.getKeyId()) {
-    const key = settings.razorpay_key_id || process.env.RAZORPAY_KEY_ID || 'rzp_live_U2rRiMqcCnXRk6';
-    const secret = process.env.RAZORPAY_KEY_SECRET || 'mep2sWSV6gGt2vqXBf049v9Z';
-    if (key && secret) {
-      razorpayService.refreshCredentials(key, secret);
-    }
+  // Refresh credentials ONLY from secure environment variables or database settings
+  const envKey = process.env.RAZORPAY_KEY_ID || '';
+  const envSecret = process.env.RAZORPAY_KEY_SECRET || '';
+  const dbKey = settings.razorpay_key_id || '';
+  const candidateKey = envKey || dbKey;
+
+  if (candidateKey && envSecret) {
+    razorpayService.refreshCredentials(candidateKey, envSecret);
   }
 
-  const envExplicitEnable = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+  // 1. Environment-level explicit disable ALWAYS wins:
+  // ENABLE_RAZORPAY=false or RAZORPAY_ENABLED=false must ALWAYS prevent new online payment
   const envExplicitDisable = process.env.ENABLE_RAZORPAY === 'false' || process.env.RAZORPAY_ENABLED === 'false';
-  const dbExplicitDisable = settings.razorpay_enabled === 'false';
+  const envExplicitEnable = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
   const dbExplicitEnable = settings.razorpay_enabled === 'true';
   const isConfigured = razorpayService.isConfigured();
-  const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6';
 
-  // Explicit priority:
-  // 1. If DB explicitly enabled: true
-  // 2. If DB explicitly disabled: false
-  // 3. If env explicitly disabled without DB override: false
-  // 4. Otherwise if credentials configured: true
-  const isEnabled = dbExplicitDisable ? false : (dbExplicitEnable ? true : (!envExplicitDisable && isConfigured));
-  const isAvailable = isEnabled && isConfigured;
+  // Strict decision matrix:
+  // - If envExplicitDisable is TRUE -> ALWAYS DISABLED (Database cannot override)
+  // - Default is DISABLED.
+  // - Online payments enabled ONLY IF:
+  //     NOT envExplicitDisable
+  //     AND (envExplicitEnable || dbExplicitEnable)
+  //     AND isConfigured
+  // - Do NOT enable Razorpay merely because credentials exist.
+  const isAvailable = !envExplicitDisable && (envExplicitEnable || dbExplicitEnable) && isConfigured;
 
   let disabledReason: string | null = null;
-  if (!isConfigured) {
-    disabledReason = 'Razorpay credentials not configured';
-  } else if (!isEnabled) {
-    disabledReason = 'Disabled by store owner';
+  if (envExplicitDisable) {
+    disabledReason = 'Online payments temporarily disabled via system environment configuration.';
+  } else if (!isConfigured) {
+    disabledReason = 'Razorpay credentials not configured or incomplete.';
+  } else if (!isAvailable) {
+    disabledReason = 'Online payment via Razorpay is temporarily disabled. Please select Cash on Delivery (Pay After Service).';
   }
 
+  const razorpayKey = isAvailable ? (razorpayService.getKeyId() || candidateKey) : '';
   const paymentMode: 'test' | 'live' = razorpayKey.startsWith('rzp_live_') ? 'live' : 'test';
 
   return {
     codAvailable: true,
     razorpayAvailable: isAvailable,
-    razorpayKeyId: isAvailable ? razorpayKey : '',
+    razorpayKeyId: razorpayKey,
     paymentMode,
     disabledReason
   };

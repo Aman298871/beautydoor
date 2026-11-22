@@ -3474,9 +3474,10 @@ export default function AdminApp() {
                     <label className="font-semibold block mb-1">Razorpay Key ID</label>
                     <input
                       type="text"
-                      value={settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6'}
+                      value={settings.razorpay_key_id || ''}
                       onChange={(e) => setSettings({ ...settings, razorpay_key_id: e.target.value })}
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono"
+                      placeholder="rzp_live_..."
                     />
                   </div>
 

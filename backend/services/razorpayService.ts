@@ -23,8 +23,8 @@ export class RazorpayService {
   private isTestMode: boolean;
 
   constructor() {
-    this.keyId = process.env.RAZORPAY_KEY_ID || 'rzp_live_U2rRiMqcCnXRk6';
-    this.keySecret = process.env.RAZORPAY_KEY_SECRET || 'mep2sWSV6gGt2vqXBf049v9Z';
+    this.keyId = process.env.RAZORPAY_KEY_ID || '';
+    this.keySecret = process.env.RAZORPAY_KEY_SECRET || '';
     this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || this.keySecret;
     this.isTestMode = this.keyId.startsWith('rzp_test_');
   }
@@ -33,9 +33,9 @@ export class RazorpayService {
    * Refresh credentials from environment or runtime config
    */
   public refreshCredentials(keyId?: string, keySecret?: string, webhookSecret?: string): void {
-    if (keyId) this.keyId = keyId;
-    if (keySecret) this.keySecret = keySecret;
-    if (webhookSecret) this.webhookSecret = webhookSecret;
+    if (keyId !== undefined) this.keyId = keyId;
+    if (keySecret !== undefined) this.keySecret = keySecret;
+    if (webhookSecret !== undefined) this.webhookSecret = webhookSecret;
     this.isTestMode = process.env.NODE_ENV === 'test' || !this.keyId || this.keyId.includes('placeholder');
   }
 
@@ -49,11 +49,11 @@ export class RazorpayService {
   }
 
   public getKeyId(): string {
-    return this.keyId || (process.env.NODE_ENV !== 'production' ? 'rzp_test_mock_key' : '');
+    return this.keyId || (process.env.NODE_ENV === 'test' ? 'rzp_test_mock_key' : '');
   }
 
   public getKeySecret(): string {
-    return this.keySecret || process.env.RAZORPAY_KEY_SECRET || (process.env.NODE_ENV !== 'production' ? 'test_secret_for_automated_suite_123' : '');
+    return this.keySecret || (process.env.NODE_ENV === 'test' ? 'test_secret_for_automated_suite_123' : '');
   }
 
   public getWebhookSecret(): string {

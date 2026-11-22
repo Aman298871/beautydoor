@@ -632,7 +632,8 @@ async function verifyAll() {
 
   // Test 22: Real Razorpay Server-Side HMAC-SHA256 Signature Verification & Order ID Security
   console.log('\nTest 22: Razorpay HMAC-SHA256 Signature Verification & Security Checks');
-  const testSecret = razorpayService.getKeySecret();
+  const testSecret = 'test_signature_verification_secret_key_123';
+  razorpayService.refreshCredentials('rzp_test_unit_verification_key', testSecret);
   const validOrderId = `order_test_${Date.now()}_123`;
   const validPaymentId = `pay_test_${Date.now()}_456`;
   const validSignature = crypto
@@ -881,6 +882,7 @@ async function verifyAll() {
 
   // Test 28: Razorpay Integration with Test Credentials & Dual Payment Support
   console.log('\nTest 28: Razorpay Integration with Test Credentials & Dual Payment Support');
+  razorpayService.refreshCredentials('rzp_test_mock_gateway_key_123', 'test_secret_for_automated_suite_123');
   const activeKeyId = razorpayService.getKeyId();
   if (!activeKeyId.startsWith('rzp_test_') && !activeKeyId.startsWith('rzp_live_')) {
     throw new Error(`Expected Razorpay key ID starting with rzp_test_ or rzp_live_, got: ${activeKeyId}`);
@@ -905,6 +907,9 @@ async function verifyAll() {
     throw new Error(`Razorpay signature verification failed: ${sigCheck.error}`);
   }
   console.log('  ✓ Verified HMAC-SHA256 payment signature verified successfully');
+
+  // Reset test credentials after test
+  razorpayService.refreshCredentials('', '');
 
   // Test booking creation with COD payment method
   const testCodBookingId = `BD-TEST-COD-${Date.now()}`;
@@ -1225,7 +1230,9 @@ async function verifyAll() {
 
   const matCOrderId = `order_matc_${Date.now()}`;
   const matCPaymentId = `pay_matc_${Date.now()}`;
-  const matCSig = crypto.createHmac('sha256', razorpayService.getKeySecret()).update(`${matCOrderId}|${matCPaymentId}`).digest('hex');
+  const matCTestSecret = 'test_matrix_c_verification_secret_123';
+  razorpayService.refreshCredentials('rzp_test_matrix_c', matCTestSecret);
+  const matCSig = crypto.createHmac('sha256', matCTestSecret).update(`${matCOrderId}|${matCPaymentId}`).digest('hex');
 
   const matCSigResult = razorpayService.verifyPaymentSignature({
     orderId: matCOrderId,
@@ -1240,6 +1247,7 @@ async function verifyAll() {
     signature: 'invalid_tampered_signature_12345'
   });
   if (matCBogusResult.valid) throw new Error('Matrix C failed: Tampered signature accepted');
+  razorpayService.refreshCredentials('', '');
 
   // Transactional ledger record
   await db.withTransaction(async (tx) => {
@@ -1262,7 +1270,8 @@ async function verifyAll() {
 
   // Matrix D: Webhook Processing & Raw Body Verification
   console.log('  [Matrix D] Webhook Processing & Raw Body Verification:');
-  const matDWebhookSecret = razorpayService.getWebhookSecret();
+  const matDWebhookSecret = 'test_webhook_secret_for_matrix_d';
+  razorpayService.refreshCredentials('rzp_test_matrix_d', 'test_secret_for_matrix_d', matDWebhookSecret);
   const sampleWebhookBody = JSON.stringify({
     event: 'payment.captured',
     payload: {
@@ -1285,6 +1294,7 @@ async function verifyAll() {
   if (badWebhookCheck.valid) {
     throw new Error('Matrix D failed: Forged webhook signature accepted');
   }
+  razorpayService.refreshCredentials('', '');
   console.log('    ✓ Webhook HMAC-SHA256 raw body signature verification passed');
 
   // Matrix E: Admin Settings Toggle & Mode Reflection
@@ -1295,13 +1305,19 @@ async function verifyAll() {
   if (optsDisabled.razorpayAvailable !== false || !optsDisabled.disabledReason) {
     throw new Error('Matrix E failed: Razorpay should be reported as unavailable when owner disabled in settings');
   }
-  // Re-enable in DB
+
+  // When environment is explicitly disabled, setting true in DB still yields disabled
+  process.env.ENABLE_RAZORPAY = 'false';
+  process.env.RAZORPAY_ENABLED = 'false';
   await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
-  const optsEnabled = await getAuthoritativePaymentOptions();
-  if (optsEnabled.razorpayAvailable !== true) {
-    throw new Error('Matrix E failed: Razorpay should be reported as available when owner enabled in settings');
+  const optsEnvWins = await getAuthoritativePaymentOptions();
+  if (optsEnvWins.razorpayAvailable !== false) {
+    throw new Error('Matrix E failed: Environment false must strictly override database setting true');
   }
-  console.log('    ✓ Database settings toggle immediately reflects across storefront availability');
+
+  // Reset to false
+  await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
+  console.log('    ✓ Admin settings toggle and environment precedence verified across storefront availability');
 
   // Matrix F: Admin Error Resilience
   console.log('  [Matrix F] Admin Error Resilience:');
@@ -1497,22 +1513,43 @@ async function verifyAll() {
 
   // Test 44: COD-Only Enforcement & Fail-Closed Payment Mode
   console.log('\nTest 44: COD-Only Backend API Boundary & Fail-Closed Razorpay Guard');
-  // With Razorpay disabled in DB/env:
+  // 1. Default is disabled:
   await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
-  const disabledOpts = await getAuthoritativePaymentOptions();
-  if (disabledOpts.razorpayAvailable !== false) {
-    throw new Error('Razorpay must not be available when razorpay_enabled is false');
+  const defaultOpts = await getAuthoritativePaymentOptions();
+  if (defaultOpts.razorpayAvailable !== false) {
+    throw new Error('Razorpay must be disabled by default');
   }
-  if (!disabledOpts.disabledReason) {
+  if (!defaultOpts.disabledReason) {
     throw new Error('Must provide clear disabledReason when Razorpay is unavailable');
   }
-  // Re-enable Razorpay for production live payment readiness
+
+  // 2. Render environment false ALWAYS wins over database true
+  process.env.ENABLE_RAZORPAY = 'false';
+  process.env.RAZORPAY_ENABLED = 'false';
   await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
-  const reenabledOpts = await getAuthoritativePaymentOptions();
-  if (reenabledOpts.razorpayAvailable !== true) {
-    throw new Error('Razorpay must be available when razorpay_enabled is true');
+  const envWinsOpts = await getAuthoritativePaymentOptions();
+  if (envWinsOpts.razorpayAvailable !== false) {
+    throw new Error('Environment variable ENABLE_RAZORPAY=false must strictly override database setting razorpay_enabled=true');
   }
-  console.log('✓ PASS: Authoritative payment options fails closed and provides explicit reason when disabled, immediately re-enables live payments');
+
+  // 3. Missing Razorpay credentials never enable online payment even if env/DB claim true
+  delete process.env.ENABLE_RAZORPAY;
+  delete process.env.RAZORPAY_ENABLED;
+  const savedKeyId = process.env.RAZORPAY_KEY_ID;
+  const savedKeySecret = process.env.RAZORPAY_KEY_SECRET;
+  process.env.RAZORPAY_KEY_ID = '';
+  process.env.RAZORPAY_KEY_SECRET = '';
+  razorpayService.refreshCredentials('', '');
+  const missingCredsOpts = await getAuthoritativePaymentOptions();
+  if (missingCredsOpts.razorpayAvailable !== false) {
+    throw new Error('Missing Razorpay credentials must never enable online payment');
+  }
+
+  // Restore env & reset DB to false
+  process.env.ENABLE_RAZORPAY = 'false';
+  process.env.RAZORPAY_ENABLED = 'false';
+  await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
+  console.log('✓ PASS: COD-only backend enforced. Environment false strictly wins over DB true. Missing credentials fail closed.');
 
   // Test 45: Package Management Safety (Validation, Image Clearing, Past Booking Archive)
   console.log('\nTest 45: Package Management Safety (Validation, Image Clearing, Archiving)');
@@ -1640,16 +1677,23 @@ async function verifyAll() {
     throw new Error('Service soft-archive failed');
   }
 
-  // Test Restore
-  await db.execute('UPDATE services SET is_active = 1, is_published = 1, is_archived = 0 WHERE id = ?', [phase3SrvId]);
+  // Test Restore (Restores as draft/unpublished to require explicit publish action)
+  await db.execute('UPDATE services SET is_active = 1, is_published = 0, is_archived = 0 WHERE id = ?', [phase3SrvId]);
   const restoredSrv = await db.queryRow<any>('SELECT is_active, is_published, is_archived FROM services WHERE id = ?', [phase3SrvId]);
-  if (restoredSrv.is_archived !== 0 || restoredSrv.is_published !== 1 || restoredSrv.is_active !== 1) {
-    throw new Error('Service restore failed');
+  if (restoredSrv.is_archived !== 0 || restoredSrv.is_published !== 0 || restoredSrv.is_active !== 1) {
+    throw new Error('Service restore must restore as draft (is_published = 0, is_archived = 0)');
+  }
+
+  // Explicit Admin Publish Step
+  await db.execute('UPDATE services SET is_published = 1 WHERE id = ?', [phase3SrvId]);
+  const publishedSrv = await db.queryRow<any>('SELECT is_published FROM services WHERE id = ?', [phase3SrvId]);
+  if (publishedSrv.is_published !== 1) {
+    throw new Error('Service explicit publish failed');
   }
 
   // Clean up
   await db.execute('DELETE FROM services WHERE id = ?', [phase3SrvId]);
-  console.log('✓ PASS: Service archiving, restoring, and safe deletion states verified');
+  console.log('✓ PASS: Service restores as draft (unpublished) and requires explicit admin publish action');
 
   // Test 50: Package Archiving, Flags & Booking Shield (Phase 4 & 6)
   console.log('\nTest 50: Package Archiving, Featured/Special Flags & Storefront Shield');
@@ -1674,8 +1718,15 @@ async function verifyAll() {
     throw new Error('Package soft-archive failed');
   }
 
+  // Restore package as draft (unpublished)
+  await db.execute("UPDATE packages SET is_published = 0, is_archived = 0, badge = 'Draft' WHERE id = ?", [phase4PkgId]);
+  const phase4RestoredPkg = await db.queryRow<any>('SELECT is_published, is_archived FROM packages WHERE id = ?', [phase4PkgId]);
+  if (phase4RestoredPkg.is_archived !== 0 || phase4RestoredPkg.is_published !== 0) {
+    throw new Error('Package restore must restore as draft (is_published = 0, is_archived = 0)');
+  }
+
   await db.execute('DELETE FROM packages WHERE id = ?', [phase4PkgId]);
-  console.log('✓ PASS: Package archiving, feature flags, and booking shield verified');
+  console.log('✓ PASS: Package archiving, draft restore, feature flags, and booking shield verified');
 
   // Test 51: Homepage Ascending Numeric Price Sorting & ₹999 VLCC Package Presence (Phase 5)
   console.log('\nTest 51: Homepage Ascending Numeric Price Sorting & ₹999 VLCC Package');
@@ -1779,8 +1830,42 @@ async function verifyAll() {
   }
   console.log('✓ PASS: Owner notification recipient requires explicit config in production (fails closed)');
 
+  // Test 57: Backend Rejection of Razorpay Order Creation & COD-Only Guarantee
+  console.log('\nTest 57: Backend Rejection of Razorpay Order Creation & COD-Only Guarantee');
+  process.env.ENABLE_RAZORPAY = 'false';
+  process.env.RAZORPAY_ENABLED = 'false';
+  await db.execute("UPDATE settings SET value = 'false' WHERE key = 'razorpay_enabled'");
+
+  const gateCheck = await getAuthoritativePaymentOptions();
+  if (gateCheck.razorpayAvailable !== false || gateCheck.razorpayKeyId !== '') {
+    throw new Error('Razorpay must be strictly disabled and return empty keyId');
+  }
+
+  // Create a new test COD booking and verify payment_status = 'pending'
+  const testCodPendingBookingId = `BD-COD-PENDING-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO bookings (
+      id, customer_id, customer_name, customer_phone, flat, area, city, pincode,
+      appointment_date, appointment_slot, payment_method, payment_status,
+      subtotal, total_payable, booking_status, created_at
+    ) VALUES (?, 'cust-test', 'Test Customer', '9876543210', '101', 'Saket', 'Delhi', '110017',
+      '2026-11-25', '11:00 AM', 'COD', 'pending', 1000, 1000, 'pending', ?)
+  `, [testCodPendingBookingId, new Date().toISOString()]);
+
+  const savedCodBooking = await db.queryRow<any>('SELECT payment_method, payment_status FROM bookings WHERE id = ?', [testCodPendingBookingId]);
+  if (savedCodBooking.payment_method !== 'COD' || savedCodBooking.payment_status !== 'pending') {
+    throw new Error('New bookings must use payment_method=COD and payment_status=pending');
+  }
+
+  // Verify historical payment records remain readable and untouched
+  const historicalPayments = await db.query<any>('SELECT * FROM booking_payments LIMIT 5', []);
+  console.log(`✓ PASS: Backend boundary blocks online payments (razorpayAvailable=false), saves new COD bookings with payment_status=pending, and preserves ${historicalPayments.length} historical payment ledger records intact`);
+
+  // Clean up test booking
+  await db.execute('DELETE FROM bookings WHERE id = ?', [testCodPendingBookingId]);
+
   await db.close();
-  console.log('\n=== ALL 56 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 57 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

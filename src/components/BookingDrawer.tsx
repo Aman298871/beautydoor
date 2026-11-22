@@ -78,10 +78,10 @@ export const BookingDrawer: React.FC<Props> = ({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
-  // Payment & Submission state - Both COD and Online Payment via Razorpay
+  // Payment & Submission state - Defaults strictly to COD (Razorpay disabled until approved)
   const [paymentMethodChoice, setPaymentMethodChoice] = useState<'COD' | 'RAZORPAY'>('COD');
-  const [razorpayAvailable, setRazorpayAvailable] = useState<boolean>(true);
-  const [razorpayKeyId, setRazorpayKeyId] = useState<string>('rzp_live_U2rRiMqcCnXRk6');
+  const [razorpayAvailable, setRazorpayAvailable] = useState<boolean>(false);
+  const [razorpayKeyId, setRazorpayKeyId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export const BookingDrawer: React.FC<Props> = ({
     });
   };
 
-  // Check server payment settings
+  // Check server payment settings - Fails safe to COD-only on any missing config or network failure
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
@@ -122,20 +122,26 @@ export const BookingDrawer: React.FC<Props> = ({
             ? Boolean(data.razorpay.enabled)
             : data?.settings?.razorpay_enabled !== undefined
             ? data.settings.razorpay_enabled === 'true'
-            : true;
+            : false;
         const keyId =
           data?.paymentOptions?.razorpayKeyId ||
           data?.razorpay?.keyId ||
           data?.settings?.razorpay_key_id ||
-          'rzp_live_U2rRiMqcCnXRk6';
-        setRazorpayAvailable(Boolean(isOnlineEnabled));
+          '';
+        const isAvailable = Boolean(isOnlineEnabled && keyId);
+        setRazorpayAvailable(isAvailable);
         if (keyId) {
           setRazorpayKeyId(keyId);
         }
+        if (!isAvailable) {
+          setPaymentMethodChoice('COD');
+        }
       })
       .catch(() => {
-        setRazorpayAvailable(true);
-        setRazorpayKeyId('rzp_live_U2rRiMqcCnXRk6');
+        // Network errors fail safe to COD-only
+        setRazorpayAvailable(false);
+        setRazorpayKeyId('');
+        setPaymentMethodChoice('COD');
       });
   }, []);
 

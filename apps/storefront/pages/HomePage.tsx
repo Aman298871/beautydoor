@@ -466,9 +466,15 @@ export const HomePage: React.FC<Props> = ({
                 <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
                   Beauty Packages at Special Prices
                 </h2>
-                <p className="text-base text-[#554749] mt-1 font-light">
-                  Enjoy head-to-toe salon ceremonies at transparent flat rates, starting from just ₹999 with genuine salon-grade products.
-                </p>
+                {(() => {
+                  const eligible = (packages || []).filter((p: any) => p.is_published === 1 && !p.is_archived && Number(p.selling_price) > 0);
+                  const minPrice = eligible.length > 0 ? Math.min(...eligible.map((p: any) => Number(p.selling_price))) : 0;
+                  return (
+                    <p className="text-base text-[#554749] mt-1 font-light">
+                      Enjoy head-to-toe salon ceremonies at transparent flat rates{minPrice > 0 ? `, starting from just ₹${minPrice.toLocaleString('en-IN')}` : ''} with genuine salon-grade products.
+                    </p>
+                  );
+                })()}
               </div>
 
               <button
@@ -535,11 +541,11 @@ export const HomePage: React.FC<Props> = ({
                     <div className="mt-6 pt-4 border-t border-[#E8DDD3] flex items-center justify-between gap-2">
                       <div>
                         <div className="text-2xl font-serif font-bold text-[#4A0417] tabular-nums">
-                          ₹{pkg.selling_price.toLocaleString('en-IN')}
+                          ₹{Number(pkg.selling_price).toLocaleString('en-IN')}
                         </div>
-                        {pkg.original_price > pkg.selling_price && (
+                        {Number(pkg.original_price) > Number(pkg.selling_price) && (
                           <span className="text-xs text-[#8C7A7C] line-through tabular-nums">
-                            ₹{pkg.original_price.toLocaleString('en-IN')}
+                            ₹{Number(pkg.original_price).toLocaleString('en-IN')}
                           </span>
                         )}
                       </div>

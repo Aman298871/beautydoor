@@ -34,7 +34,12 @@ export class RazorpayService {
    */
   public refreshCredentials(keyId?: string, keySecret?: string, webhookSecret?: string): void {
     if (keyId !== undefined) this.keyId = keyId;
-    if (keySecret !== undefined) this.keySecret = keySecret;
+    if (keySecret !== undefined) {
+      this.keySecret = keySecret;
+      if (webhookSecret === undefined && !process.env.RAZORPAY_WEBHOOK_SECRET) {
+        this.webhookSecret = keySecret;
+      }
+    }
     if (webhookSecret !== undefined) this.webhookSecret = webhookSecret;
     this.isTestMode = process.env.NODE_ENV === 'test' || !this.keyId || this.keyId.includes('placeholder');
   }

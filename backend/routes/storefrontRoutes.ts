@@ -38,23 +38,28 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   // 1. Environment-level explicit disable ALWAYS wins:
   // ENABLE_RAZORPAY=false or RAZORPAY_ENABLED=false must ALWAYS prevent new online payment
   const envExplicitDisable = process.env.ENABLE_RAZORPAY === 'false' || process.env.RAZORPAY_ENABLED === 'false';
+  const dbExplicitDisable = settings.razorpay_enabled === 'false';
   const envExplicitEnable = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
   const dbExplicitEnable = settings.razorpay_enabled === 'true';
   const isConfigured = razorpayService.isConfigured();
 
   // Strict decision matrix:
   // - If envExplicitDisable is TRUE -> ALWAYS DISABLED (Database cannot override)
+  // - If dbExplicitDisable is TRUE -> DISABLED (Admin toggle turned off in settings)
   // - Default is DISABLED.
   // - Online payments enabled ONLY IF:
   //     NOT envExplicitDisable
+  //     AND NOT dbExplicitDisable
   //     AND (envExplicitEnable || dbExplicitEnable)
   //     AND isConfigured
   // - Do NOT enable Razorpay merely because credentials exist.
-  const isAvailable = !envExplicitDisable && (envExplicitEnable || dbExplicitEnable) && isConfigured;
+  const isAvailable = !envExplicitDisable && !dbExplicitDisable && (envExplicitEnable || dbExplicitEnable) && isConfigured;
 
   let disabledReason: string | null = null;
   if (envExplicitDisable) {
     disabledReason = 'Online payments temporarily disabled via system environment configuration.';
+  } else if (dbExplicitDisable) {
+    disabledReason = 'Online payment via Razorpay has been disabled in business settings. Please select Cash on Delivery (Pay After Service).';
   } else if (!isConfigured) {
     disabledReason = 'Razorpay online payment gateway credentials are not configured. Please select Cash on Delivery (Pay After Service).';
   } else if (!isAvailable) {

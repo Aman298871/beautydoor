@@ -565,6 +565,13 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '2' WHERE key = 'cancellation_window_hours' AND (value = '4' OR value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
+  if (process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true') {
+    await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
+  }
+  const envKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
+  if (envKeyId && envKeyId.startsWith('rzp_')) {
+    await db.execute("UPDATE settings SET value = ? WHERE key = 'razorpay_key_id' AND (value = '' OR value IS NULL)", [envKeyId]);
+  }
 
   // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [

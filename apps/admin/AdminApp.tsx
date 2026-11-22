@@ -310,7 +310,9 @@ export default function AdminApp() {
       if (coup && coup.coupons) setCoupons(coup.coupons);
       if (rev && rev.reviews) setReviews(rev.reviews);
       if (aud && aud.logs) setAuditLogs(aud.logs);
-      if (sett && sett.settings) setSettings(sett.settings);
+      if (sett && sett.settings) {
+        setSettings((prev: any) => (activeTab === 'settings' && prev && Object.keys(prev).length > 0 ? prev : sett.settings));
+      }
       if (faqsRes && faqsRes.faqs) setFaqsList(faqsRes.faqs);
       if (pkgRes && pkgRes.packages) setPackagesList(pkgRes.packages);
       if (hygRes && hygRes.commitments) setHygieneList(hygRes.commitments);
@@ -1368,9 +1370,13 @@ export default function AdminApp() {
       if (res.ok) {
         notify('Business settings updated and active across storefront.');
         fetchAdminData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify(data.error || 'Failed to save settings. Please verify admin session.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      notify('Error saving settings: ' + err.message);
     }
   };
 
@@ -3184,13 +3190,23 @@ export default function AdminApp() {
         {/* 12. BUSINESS SETTINGS & POLICIES */}
         {activeTab === 'settings' && (
           <div className="space-y-6">
-            <div>
-              <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
-                Business Settings & Operating Policies
-              </h3>
-              <p className="text-xs text-[#7A6B6D]">
-                Manage promotional banners, optional loyalty & referral programs, customer support details, and payment gateway configuration.
-              </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-[#E8DDD3] shadow-xs">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Business Settings & Operating Policies
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Manage promotional banners, customer support details, and payment gateway configuration.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                className="px-5 py-2.5 bg-[#4A0417] text-white text-xs font-semibold rounded-md shadow-sm hover:bg-[#36020F] transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <span>Save All Settings</span>
+              </button>
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-6">
@@ -3464,10 +3480,19 @@ export default function AdminApp() {
 
               {/* Section D: Payment Gateway */}
               <div className="bg-white rounded-2xl p-6 border border-[#E8DDD3] shadow-xs space-y-4">
-                <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-[#C5A880]" />
-                  <span>Razorpay Payment Gateway</span>
-                </h4>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                  <h4 className="text-sm font-serif font-bold text-[#4A0417] uppercase tracking-wider flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-[#C5A880]" />
+                    <span>Razorpay Payment Gateway</span>
+                  </h4>
+                  <button
+                    type="submit"
+                    className="self-start sm:self-auto px-4 py-1.5 bg-[#4A0417] text-white text-xs font-semibold rounded-md shadow-xs hover:bg-[#36020F] transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Save Razorpay Settings</span>
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
@@ -3479,6 +3504,9 @@ export default function AdminApp() {
                       className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono"
                       placeholder="rzp_live_..."
                     />
+                    <span className="text-[11px] text-[#7A6B6D] mt-1 block">
+                      Live Key ID starts with <code>rzp_live_</code>. Note: The Secret Key is configured securely in your Render server environment.
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2 pt-6">

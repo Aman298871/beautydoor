@@ -1802,26 +1802,63 @@ async function verifyAll() {
   }
   console.log('✓ PASS: Strict DLT template checking blocks booking notifications from generic/OTP fallback');
 
-  // Test 55: Twilio Real Message SID Validation & Rejection of Missing/Fake IDs
-  console.log('\nTest 55: Twilio Real Message SID Validation & Rejection of Missing/Fake IDs');
-  const twilioValidSample = JSON.stringify({
-    sid: 'SM9876543210abcdef1234567890abcdef',
-    status: 'queued',
-    to: '+919876543210'
-  });
-  const parsedTwilio = JSON.parse(twilioValidSample);
-  const isValidSid = typeof parsedTwilio.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsedTwilio.sid);
-  if (!isValidSid) {
-    throw new Error('Twilio response parser must validate 34-character SM/MM Message SID');
+  // Test 55: Twilio Real Message SID Validation & Mocked HTTP Response Testing
+  console.log('\nTest 55: Twilio Real Message SID Validation & Mocked HTTP Response Testing');
+  // 1. Valid 201 response with genuine 34-char SID
+  const twilioValidRes = (smsService as any).parseTwilioResponseBody(
+    201,
+    JSON.stringify({ sid: 'SM9876543210abcdef1234567890abcdef', status: 'queued', to: '+919876543210' }),
+    '9876543210'
+  );
+  if (!twilioValidRes.success || twilioValidRes.messageId !== 'SM9876543210abcdef1234567890abcdef' || twilioValidRes.status !== 'queued') {
+    throw new Error('parseTwilioResponseBody must accept valid genuine 34-char SID with queued status');
   }
+  console.log('  ✓ Genuine Twilio 201 response parsed successfully (SID: SM..., Status: queued)');
 
-  // Verify that responses without a valid SID fail
-  const twilioInvalidSample = JSON.stringify({ status: 'queued', to: '+919876543210' });
-  const parsedInvalid = JSON.parse(twilioInvalidSample);
-  if (parsedInvalid.sid) {
-    throw new Error('Invalid sample should not have SID');
+  // 2. Missing SID in response
+  const twilioMissingSidRes = (smsService as any).parseTwilioResponseBody(
+    200,
+    JSON.stringify({ status: 'queued', to: '+919876543210' }),
+    '9876543210'
+  );
+  if (twilioMissingSidRes.success !== false || !twilioMissingSidRes.error.includes('valid provider Message SID')) {
+    throw new Error('parseTwilioResponseBody must fail if SID is missing from Twilio payload');
   }
-  console.log('✓ PASS: Twilio Message SID validation strictly requires genuine 34-char SID (SM...) and rejects missing IDs');
+  console.log('  ✓ Missing SID in Twilio payload correctly reported as failure');
+
+  // 3. Malformed SID (e.g. wrong prefix or insufficient characters)
+  const twilioMalformedSidRes = (smsService as any).parseTwilioResponseBody(
+    200,
+    JSON.stringify({ sid: 'XX_short_malformed_sid', status: 'queued' }),
+    '9876543210'
+  );
+  if (twilioMalformedSidRes.success !== false || !twilioMalformedSidRes.error.includes('valid provider Message SID')) {
+    throw new Error('parseTwilioResponseBody must fail if SID is malformed');
+  }
+  console.log('  ✓ Malformed SID (invalid prefix/length) correctly rejected');
+
+  // 4. Invalid JSON from provider (e.g. upstream HTML gateway error)
+  const twilioInvalidJsonRes = (smsService as any).parseTwilioResponseBody(
+    200,
+    '<html><body>502 Bad Gateway</body></html>',
+    '9876543210'
+  );
+  if (twilioInvalidJsonRes.success !== false || !twilioInvalidJsonRes.error.includes('JSON')) {
+    throw new Error('parseTwilioResponseBody must handle invalid JSON payload safely');
+  }
+  console.log('  ✓ Invalid JSON provider response correctly handled');
+
+  // 5. Non-2xx HTTP status from Twilio
+  const twilioHttpErrRes = (smsService as any).parseTwilioResponseBody(
+    400,
+    JSON.stringify({ code: 21211, message: "The 'To' number is not a valid phone number." }),
+    '9876543210'
+  );
+  if (twilioHttpErrRes.success !== false || !twilioHttpErrRes.error.includes('Twilio HTTP 400')) {
+    throw new Error('parseTwilioResponseBody must report non-2xx status as failure');
+  }
+  console.log('  ✓ Non-2xx HTTP error from Twilio correctly rejected');
+  console.log('✓ PASS: Twilio Message SID validation strictly requires genuine 34-char SID (SM...) and handles all mocked HTTP cases');
 
   // Test 56: Owner Alert Fail-Closed in Production When Unconfigured
   console.log('\nTest 56: Owner Alert Fail-Closed in Production When Unconfigured');
@@ -1896,6 +1933,8 @@ async function verifyAll() {
   console.log('\nTest 59: Webhook Security Verification & Authenticity Checks');
   const mockTwilioAuthToken = 'mock_twilio_auth_token_secret_12345';
   const testWebhookUrl = 'https://beautydoor-rclz.onrender.com/api/webhooks/twilio/sms-status';
+  const prevTwilioWebhookUrl = process.env.TWILIO_WEBHOOK_URL;
+  process.env.TWILIO_WEBHOOK_URL = testWebhookUrl;
   const testParams = {
     MessageSid: twilioTestSid,
     MessageStatus: 'delivered',
@@ -1931,7 +1970,7 @@ async function verifyAll() {
   const fakeResNoSig: any = {
     status: (code: number) => {
       if (code === 401 || code === 403) rejectedNoSig = true;
-      return { json: () => {}, send: () => {} };
+      return { json: () => { }, send: () => { } };
     }
   };
   const prevTwilioToken = process.env.TWILIO_AUTH_TOKEN;
@@ -1947,8 +1986,9 @@ async function verifyAll() {
   console.log('  ✓ Unauthenticated webhook requests without valid signature are strictly rejected');
 
   // 3. Reject arbitrary unrecorded message SIDs
+  const unrecordedSid = 'SM99999999999999999999999999999999'; // 34-char valid format, but unrecorded
   const unrecordedParams = {
-    MessageSid: 'SMunknown_unrecorded_message_99999999',
+    MessageSid: unrecordedSid,
     MessageStatus: 'delivered'
   };
   let unrecSigData = testWebhookUrl;
@@ -1965,8 +2005,8 @@ async function verifyAll() {
   let rejectedUnrecorded = false;
   const fakeResUnrecorded: any = {
     status: (code: number) => {
-      if (code === 404 || code === 403 || code === 400) rejectedUnrecorded = true;
-      return { json: () => {}, send: () => {} };
+      if (code === 404) rejectedUnrecorded = true;
+      return { json: () => { }, send: () => { } };
     }
   };
   process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
@@ -1988,27 +2028,210 @@ async function verifyAll() {
   }
   console.log('  ✓ Notification status marked "delivered" upon verified provider delivery event');
 
-  // 5. Test Resend Svix Webhook Signature Verification
+  // 4b. Twilio Webhook Status Validation & Terminal Protection
+  // Malformed MessageSid format rejection
+  const badSidParams = { MessageSid: 'malformed_short_sid', MessageStatus: 'delivered' };
+  let badSidData = testWebhookUrl;
+  for (const k of Object.keys(badSidParams).sort()) {
+    badSidData += k + (badSidParams as any)[k];
+  }
+  const badSidSig = crypto.createHmac('sha1', mockTwilioAuthToken).update(Buffer.from(badSidData, 'utf-8')).digest('base64');
+
+  const fakeReqBadSid: any = {
+    headers: { 'x-twilio-signature': badSidSig },
+    body: badSidParams,
+    originalUrl: '/api/webhooks/twilio/sms-status'
+  };
+  let rejectedBadSid = false;
+  const fakeResBadSid: any = {
+    status: (code: number) => {
+      if (code === 400) rejectedBadSid = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
+  try {
+    await twilioStatusWebhookHandler(fakeReqBadSid, fakeResBadSid);
+  } finally {
+    process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (!rejectedBadSid) {
+    throw new Error('twilioStatusWebhookHandler must reject malformed MessageSid with HTTP 400');
+  }
+  console.log('  ✓ Malformed MessageSid strictly rejected with HTTP 400');
+
+  // Unsupported MessageStatus rejection
+  const badStatusParams = { MessageSid: twilioTestSid, MessageStatus: 'unsupported_custom_state' };
+  let badStatusData = testWebhookUrl;
+  for (const k of Object.keys(badStatusParams).sort()) {
+    badStatusData += k + (badStatusParams as any)[k];
+  }
+  const badStatusSig = crypto.createHmac('sha1', mockTwilioAuthToken).update(Buffer.from(badStatusData, 'utf-8')).digest('base64');
+
+  const fakeReqBadStatus: any = {
+    headers: { 'x-twilio-signature': badStatusSig },
+    body: badStatusParams,
+    originalUrl: '/api/webhooks/twilio/sms-status'
+  };
+  let rejectedBadStatus = false;
+  const fakeResBadStatus: any = {
+    status: (code: number) => {
+      if (code === 400) rejectedBadStatus = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
+  try {
+    await twilioStatusWebhookHandler(fakeReqBadStatus, fakeResBadStatus);
+  } finally {
+    process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (!rejectedBadStatus) {
+    throw new Error('twilioStatusWebhookHandler must reject unsupported MessageStatus with HTTP 400');
+  }
+  console.log('  ✓ Unsupported MessageStatus strictly rejected with HTTP 400');
+
+  // Terminal delivery status protection: stale queued/sent event cannot downgrade delivered status
+  const staleParams = {
+    MessageSid: twilioTestSid,
+    MessageStatus: 'queued',
+    To: '+919876543210',
+    From: '+15005550006'
+  };
+  let staleSigData = testWebhookUrl;
+  for (const k of Object.keys(staleParams).sort()) {
+    staleSigData += k + (staleParams as any)[k];
+  }
+  const staleSig = crypto.createHmac('sha1', mockTwilioAuthToken).update(Buffer.from(staleSigData, 'utf-8')).digest('base64');
+  const fakeReqStale: any = {
+    headers: { 'x-twilio-signature': staleSig },
+    body: staleParams,
+    originalUrl: '/api/webhooks/twilio/sms-status'
+  };
+  const fakeResStale: any = {
+    type: () => ({ send: () => {} }),
+    status: () => ({ json: () => {}, send: () => {} })
+  };
+  process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
+  try {
+    await twilioStatusWebhookHandler(fakeReqStale, fakeResStale);
+  } finally {
+    process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  const terminalNotifCheck = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioTestSid]);
+  if (!terminalNotifCheck || terminalNotifCheck.status !== 'delivered') {
+    throw new Error('Stale webhook event must never downgrade terminal delivered status');
+  }
+  console.log('  ✓ Stale webhook event correctly prevented from downgrading terminal delivered status');
+
+  // 5. Test Resend Svix Webhook Signature Verification & Replay Protection
   const resendSecret = 'whsec_dGhpcyBpcyBhIHNhbXBsZSBzZWNyZXQgdGVzdGluZw==';
   const svixId = 'msg_test_123456';
   const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+  const resendTestEmailId = `re_test_email_${Date.now()}`;
   const testEmailPayload = JSON.stringify({
     type: 'email.delivered',
-    data: { email_id: 're_test_email_123456' }
+    data: { email_id: resendTestEmailId }
   });
   const keyBytes = Buffer.from(resendSecret.substring(6), 'base64');
   const svixSig = crypto.createHmac('sha256', keyBytes).update(`${svixId}.${svixTimestamp}.${testEmailPayload}`, 'utf-8').digest('base64');
   const formattedSvixSig = `v1,${svixSig}`;
 
-  const resendValid = verifyResendWebhookSignature(resendSecret, svixId, svixTimestamp, formattedSvixSig, testEmailPayload);
-  if (!resendValid) {
-    throw new Error('verifyResendWebhookSignature must return true for valid Svix HMAC-SHA256 signature');
+  // 5a. Missing rawBody rejection
+  const fakeReqNoRaw: any = {
+    headers: { 'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': formattedSvixSig },
+    body: JSON.parse(testEmailPayload)
+  };
+  let rejectedNoRaw = false;
+  const fakeResNoRaw: any = {
+    status: (code: number) => {
+      if (code === 400) rejectedNoRaw = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  process.env.EMAIL_PROVIDER = 'resend';
+  process.env.RESEND_WEBHOOK_SECRET = resendSecret;
+  await emailStatusWebhookHandler(fakeReqNoRaw, fakeResNoRaw);
+  if (!rejectedNoRaw) {
+    throw new Error('emailStatusWebhookHandler must reject requests with missing rawBody');
   }
-  const resendTampered = verifyResendWebhookSignature(resendSecret, svixId, svixTimestamp, 'v1,tampered_signature_value', testEmailPayload);
-  if (resendTampered) {
-    throw new Error('verifyResendWebhookSignature must reject tampered signature');
+  console.log('  ✓ Missing raw request body strictly rejected with HTTP 400');
+
+  // 5b. Missing Svix headers rejection
+  const fakeReqNoHeaders: any = {
+    headers: {},
+    rawBody: Buffer.from(testEmailPayload, 'utf-8'),
+    body: JSON.parse(testEmailPayload)
+  };
+  let rejectedNoHeaders = false;
+  const fakeResNoHeaders: any = {
+    status: (code: number) => {
+      if (code === 400) rejectedNoHeaders = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  await emailStatusWebhookHandler(fakeReqNoHeaders, fakeResNoHeaders);
+  if (!rejectedNoHeaders) {
+    throw new Error('emailStatusWebhookHandler must reject requests with missing Svix headers');
   }
-  console.log('  ✓ Resend Svix HMAC-SHA256 signature validation verifies authentic signatures and rejects tampered ones');
+  console.log('  ✓ Missing Svix headers strictly rejected with HTTP 400');
+
+  // 5c. Replayed event rejection (timestamp > 300 seconds old)
+  const staleTimestamp = (Math.floor(Date.now() / 1000) - 350).toString();
+  const staleSvixSig = crypto.createHmac('sha256', keyBytes).update(`${svixId}.${staleTimestamp}.${testEmailPayload}`, 'utf-8').digest('base64');
+  const fakeReqReplayed: any = {
+    headers: { 'svix-id': svixId, 'svix-timestamp': staleTimestamp, 'svix-signature': `v1,${staleSvixSig}` },
+    rawBody: Buffer.from(testEmailPayload, 'utf-8'),
+    body: JSON.parse(testEmailPayload)
+  };
+  let rejectedReplayed = false;
+  const fakeResReplayed: any = {
+    status: (code: number) => {
+      if (code === 403) rejectedReplayed = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  await emailStatusWebhookHandler(fakeReqReplayed, fakeResReplayed);
+  if (!rejectedReplayed) {
+    throw new Error('emailStatusWebhookHandler must reject replayed events older than 300s with HTTP 403');
+  }
+  console.log('  ✓ Replayed events older than 300s strictly rejected with HTTP 403');
+
+  // 5d. Valid Svix signature verification & status delivery update
+  // Insert test email notification into audit ledger
+  const testEmailNotifId = `notif-email-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO booking_notifications (
+      id, booking_id, recipient_email, notification_type, subject,
+      status, provider, message_id, sent_at
+    ) VALUES (?, ?, 'customer@example.com', 'customer_booking_received', 'Booking Confirmed', 'sent', 'resend', ?, ?)
+  `, [testEmailNotifId, 'BD-TEST-EMAIL-RESEND', resendTestEmailId, new Date().toISOString()]);
+
+  const fakeReqValidSvix: any = {
+    headers: { 'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': formattedSvixSig },
+    rawBody: Buffer.from(testEmailPayload, 'utf-8'),
+    body: JSON.parse(testEmailPayload)
+  };
+  let validSvixAccepted = false;
+  const fakeResValidSvix: any = {
+    json: (data: any) => {
+      if (data.received) validSvixAccepted = true;
+    },
+    status: () => ({ json: () => {}, send: () => {} })
+  };
+  await emailStatusWebhookHandler(fakeReqValidSvix, fakeResValidSvix);
+  if (!validSvixAccepted) {
+    throw new Error('emailStatusWebhookHandler must accept valid Svix webhook and return received: true');
+  }
+
+  const updatedEmailNotif = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [resendTestEmailId]);
+  if (!updatedEmailNotif || updatedEmailNotif.status !== 'delivered') {
+    throw new Error('Notification record must be updated to status delivered upon authentic Resend delivery event');
+  }
+  console.log('  ✓ Authentic Resend Svix webhook verified, updating notification status to "delivered"');
+
+  // Clean up test email record
+  await db.execute('DELETE FROM booking_notifications WHERE id = ?', [testEmailNotifId]);
 
   // 6. Test Email Webhook Rejection when pure SMTP is configured
   const fakeSmtpReq: any = {
@@ -2019,15 +2242,15 @@ async function verifyAll() {
   const fakeSmtpRes: any = {
     status: (code: number) => {
       if (code === 400) smtpRejected = true;
-      return { json: () => {}, send: () => {} };
+      return { json: () => { }, send: () => { } };
     }
   };
-  const prevEmailProvider = process.env.EMAIL_PROVIDER;
   process.env.EMAIL_PROVIDER = 'smtp';
   try {
     await emailStatusWebhookHandler(fakeSmtpReq, fakeSmtpRes);
   } finally {
-    process.env.EMAIL_PROVIDER = prevEmailProvider;
+    delete process.env.EMAIL_PROVIDER;
+    delete process.env.RESEND_WEBHOOK_SECRET;
   }
   if (!smtpRejected) {
     throw new Error('emailStatusWebhookHandler must reject webhooks when configured provider is standard SMTP');

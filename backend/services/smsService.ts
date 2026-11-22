@@ -325,6 +325,60 @@ export class SmsService {
     }
   }
 
+  /**
+   * Parse and validate Twilio HTTP response payload
+   */
+  public parseTwilioResponseBody(statusCode: number, body: string, phone?: string): SmsSendResult {
+    if (statusCode < 200 || statusCode >= 300) {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: `Twilio HTTP ${statusCode}: ${body.substring(0, 200)}`
+      };
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(body);
+    } catch (err: any) {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: `Failed to parse Twilio response JSON: ${err.message}`
+      };
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: 'Twilio response is not a valid JSON object.'
+      };
+    }
+
+    const sid = parsed.sid;
+    if (!sid || typeof sid !== 'string' || !/^(SM|MM)[a-zA-Z0-9]{32}$/.test(sid)) {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: 'Twilio API did not return a valid provider Message SID (must start with SM/MM and contain 34 characters).'
+      };
+    }
+
+    const rawStatus = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : 'queued';
+    // Ensure queued/accepted status is strictly distinguished from delivered
+    const initialStatus = (rawStatus === 'delivered') ? 'delivered' : (rawStatus === 'accepted' ? 'accepted' : 'queued');
+
+    const masked = phone ? ` for delivery to +91 ${this.maskPhoneNumber(phone)}` : '';
+    return {
+      success: true,
+      provider: 'twilio',
+      messageId: sid,
+      status: initialStatus,
+      telemetryMessage: `Twilio message accepted (Status: ${initialStatus}, SID: ${sid})${masked}.`
+    };
+  }
+
   private sendCustomMessageViaTwilio(phone: string, text: string): Promise<SmsSendResult> {
     const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
     const authToken = process.env.TWILIO_AUTH_TOKEN || '';
@@ -354,53 +408,11 @@ export class SmsService {
         let body = '';
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            let parsedSid = '';
-            let parsedStatus = 'queued';
-            try {
-              const parsed = JSON.parse(body);
-              if (parsed.sid && typeof parsed.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsed.sid)) {
-                parsedSid = parsed.sid;
-              }
-              if (parsed.status && typeof parsed.status === 'string') {
-                parsedStatus = parsed.status;
-              }
-            } catch (err: any) {
-              resolve({
-                success: false,
-                provider: 'twilio',
-                error: `Failed to parse Twilio response JSON: ${err.message}`
-              });
-              return;
-            }
-
-            if (!parsedSid) {
-              resolve({
-                success: false,
-                provider: 'twilio',
-                error: 'Twilio API did not return a valid provider Message SID (must start with SM/MM and contain 34 characters).'
-              });
-              return;
-            }
-
-            resolve({
-              success: true,
-              provider: 'twilio',
-              messageId: parsedSid,
-              status: parsedStatus,
-              telemetryMessage: `Twilio message accepted (Status: ${parsedStatus}, SID: ${parsedSid})`
-            });
-          } else {
-            resolve({
-              success: false,
-              provider: 'twilio',
-              error: `Twilio HTTP ${res.statusCode}: ${body}`
-            });
-          }
+          resolve(this.parseTwilioResponseBody(res.statusCode || 500, body, phone));
         });
       });
 
-      req.on('error', (err) => {
+      req.on('error', (err: any) => {
         resolve({ success: false, provider: 'twilio', error: err.message });
       });
 
@@ -625,49 +637,7 @@ export class SmsService {
         let body = '';
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            let parsedSid = '';
-            let parsedStatus = 'queued';
-            try {
-              const parsed = JSON.parse(body);
-              if (parsed.sid && typeof parsed.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsed.sid)) {
-                parsedSid = parsed.sid;
-              }
-              if (parsed.status && typeof parsed.status === 'string') {
-                parsedStatus = parsed.status;
-              }
-            } catch (err: any) {
-              resolve({
-                success: false,
-                provider: 'twilio',
-                error: `Failed to parse Twilio response JSON: ${err.message}`
-              });
-              return;
-            }
-
-            if (!parsedSid) {
-              resolve({
-                success: false,
-                provider: 'twilio',
-                error: 'Twilio API did not return a valid provider Message SID (must start with SM/MM and contain 34 characters).'
-              });
-              return;
-            }
-
-            resolve({
-              success: true,
-              provider: 'twilio',
-              messageId: parsedSid,
-              status: parsedStatus,
-              telemetryMessage: `OTP accepted by Twilio messaging service (Status: ${parsedStatus}, SID: ${parsedSid}) for delivery to +91 ${this.maskPhoneNumber(phone)}.`
-            });
-          } else {
-            resolve({
-              success: false,
-              provider: 'twilio',
-              error: `Twilio HTTP ${res.statusCode}: ${body}`
-            });
-          }
+          resolve(this.parseTwilioResponseBody(res.statusCode || 500, body, phone));
         });
       });
 

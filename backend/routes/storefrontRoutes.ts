@@ -1561,38 +1561,52 @@ export const twilioStatusWebhookHandler = async (req: Request, res: Response): P
     const messageSid = req.body?.MessageSid || req.body?.SmsSid;
     const messageStatus = req.body?.MessageStatus || req.body?.SmsStatus;
 
-    if (!messageSid || !messageStatus) {
-      res.status(400).json({ error: 'Missing MessageSid or MessageStatus in webhook payload.' });
+    // 1. Validate MessageSid format (must be 34 characters starting with SM or MM)
+    if (!messageSid || typeof messageSid !== 'string' || !/^(SM|MM)[a-zA-Z0-9]{32}$/.test(messageSid)) {
+      res.status(400).json({ error: 'Invalid or missing Twilio MessageSid format (must start with SM/MM and be 34 characters).' });
       return;
     }
 
-    // Do not trust arbitrary webhook payloads: verify message SID exists in audit records
+    // 2. Validate MessageStatus against explicitly supported Twilio statuses
+    const VALID_TWILIO_STATUSES = new Set(['queued', 'accepted', 'sending', 'sent', 'delivered', 'undelivered', 'failed', 'canceled', 'cancelled']);
+    const normStatus = typeof messageStatus === 'string' ? messageStatus.toLowerCase() : '';
+    if (!normStatus || !VALID_TWILIO_STATUSES.has(normStatus)) {
+      res.status(400).json({ error: `Unsupported or unknown Twilio MessageStatus: ${messageStatus}` });
+      return;
+    }
+
+    // 3. Do not trust arbitrary webhook payloads: verify message SID exists in audit records and provider is Twilio
     const existing = (await db.queryRow(
-      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ?",
+      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ? AND provider = 'twilio'",
       [messageSid]
     )) as any;
 
     if (!existing) {
-      res.status(404).json({ error: 'Message SID not found in notification audit records.' });
+      res.status(404).json({ error: 'Message SID not found in Twilio notification audit records.' });
       return;
     }
 
-    // Distinguish queued/accepted from delivered. Only claim delivery when confirmed by provider.
-    let updatedStatus: string;
-    if (messageStatus === 'delivered') {
+    // 4. Distinguish queued/accepted from delivered and prevent stale events from downgrading terminal status
+    const isCurrentTerminal = existing.status === 'delivered' || existing.status === 'failed';
+    let updatedStatus = existing.status;
+
+    if (normStatus === 'delivered') {
       updatedStatus = 'delivered';
-    } else if (messageStatus === 'undelivered' || messageStatus === 'failed') {
+    } else if (normStatus === 'undelivered' || normStatus === 'failed') {
       updatedStatus = 'failed';
-    } else if (messageStatus === 'sent') {
-      updatedStatus = 'sent';
-    } else if (messageStatus === 'accepted') {
-      updatedStatus = 'accepted';
-    } else {
-      updatedStatus = 'queued';
+    } else if (!isCurrentTerminal) {
+      // Non-terminal records transition through intermediate states
+      if (normStatus === 'sent') {
+        updatedStatus = 'sent';
+      } else if (normStatus === 'accepted') {
+        updatedStatus = 'accepted';
+      } else {
+        updatedStatus = 'queued';
+      }
     }
 
     await db.execute(
-      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Twilio status: ' || ? WHERE message_id = ?",
+      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Twilio status: ' || ? WHERE message_id = ? AND provider = 'twilio'",
       [updatedStatus, messageStatus, messageSid]
     );
 
@@ -1608,38 +1622,49 @@ storefrontRouter.post('/webhooks/twilio/sms-status', twilioStatusWebhookHandler)
  * Standard Resend webhook headers: svix-id, svix-timestamp, svix-signature
  * Secret format: whsec_<base64> or raw secret string
  */
-export function verifyResendWebhookSignature(
+export function verifyResendWebhookSignatureDetailed(
   signingSecret: string,
   svixId: string | undefined,
   svixTimestamp: string | undefined,
   svixSignature: string | undefined,
   rawBody: string | Buffer
-): boolean {
-  if (!signingSecret || !svixId || !svixTimestamp || !svixSignature) {
-    return false;
+): { valid: boolean; error?: string; code?: string } {
+  if (!signingSecret) {
+    return { valid: false, error: 'Signing secret is missing', code: 'MISSING_SECRET' };
+  }
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return { valid: false, error: 'Missing required Svix headers', code: 'MISSING_HEADERS' };
   }
 
-  // Prevent replay attacks (5 minutes tolerance)
+  // Prevent replay attacks (5 minutes / 300 seconds tolerance)
   const timestampNum = parseInt(svixTimestamp, 10);
-  if (isNaN(timestampNum)) return false;
+  if (isNaN(timestampNum)) {
+    return { valid: false, error: 'Invalid timestamp format', code: 'INVALID_TIMESTAMP' };
+  }
   const currentTimestamp = Math.floor(Date.now() / 1000);
   if (Math.abs(currentTimestamp - timestampNum) > 300) {
-    return false;
+    return { valid: false, error: 'Webhook timestamp too old or too far in future (replayed event)', code: 'REPLAYED_EVENT' };
   }
 
   // Extract secret key bytes (strip whsec_ prefix if present)
   let key: Buffer;
   if (signingSecret.startsWith('whsec_')) {
-    key = Buffer.from(signingSecret.substring(6), 'base64');
+    try {
+      key = Buffer.from(signingSecret.substring(6), 'base64');
+    } catch {
+      key = Buffer.from(signingSecret, 'utf-8');
+    }
   } else {
     key = Buffer.from(signingSecret, 'utf-8');
   }
 
-  const payloadString = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf-8');
-  const toSign = `${svixId}.${svixTimestamp}.${payloadString}`;
+  const payloadBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf-8');
+  const headerBuffer = Buffer.from(`${svixId}.${svixTimestamp}.`, 'utf-8');
+  const toSign = Buffer.concat([headerBuffer, payloadBuffer]);
+
   const computedSignature = crypto
     .createHmac('sha256', key)
-    .update(toSign, 'utf-8')
+    .update(toSign)
     .digest('base64');
 
   // Check against all space-separated signatures in svix-signature
@@ -1651,13 +1676,23 @@ export function verifyResendWebhookSignature(
         const a = Buffer.from(signature, 'base64');
         const b = Buffer.from(computedSignature, 'base64');
         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-          return true;
+          return { valid: true };
         }
       } catch {}
     }
   }
 
-  return false;
+  return { valid: false, error: 'Computed signature does not match svix-signature', code: 'SIGNATURE_MISMATCH' };
+}
+
+export function verifyResendWebhookSignature(
+  signingSecret: string,
+  svixId: string | undefined,
+  svixTimestamp: string | undefined,
+  svixSignature: string | undefined,
+  rawBody: string | Buffer
+): boolean {
+  return verifyResendWebhookSignatureDetailed(signingSecret, svixId, svixTimestamp, svixSignature, rawBody).valid;
 }
 
 // Email Delivery Status Webhook (Resend provider delivery notifications)
@@ -1667,7 +1702,7 @@ export const emailStatusWebhookHandler = async (req: Request, res: Response): Pr
   try {
     const configuredProvider = (process.env.EMAIL_PROVIDER || 'smtp').toLowerCase();
 
-    // Explicitly reject if configured provider is pure SMTP, as standard SMTP does not support inbound webhooks
+    // 1. Explicitly reject if configured provider is pure SMTP, as standard SMTP does not support inbound webhooks
     if (configuredProvider === 'smtp') {
       res.status(400).json({
         error: 'Standard SMTP does not support inbound delivery webhooks. Inbound delivery status webhooks require an API provider like Resend.',
@@ -1676,37 +1711,60 @@ export const emailStatusWebhookHandler = async (req: Request, res: Response): Pr
       return;
     }
 
+    // 2. Strict Resend Webhook Authentication: Svix headers & raw request body required
     const signingSecret = process.env.RESEND_WEBHOOK_SECRET || process.env.EMAIL_WEBHOOK_SECRET || '';
-    const svixId = (req.headers['svix-id'] as string) || '';
-    const svixTimestamp = (req.headers['svix-timestamp'] as string) || '';
-    const svixSignature = (req.headers['svix-signature'] as string) || '';
-    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
-
-    const incomingBearer = (req.headers['x-webhook-secret'] as string) || (req.headers['authorization'] as string) || '';
-
-    // Verify webhook authenticity
-    if (signingSecret) {
-      // 1. Try Resend Svix signature if svix headers are present
-      if (svixSignature && svixId && svixTimestamp) {
-        const isSvixValid = verifyResendWebhookSignature(signingSecret, svixId, svixTimestamp, svixSignature, rawBody);
-        if (!isSvixValid) {
-          res.status(403).json({ error: 'Invalid Resend webhook signature.' });
-          return;
-        }
-      } else {
-        // 2. Otherwise verify shared webhook secret / bearer token
-        const token = incomingBearer.replace(/^Bearer\s+/i, '');
-        if (!token || token !== signingSecret) {
-          res.status(403).json({ error: 'Invalid or missing email webhook secret/signature.' });
-          return;
-        }
-      }
-    } else if (process.env.NODE_ENV === 'production') {
-      res.status(403).json({ error: 'Email webhook secret not configured. Unauthenticated webhooks rejected.' });
+    if (!signingSecret) {
+      res.status(500).json({
+        error: 'Resend webhook signing secret is not configured on the server. Set RESEND_WEBHOOK_SECRET.',
+        code: 'RESEND_SECRET_MISSING'
+      });
       return;
     }
 
-    const event = req.body;
+    // Require original raw request body - do NOT accept JSON.stringify(req.body)
+    const rawBody = (req as any).rawBody;
+    if (!rawBody || (Buffer.isBuffer(rawBody) && rawBody.length === 0) || (typeof rawBody === 'string' && rawBody.trim() === '')) {
+      res.status(400).json({
+        error: 'Missing raw request body required for cryptographic Svix signature verification.',
+        code: 'MISSING_RAW_BODY'
+      });
+      return;
+    }
+
+    // Require valid Svix headers
+    const svixId = (req.headers['svix-id'] as string) || '';
+    const svixTimestamp = (req.headers['svix-timestamp'] as string) || '';
+    const svixSignature = (req.headers['svix-signature'] as string) || '';
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      res.status(400).json({
+        error: 'Missing required Svix headers: svix-id, svix-timestamp, svix-signature.',
+        code: 'MISSING_SVIX_HEADERS'
+      });
+      return;
+    }
+
+    // Verify cryptographic Svix signature and replay window (no shared Bearer fallback)
+    const svixCheck = verifyResendWebhookSignatureDetailed(signingSecret, svixId, svixTimestamp, svixSignature, rawBody);
+    if (!svixCheck.valid) {
+      res.status(403).json({
+        error: `Invalid Resend webhook signature: ${svixCheck.error}`,
+        code: svixCheck.code || 'INVALID_SVIX_SIGNATURE'
+      });
+      return;
+    }
+
+    // Parse verified payload
+    let event = req.body;
+    if (!event || typeof event !== 'object') {
+      try {
+        event = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf-8') : rawBody);
+      } catch {
+        res.status(400).json({ error: 'Malformed JSON payload in Resend webhook.' });
+        return;
+      }
+    }
+
     const emailId = event?.data?.email_id || event?.id;
     const eventType = event?.type;
 
@@ -1717,7 +1775,7 @@ export const emailStatusWebhookHandler = async (req: Request, res: Response): Pr
 
     // Do not trust arbitrary webhook payloads: verify email ID exists in audit records
     const existing = (await db.queryRow(
-      "SELECT id, status FROM booking_notifications WHERE message_id = ?",
+      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ?",
       [emailId]
     )) as any;
 
@@ -1728,6 +1786,13 @@ export const emailStatusWebhookHandler = async (req: Request, res: Response): Pr
 
     const isSuccess = eventType === 'email.delivered';
     const isFailed = eventType === 'email.bounced' || eventType === 'email.complained';
+
+    // Prevent duplicate or stale events from incorrectly changing a terminal delivery status
+    if (existing.status === 'delivered' && !isFailed) {
+      res.json({ received: true, status: 'already_terminal_delivered' });
+      return;
+    }
+
     const updatedStatus = isSuccess ? 'delivered' : (isFailed ? 'failed' : 'sent');
 
     await db.execute(

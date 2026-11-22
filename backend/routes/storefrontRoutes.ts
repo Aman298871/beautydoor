@@ -1664,17 +1664,21 @@ export function verifyResendWebhookSignatureDetailed(
     return { valid: false, error: 'Webhook timestamp too old or too far in future (replayed event)', code: 'REPLAYED_EVENT' };
   }
 
-  // Extract secret key bytes (strip whsec_ prefix if present, validate base64 format)
+  // Extract secret key bytes (strip whsec_ prefix if present, strictly validate canonical base64 format)
   let key: Buffer;
   if (signingSecret.startsWith('whsec_')) {
     const rawSecretKey = signingSecret.substring(6);
-    if (!rawSecretKey || !/^[A-Za-z0-9+/]+={0,2}$/.test(rawSecretKey)) {
-      return { valid: false, error: 'Malformed whsec_ secret: invalid base64 format', code: 'INVALID_SECRET_FORMAT' };
+    if (!rawSecretKey || rawSecretKey.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(rawSecretKey)) {
+      return { valid: false, error: 'Malformed whsec_ secret: invalid base64 format or length', code: 'INVALID_SECRET_FORMAT' };
     }
     try {
       key = Buffer.from(rawSecretKey, 'base64');
       if (key.length === 0) {
         return { valid: false, error: 'Decoded secret key is empty', code: 'INVALID_SECRET_KEY' };
+      }
+      // Canonical Base64 check: re-encoding must match rawSecretKey byte-for-byte to reject non-canonical inputs
+      if (key.toString('base64') !== rawSecretKey) {
+        return { valid: false, error: 'Malformed whsec_ secret: non-canonical base64 encoding', code: 'INVALID_SECRET_FORMAT' };
       }
     } catch {
       return { valid: false, error: 'Failed to decode base64 secret key', code: 'INVALID_SECRET_FORMAT' };

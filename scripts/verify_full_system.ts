@@ -1957,7 +1957,10 @@ async function verifyAll() {
   // Test 58: Twilio Notification Status Lifecycle & Provider SID Storage
   console.log('\nTest 58: Twilio Notification Status Lifecycle & Provider SID Storage');
   const twilioTestNotifId = `notif-tw-${Date.now()}`;
-  const twilioTestSid = `SM${Date.now()}abcdef1234567890`;
+  const twilioTestSid = 'SM' + crypto.randomBytes(16).toString('hex');
+  if (!/^(SM|MM)[a-zA-Z0-9]{32}$/.test(twilioTestSid)) {
+    throw new Error(`twilioTestSid must be 34 alphanumeric chars: ${twilioTestSid}`);
+  }
   const twilioTestBookingId = `BD-TW-TEST-${Date.now()}`;
 
   // Insert notification with status 'queued' (as returned on initial Twilio accept)
@@ -2031,8 +2034,12 @@ async function verifyAll() {
   console.log('  ✓ Unauthenticated webhook requests without valid signature are strictly rejected');
 
   // 3. Reject arbitrary unrecorded message SIDs
+  const unrecordedSid = 'SM' + crypto.randomBytes(16).toString('hex');
+  if (!/^(SM|MM)[a-zA-Z0-9]{32}$/.test(unrecordedSid)) {
+    throw new Error(`unrecordedSid must match Twilio format regex: ${unrecordedSid}`);
+  }
   const unrecordedParams = {
-    MessageSid: 'SMunknown_unrecorded_message_99999999',
+    MessageSid: unrecordedSid,
     MessageStatus: 'delivered'
   };
   let unrecSigData = testWebhookUrl;
@@ -2049,7 +2056,7 @@ async function verifyAll() {
   let rejectedUnrecorded = false;
   const fakeResUnrecorded: any = {
     status: (code: number) => {
-      if (code === 404 || code === 403 || code === 400) rejectedUnrecorded = true;
+      if (code === 404) rejectedUnrecorded = true;
       return { json: () => { }, send: () => { } };
     }
   };
@@ -2152,9 +2159,16 @@ async function verifyAll() {
     body: staleParams,
     originalUrl: '/api/webhooks/twilio/sms-status'
   };
+  let staleXmlResponse = '';
+  let staleHttpResponse = 200;
   const fakeResStale: any = {
-    type: () => ({ send: () => { } }),
-    status: () => ({ json: () => { }, send: () => { } })
+    type: (_t: string) => ({
+      send: (xml: string) => { staleXmlResponse = xml; }
+    }),
+    status: (code: number) => {
+      staleHttpResponse = code;
+      return { json: () => { }, send: () => { } };
+    }
   };
   process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
   try {
@@ -2162,11 +2176,14 @@ async function verifyAll() {
   } finally {
     process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
   }
+  if (staleHttpResponse !== 200 || staleXmlResponse !== '<Response></Response>') {
+    throw new Error(`twilioStatusWebhookHandler must return 200 XML on terminal state preservation, got HTTP ${staleHttpResponse}`);
+  }
   const terminalNotifCheck = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioTestSid]);
   if (!terminalNotifCheck || terminalNotifCheck.status !== 'delivered') {
     throw new Error('Stale webhook event must never downgrade terminal delivered status');
   }
-  console.log('  ✓ Stale queued event correctly prevented from downgrading terminal delivered status');
+  console.log('  ✓ Stale queued event correctly prevented from downgrading terminal delivered status (handler returned 200 XML)');
 
   // Terminal transition test: delivered -> failed / undelivered must NEVER downgrade delivered
   const failedParams = { MessageSid: twilioTestSid, MessageStatus: 'failed' };
@@ -2178,20 +2195,39 @@ async function verifyAll() {
     body: failedParams,
     originalUrl: '/api/webhooks/twilio/sms-status'
   };
+  let failedXmlResponse = '';
+  let failedHttpResponse = 200;
+  const fakeResFailed: any = {
+    type: (_t: string) => ({
+      send: (xml: string) => { failedXmlResponse = xml; }
+    }),
+    status: (code: number) => {
+      failedHttpResponse = code;
+      return { json: () => {}, send: () => {} };
+    }
+  };
   process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
   try {
-    await twilioStatusWebhookHandler(fakeReqFailed, fakeResStale);
+    await twilioStatusWebhookHandler(fakeReqFailed, fakeResFailed);
   } finally {
     process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (failedHttpResponse !== 200 || failedXmlResponse !== '<Response></Response>') {
+    throw new Error(`twilioStatusWebhookHandler must return 200 XML on terminal state preservation, got HTTP ${failedHttpResponse}`);
   }
   const deliveredKeptCheck = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioTestSid]);
   if (!deliveredKeptCheck || deliveredKeptCheck.status !== 'delivered') {
     throw new Error('delivered state must never be downgraded to failed by late failure events');
   }
-  console.log('  ✓ Late failure event correctly prevented from downgrading terminal delivered status');
+  console.log('  ✓ Late failure event correctly prevented from downgrading terminal delivered status (handler returned 200 XML)');
 
-  // Terminal transition test: failed -> delivered must NEVER overwrite terminal failed status
-  const twilioFailedSid = `SMfailed_${Date.now()}`.padEnd(34, '0');
+  // Generate a valid 34-character SID: 'SM' + exactly 32 alphanumeric hex characters
+  const hexSuffix = crypto.randomBytes(16).toString('hex'); // exactly 32 hex chars: [0-9a-f]
+  const twilioFailedSid = `SM${hexSuffix}`;
+  if (!/^(SM|MM)[a-zA-Z0-9]{32}$/.test(twilioFailedSid)) {
+    throw new Error(`Generated test SID must strictly match Twilio format regex: ${twilioFailedSid}`);
+  }
+
   const twilioFailedNotifId = `notif-tw-failed-${Date.now()}`;
   await db.execute(`
     INSERT INTO booking_notifications (
@@ -2200,6 +2236,7 @@ async function verifyAll() {
     ) VALUES (?, 'BD-TW-FAILED', '+91 9876543210', 'customer_otp', 'Failed OTP', 'failed', 'twilio', ?, ?)
   `, [twilioFailedNotifId, twilioFailedSid, new Date().toISOString()]);
 
+  // Terminal transition test: failed -> delivered must NEVER overwrite terminal failed status
   const lateDeliveredParams = { MessageSid: twilioFailedSid, MessageStatus: 'delivered' };
   let lateDelivSigData = testWebhookUrl;
   for (const k of Object.keys(lateDeliveredParams).sort()) lateDelivSigData += k + (lateDeliveredParams as any)[k];
@@ -2209,17 +2246,31 @@ async function verifyAll() {
     body: lateDeliveredParams,
     originalUrl: '/api/webhooks/twilio/sms-status'
   };
+  let lateDelivXml = '';
+  let lateDelivHttp = 200;
+  const fakeResLateDeliv: any = {
+    type: (_t: string) => ({
+      send: (xml: string) => { lateDelivXml = xml; }
+    }),
+    status: (code: number) => {
+      lateDelivHttp = code;
+      return { json: () => {}, send: () => {} };
+    }
+  };
   process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
   try {
-    await twilioStatusWebhookHandler(fakeReqLateDeliv, fakeResStale);
+    await twilioStatusWebhookHandler(fakeReqLateDeliv, fakeResLateDeliv);
   } finally {
     process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (lateDelivHttp !== 200 || lateDelivXml !== '<Response></Response>') {
+    throw new Error(`twilioStatusWebhookHandler must return 200 XML on terminal failed preservation, got HTTP ${lateDelivHttp}`);
   }
   const failedKeptCheck = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioFailedSid]);
   if (!failedKeptCheck || failedKeptCheck.status !== 'failed') {
     throw new Error('failed terminal state must never be overwritten by out-of-order delivered events');
   }
-  console.log('  ✓ Out-of-order delivered event correctly prevented from overwriting terminal failed status');
+  console.log('  ✓ Out-of-order delivered event correctly prevented from overwriting terminal failed status (handler returned 200 XML)');
 
   // Terminal transition test: failed -> sent must NEVER overwrite terminal failed status
   const lateSentParams = { MessageSid: twilioFailedSid, MessageStatus: 'sent' };
@@ -2231,19 +2282,32 @@ async function verifyAll() {
     body: lateSentParams,
     originalUrl: '/api/webhooks/twilio/sms-status'
   };
+  let lateSentXml = '';
+  let lateSentHttp = 200;
+  const fakeResLateSent: any = {
+    type: (_t: string) => ({
+      send: (xml: string) => { lateSentXml = xml; }
+    }),
+    status: (code: number) => {
+      lateSentHttp = code;
+      return { json: () => {}, send: () => {} };
+    }
+  };
   process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
   try {
-    await twilioStatusWebhookHandler(fakeReqLateSent, fakeResStale);
+    await twilioStatusWebhookHandler(fakeReqLateSent, fakeResLateSent);
   } finally {
     process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (lateSentHttp !== 200 || lateSentXml !== '<Response></Response>') {
+    throw new Error(`twilioStatusWebhookHandler must return 200 XML on terminal failed preservation, got HTTP ${lateSentHttp}`);
   }
   const failedKeptAfterSent = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioFailedSid]);
   if (!failedKeptAfterSent || failedKeptAfterSent.status !== 'failed') {
     throw new Error('failed terminal state must never be overwritten by stale sent events');
   }
-  console.log('  ✓ Stale sent event correctly prevented from overwriting terminal failed status');
+  console.log('  ✓ Stale sent event correctly prevented from overwriting terminal failed status (handler returned 200 XML)');
   await db.execute('DELETE FROM booking_notifications WHERE id = ?', [twilioFailedNotifId]);
-  process.env.TWILIO_WEBHOOK_URL = prevTwilioWebhookUrl;
 
   // 5. Test Resend Svix Webhook Signature Verification & Replay Protection
   const resendSecret = 'whsec_dGhpcyBpcyBhIHNhbXBsZSBzZWNyZXQgdGVzdGluZw==';
@@ -2358,17 +2422,66 @@ async function verifyAll() {
   }
   console.log('  ✓ Malformed non-numeric Svix timestamp strictly rejected (code: INVALID_TIMESTAMP)');
 
-  // 5f. Malformed whsec_ secret format check
-  const badSecCheck = verifyResendWebhookSignatureDetailed('whsec_!invalid_base64@#$', svixId, svixTimestamp, formattedSvixSig, Buffer.from(testEmailPayload, 'utf-8'));
-  if (badSecCheck.valid || badSecCheck.code !== 'INVALID_SECRET_FORMAT') {
-    throw new Error('verifyResendWebhookSignatureDetailed must strictly reject malformed whsec_ base64 secrets');
+  // 5f. Strict Canonical Base64 Validation for Resend whsec_ Secrets
+  console.log('  Testing Strict Canonical Base64 Validation for Resend whsec_ Secrets:');
+  const samplePayloadBuf = Buffer.from(testEmailPayload, 'utf-8');
+
+  // Case 1: Valid Resend whsec_ secret
+  const validSecretRes = verifyResendWebhookSignatureDetailed(resendSecret, svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (!validSecretRes.valid) {
+    throw new Error(`Valid Resend whsec_ secret must be accepted, got: ${validSecretRes.error}`);
   }
-  console.log('  ✓ Malformed whsec_ signing secret strictly rejected (code: INVALID_SECRET_FORMAT)');
+  console.log('    ✓ Valid Resend whsec_ secret accepted');
+
+  // Case 2: Empty secret
+  const emptySecRes = verifyResendWebhookSignatureDetailed('', svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (emptySecRes.valid || emptySecRes.code !== 'MISSING_SECRET') {
+    throw new Error(`Empty signing secret must return MISSING_SECRET, got: ${emptySecRes.code}`);
+  }
+  console.log('    ✓ Empty signing secret rejected (MISSING_SECRET)');
+
+  // Case 3: Invalid characters
+  const invalidCharSecRes = verifyResendWebhookSignatureDetailed('whsec_!invalid_chars@#$', svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (invalidCharSecRes.valid || invalidCharSecRes.code !== 'INVALID_SECRET_FORMAT') {
+    throw new Error(`Invalid characters in secret must return INVALID_SECRET_FORMAT, got: ${invalidCharSecRes.code}`);
+  }
+  console.log('    ✓ Invalid characters in secret rejected (INVALID_SECRET_FORMAT)');
+
+  // Case 4: Invalid padding (e.g. 3 '=' characters)
+  const invalidPaddingSecRes = verifyResendWebhookSignatureDetailed('whsec_dGhpcy===', svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (invalidPaddingSecRes.valid || invalidPaddingSecRes.code !== 'INVALID_SECRET_FORMAT') {
+    throw new Error(`Invalid padding in secret must return INVALID_SECRET_FORMAT, got: ${invalidPaddingSecRes.code}`);
+  }
+  console.log('    ✓ Invalid padding in secret rejected (INVALID_SECRET_FORMAT)');
+
+  // Case 5: Invalid Base64 length (e.g. length not a multiple of 4)
+  const invalidLenSecRes = verifyResendWebhookSignatureDetailed('whsec_abc', svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (invalidLenSecRes.valid || invalidLenSecRes.code !== 'INVALID_SECRET_FORMAT') {
+    throw new Error(`Invalid base64 length in secret must return INVALID_SECRET_FORMAT, got: ${invalidLenSecRes.code}`);
+  }
+  console.log('    ✓ Invalid Base64 length rejected (INVALID_SECRET_FORMAT)');
+
+  // Case 6: Non-canonical Base64 encoding (e.g. unused bits before padding character are non-zero: 'Zm9=' instead of 'Zm8=')
+  const nonCanonicalSecRes = verifyResendWebhookSignatureDetailed('whsec_Zm9=', svixId, svixTimestamp, formattedSvixSig, samplePayloadBuf);
+  if (nonCanonicalSecRes.valid || nonCanonicalSecRes.code !== 'INVALID_SECRET_FORMAT') {
+    throw new Error(`Non-canonical Base64 encoding must return INVALID_SECRET_FORMAT, got: ${nonCanonicalSecRes.code}`);
+  }
+  console.log('    ✓ Non-canonical Base64 encoding rejected (INVALID_SECRET_FORMAT)');
+
+  // Case 7: Incorrect signature (tampered signature with valid secret and valid timestamp)
+  const incorrectSigRes = verifyResendWebhookSignatureDetailed(resendSecret, svixId, svixTimestamp, 'v1,dGFtcGVyZWRfc2lnbmF0dXJlX3ZhbHVlXzEyMzQ1Njc4OQ==', samplePayloadBuf);
+  if (incorrectSigRes.valid || incorrectSigRes.code !== 'SIGNATURE_MISMATCH') {
+    throw new Error(`Incorrect signature must return SIGNATURE_MISMATCH, got: ${incorrectSigRes.code}`);
+  }
+  console.log('    ✓ Incorrect signature rejected (SIGNATURE_MISMATCH)');
 
   // 5g. Unsupported Resend event type rejection (HTTP 400)
   const unsupportedPayload = JSON.stringify({ type: 'email.opened', data: { email_id: resendTestEmailId } });
   const unsupportedRawBuf = Buffer.from(unsupportedPayload, 'utf-8');
-  const unsupportedSig = crypto.createHmac('sha256', keyBytes).update(`${svixId}.${svixTimestamp}.${unsupportedPayload}`, 'utf-8').digest('base64');
+  const unsupportedSig = crypto
+    .createHmac('sha256', keyBytes)
+    .update(Buffer.concat([Buffer.from(`${svixId}.${svixTimestamp}.`, 'utf-8'), unsupportedRawBuf]))
+    .digest('base64');
   const fakeReqUnsupportedEvent: any = {
     headers: { 'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': `v1,${unsupportedSig}` },
     rawBody: unsupportedRawBuf,
@@ -2378,7 +2491,7 @@ async function verifyAll() {
   const fakeResUnsupportedEvent: any = {
     status: (code: number) => {
       if (code === 400) rejectedUnsupportedEvent = true;
-      return { json: () => {}, send: () => {} };
+      return { json: () => { }, send: () => { } };
     }
   };
   process.env.EMAIL_PROVIDER = 'resend';
@@ -2411,7 +2524,7 @@ async function verifyAll() {
   const fakeResMismatch: any = {
     status: (code: number) => {
       if (code === 404) rejectedMismatch = true;
-      return { json: () => {}, send: () => {} };
+      return { json: () => { }, send: () => { } };
     }
   };
   await emailStatusWebhookHandler(fakeReqMismatch, fakeResMismatch);
@@ -2443,7 +2556,7 @@ async function verifyAll() {
     json: (data: any) => {
       if (data.status === 'already_terminal_delivered') termDelivPreserved = true;
     },
-    status: () => ({ json: () => {}, send: () => {} })
+    status: () => ({ json: () => { }, send: () => { } })
   };
   await emailStatusWebhookHandler(fakeReqBounced, fakeResTermDeliv);
   if (!termDelivPreserved) {
@@ -2469,7 +2582,7 @@ async function verifyAll() {
     json: (data: any) => {
       if (data.status === 'already_terminal_failed') termFailedPreserved = true;
     },
-    status: () => ({ json: () => {}, send: () => {} })
+    status: () => ({ json: () => { }, send: () => { } })
   };
   await emailStatusWebhookHandler(fakeReqLateDelivEmail, fakeResTermFailed);
   if (!termFailedPreserved) {

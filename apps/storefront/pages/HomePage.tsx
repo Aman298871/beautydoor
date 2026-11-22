@@ -461,13 +461,13 @@ export const HomePage: React.FC<Props> = ({
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-1 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
-                  <span>Ready-Made Packages</span>
+                  <span>Affordable Beauty Packages</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
-                  Ready-Made Beauty Packages
+                  Beauty Packages at Special Prices
                 </h2>
                 <p className="text-base text-[#554749] mt-1 font-light">
-                  Choose a ready-made package or make your own by adding the services you want.
+                  Enjoy head-to-toe salon ceremonies at transparent flat rates, starting from just ₹999 with genuine salon-grade products.
                 </p>
               </div>
 
@@ -481,7 +481,11 @@ export const HomePage: React.FC<Props> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {packages.slice(0, 3).map((pkg) => {
+              {packages
+                .filter((p: any) => p.is_published === 1 && !p.is_archived)
+                .sort((a: any, b: any) => Number(a.selling_price) - Number(b.selling_price))
+                .slice(0, 3)
+                .map((pkg) => {
                 const inCart = cartItemIds.includes(pkg.id);
                 return (
                   <div

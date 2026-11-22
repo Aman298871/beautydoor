@@ -805,13 +805,84 @@ adminRouter.put('/services/:id/steps', async (req: Request, res: Response): Prom
   res.json({ success: true, stepsCount: cleanSteps.length, treatmentSteps: cleanSteps });
 });
 
+adminRouter.put('/services/:id/archive', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
+
+  await db.execute(
+    'UPDATE services SET is_active = 0, is_published = 0, is_archived = 1, updated_at = ? WHERE id = ?',
+    [nowIso, id]
+  );
+  recordAuditLog(adminUser, 'ARCHIVE_SERVICE', 'CATALOG', id, { is_archived: 1 }, req.ip);
+  res.json({ success: true, archived: true, message: 'Service successfully archived and removed from storefront.' });
+});
+
+adminRouter.put('/services/:id/restore', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
+
+  await db.execute(
+    'UPDATE services SET is_active = 1, is_published = 1, is_archived = 0, updated_at = ? WHERE id = ?',
+    [nowIso, id]
+  );
+  recordAuditLog(adminUser, 'RESTORE_SERVICE', 'CATALOG', id, { is_archived: 0 }, req.ip);
+  res.json({ success: true, restored: true, message: 'Service successfully restored and published to storefront.' });
+});
+
+adminRouter.put('/services/:id/toggle-publish', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
+
+  const service = (await db.queryRow('SELECT is_published, is_archived FROM services WHERE id = ?', [id])) as any;
+  if (!service) {
+    res.status(404).json({ error: 'Service not found' });
+    return;
+  }
+
+  const nextPublished = service.is_published === 1 ? 0 : 1;
+  await db.execute(
+    'UPDATE services SET is_published = ?, updated_at = ? WHERE id = ?',
+    [nextPublished, nowIso, id]
+  );
+  recordAuditLog(adminUser, 'TOGGLE_SERVICE_PUBLISH', 'CATALOG', id, { is_published: nextPublished }, req.ip);
+  res.json({ success: true, is_published: nextPublished });
+});
+
 adminRouter.delete('/services/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
 
-  (await db.execute('DELETE FROM services WHERE id = ?', [id]));
+  // Check if service is referenced in past customer bookings
+  const existingUsage = (await db.queryRow(
+    'SELECT id FROM booking_items WHERE service_id = ? LIMIT 1',
+    [id]
+  )) as any;
+
+  if (existingUsage) {
+    // Soft archive rather than hard delete to protect historical customer records
+    await db.execute(
+      'UPDATE services SET is_active = 0, is_published = 0, is_archived = 1, updated_at = ? WHERE id = ?',
+      [nowIso, id]
+    );
+    recordAuditLog(adminUser, 'ARCHIVE_SERVICE', 'CATALOG', id, { reason: 'Referenced in historical booking items' }, req.ip);
+    res.json({
+      success: true,
+      archived: true,
+      message: 'Service is referenced in historical bookings and was safely archived (hidden from storefront) rather than permanently deleted.'
+    });
+    return;
+  }
+
+  // Zero booking references: perform complete clean cascade deletion
+  await db.execute('DELETE FROM service_variants WHERE service_id = ?', [id]);
+  await db.execute('DELETE FROM service_addons WHERE service_id = ?', [id]);
+  await db.execute('DELETE FROM services WHERE id = ?', [id]);
   recordAuditLog(adminUser, 'DELETE_SERVICE', 'CATALOG', id, {}, req.ip);
-  res.json({ success: true });
+  res.json({ success: true, deleted: true });
 });
 
 // 3b. Hygiene Commitments, Price Audits, and Pending Services are defined in Section 14-16 below with full audit logging and schema parity.
@@ -1446,8 +1517,9 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     INSERT INTO packages (
       id, name, slug, subtitle, description, original_price, selling_price,
       discount_percent, duration_mins, duration_display, inclusions_json,
-      benefits_json, category_ids_json, is_published, badge, image_url, display_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      benefits_json, category_ids_json, is_published, is_archived, is_featured, is_special_deal,
+      badge, image_url, display_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [id,
     p.name.trim(),
     slug,
@@ -1462,6 +1534,9 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     JSON.stringify(p.benefits || []),
     JSON.stringify(p.category_ids || []),
     p.is_published !== false ? 1 : 0,
+    p.is_archived ? 1 : 0,
+    p.is_featured ? 1 : 0,
+    p.is_special_deal ? 1 : 0,
     p.badge || null,
     p.image_url || null,
     Number(p.display_order || 0),
@@ -1526,7 +1601,8 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
         selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
         inclusions_json = ?, benefits_json = ?,
         category_ids_json = CASE WHEN ? IS NOT NULL THEN ? ELSE category_ids_json END,
-        is_published = ?, badge = ?, image_url = ?,
+        is_published = ?, is_archived = ?, is_featured = ?, is_special_deal = ?,
+        badge = ?, image_url = ?,
         display_order = ?, updated_at = ?
     WHERE id = ?
   `, [finalName,
@@ -1543,6 +1619,9 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
     p.category_ids ? JSON.stringify(p.category_ids) : null,
     p.category_ids ? JSON.stringify(p.category_ids) : null,
     p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
+    p.is_archived !== undefined ? (p.is_archived ? 1 : 0) : 0,
+    p.is_featured !== undefined ? (p.is_featured ? 1 : 0) : 0,
+    p.is_special_deal !== undefined ? (p.is_special_deal ? 1 : 0) : 0,
     p.badge || null,
     finalImageUrl,
     Number(p.display_order || 0),
@@ -1553,28 +1632,62 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
   res.json({ success: true });
 });
 
+adminRouter.put('/packages/:id/archive', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
+
+  await db.execute(
+    "UPDATE packages SET is_published = 0, is_archived = 1, badge = 'Archived', updated_at = ? WHERE id = ?",
+    [nowIso, id]
+  );
+  recordAuditLog(adminUser, 'ARCHIVE_PACKAGE', 'CATALOG', id, { is_archived: 1 }, req.ip);
+  res.json({ success: true, archived: true, message: 'Package successfully archived and hidden from storefront.' });
+});
+
+adminRouter.put('/packages/:id/restore', async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
+
+  await db.execute(
+    "UPDATE packages SET is_published = 1, is_archived = 0, badge = CASE WHEN badge = 'Archived' THEN NULL ELSE badge END, updated_at = ? WHERE id = ?",
+    [nowIso, id]
+  );
+  recordAuditLog(adminUser, 'RESTORE_PACKAGE', 'CATALOG', id, { is_archived: 0 }, req.ip);
+  res.json({ success: true, restored: true, message: 'Package successfully restored and published to storefront.' });
+});
+
 adminRouter.delete('/packages/:id', async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const adminUser = req.adminUser?.username || 'admin';
+  const nowIso = new Date().toISOString();
 
-  // Check if package is referenced in past customer bookings
+  // Check if package is referenced in past customer bookings (by service_id or matching package name)
+  const pkg = (await db.queryRow('SELECT name FROM packages WHERE id = ?', [id])) as any;
+  const pkgName = pkg?.name || '';
+
   const existingUsage = (await db.queryRow(
-    'SELECT id FROM booking_items WHERE service_id = ? LIMIT 1',
-    [id]
+    'SELECT id FROM booking_items WHERE service_id = ? OR (service_name IS NOT NULL AND service_name LIKE ?) LIMIT 1',
+    [id, `%${pkgName}%`]
   )) as any;
 
   if (existingUsage) {
     // Soft delete / archive to protect past customer booking history
-    (await db.execute(
-      "UPDATE packages SET is_published = 0, badge = 'Archived', updated_at = ? WHERE id = ?",
-      [new Date().toISOString(), id]
-    ));
+    await db.execute(
+      "UPDATE packages SET is_published = 0, is_archived = 1, badge = 'Archived', updated_at = ? WHERE id = ?",
+      [nowIso, id]
+    );
     recordAuditLog(adminUser, 'ARCHIVE_PACKAGE', 'CATALOG', id, { reason: 'Referenced in past booking items' }, req.ip);
-    res.json({ success: true, archived: true, message: 'Package has existing booking history and was safely archived rather than deleted.' });
+    res.json({
+      success: true,
+      archived: true,
+      message: 'Package has existing booking history and was safely archived rather than deleted.'
+    });
     return;
   }
 
-  (await db.execute('DELETE FROM packages WHERE id = ?', [id]));
+  await db.execute('DELETE FROM packages WHERE id = ?', [id]);
   recordAuditLog(adminUser, 'DELETE_PACKAGE', 'CATALOG', id, {}, req.ip);
   res.json({ success: true, deleted: true });
 });

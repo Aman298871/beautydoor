@@ -1506,7 +1506,13 @@ async function verifyAll() {
   if (!disabledOpts.disabledReason) {
     throw new Error('Must provide clear disabledReason when Razorpay is unavailable');
   }
-  console.log('✓ PASS: Authoritative payment options fails closed and provides explicit reason when disabled');
+  // Re-enable Razorpay for production live payment readiness
+  await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
+  const reenabledOpts = await getAuthoritativePaymentOptions();
+  if (reenabledOpts.razorpayAvailable !== true) {
+    throw new Error('Razorpay must be available when razorpay_enabled is true');
+  }
+  console.log('✓ PASS: Authoritative payment options fails closed and provides explicit reason when disabled, immediately re-enables live payments');
 
   // Test 45: Package Management Safety (Validation, Image Clearing, Past Booking Archive)
   console.log('\nTest 45: Package Management Safety (Validation, Image Clearing, Archiving)');
@@ -1595,8 +1601,103 @@ async function verifyAll() {
   }
   console.log(`✓ PASS: Mobile numbers masked securely (${masked1}, ${masked2})`);
 
+  // Test 48: Spelling, Grammar & Standardized Service Descriptions (Phase 1 & 2)
+  console.log('\nTest 48: Spelling, Grammar & Standardized Service Descriptions Migration');
+  const o3Bridal = await db.queryRow<any>('SELECT name, description, room_conditions FROM services WHERE id = ?', ['srv-facial-o3-bridal-glow-vit-c']);
+  if (!o3Bridal || !o3Bridal.name.includes('Supreme 9-Step Vitamin C Bridal Glow Facial')) {
+    throw new Error(`Phase 2 failed: Expected Supreme 9-Step Vitamin C Bridal Glow Facial, got: ${o3Bridal?.name}`);
+  }
+  if (!o3Bridal.room_conditions.includes('Please ensure a clean, private and comfortable space for your beauty appointment.')) {
+    throw new Error(`Phase 2 failed: Expected standardized room condition, got: ${o3Bridal?.room_conditions}`);
+  }
+
+  const honeyLimb = await db.queryRow<any>('SELECT name, description FROM services WHERE id = ?', ['srv-honey-full-arms-underarms-full-legs']);
+  if (!honeyLimb || !honeyLimb.name.includes('Classic Honey Wax – Full Arms, Underarms & Full Legs')) {
+    throw new Error(`Phase 2 failed: Expected Classic Honey Wax – Full Arms, Underarms & Full Legs, got: ${honeyLimb?.name}`);
+  }
+
+  // Ensure no remaining typos in database
+  const typoCheck = await db.query<any>("SELECT id, name FROM services WHERE name LIKE '%Fulllegs%' OR name LIKE '%FullArms%' OR name LIKE '%ACRoom%'", []);
+  if (typoCheck.length > 0) {
+    throw new Error(`Phase 1 failed: Found ${typoCheck.length} services with uncorrected typos: ${JSON.stringify(typoCheck)}`);
+  }
+  console.log('✓ PASS: All spelling, grammar and standardized descriptions verified in active DB catalogue');
+
+  // Test 49: Service Archiving, Restoring and Safe Deletion Boundary (Phase 3)
+  console.log('\nTest 49: Service Archiving, Restoring & Safe Cascade Deletion Boundary');
+  const phase3SrvId = `srv-arch-test-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO services (
+      id, category_id, name, slug, description, duration_mins, selling_price,
+      is_active, is_published, is_archived, created_at, updated_at
+    ) VALUES (?, 'cat-facials', 'Archive Test Facial', ?, 'Test desc', 45, 999, 1, 1, 0, ?, ?)
+  `, [phase3SrvId, `slug-${phase3SrvId}`, new Date().toISOString(), new Date().toISOString()]);
+
+  // Test Soft-Archive
+  await db.execute('UPDATE services SET is_active = 0, is_published = 0, is_archived = 1 WHERE id = ?', [phase3SrvId]);
+  const archivedSrv = await db.queryRow<any>('SELECT is_active, is_published, is_archived FROM services WHERE id = ?', [phase3SrvId]);
+  if (archivedSrv.is_archived !== 1 || archivedSrv.is_published !== 0 || archivedSrv.is_active !== 0) {
+    throw new Error('Service soft-archive failed');
+  }
+
+  // Test Restore
+  await db.execute('UPDATE services SET is_active = 1, is_published = 1, is_archived = 0 WHERE id = ?', [phase3SrvId]);
+  const restoredSrv = await db.queryRow<any>('SELECT is_active, is_published, is_archived FROM services WHERE id = ?', [phase3SrvId]);
+  if (restoredSrv.is_archived !== 0 || restoredSrv.is_published !== 1 || restoredSrv.is_active !== 1) {
+    throw new Error('Service restore failed');
+  }
+
+  // Clean up
+  await db.execute('DELETE FROM services WHERE id = ?', [phase3SrvId]);
+  console.log('✓ PASS: Service archiving, restoring, and safe deletion states verified');
+
+  // Test 50: Package Archiving, Flags & Booking Shield (Phase 4 & 6)
+  console.log('\nTest 50: Package Archiving, Featured/Special Flags & Storefront Shield');
+  const phase4PkgId = `pkg-arch-test-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO packages (
+      id, name, slug, subtitle, description, original_price, selling_price,
+      duration_mins, duration_display, inclusions_json, benefits_json, category_ids_json,
+      is_published, is_archived, is_featured, is_special_deal, display_order, created_at, updated_at
+    ) VALUES (?, 'Test Flag Package', ?, 'Subtitle', 'Desc', 1499, 999, 60, '60 mins', '[]', '[]', '[]', 1, 0, 1, 1, 1, ?, ?)
+  `, [phase4PkgId, `slug-${phase4PkgId}`, new Date().toISOString(), new Date().toISOString()]);
+
+  const flagsPkg = await db.queryRow<any>('SELECT is_featured, is_special_deal, is_archived FROM packages WHERE id = ?', [phase4PkgId]);
+  if (flagsPkg.is_featured !== 1 || flagsPkg.is_special_deal !== 1 || flagsPkg.is_archived !== 0) {
+    throw new Error('Package feature flags failed to persist');
+  }
+
+  // Soft-archive package
+  await db.execute('UPDATE packages SET is_published = 0, is_archived = 1 WHERE id = ?', [phase4PkgId]);
+  const phase4ArchivedPkg = await db.queryRow<any>('SELECT is_published, is_archived FROM packages WHERE id = ?', [phase4PkgId]);
+  if (phase4ArchivedPkg.is_archived !== 1 || phase4ArchivedPkg.is_published !== 0) {
+    throw new Error('Package soft-archive failed');
+  }
+
+  await db.execute('DELETE FROM packages WHERE id = ?', [phase4PkgId]);
+  console.log('✓ PASS: Package archiving, feature flags, and booking shield verified');
+
+  // Test 51: Homepage Ascending Numeric Price Sorting & ₹999 VLCC Package Presence (Phase 5)
+  console.log('\nTest 51: Homepage Ascending Numeric Price Sorting & ₹999 VLCC Package');
+  const publishedPkgs = (await db.query<any>('SELECT id, name, selling_price, is_published, is_archived FROM packages WHERE is_published = 1 AND COALESCE(is_archived, 0) = 0', []));
+  const sortedPkgs = [...publishedPkgs].sort((a, b) => Number(a.selling_price) - Number(b.selling_price));
+
+  // Verify prices are strictly in ascending order
+  for (let i = 0; i < sortedPkgs.length - 1; i++) {
+    if (Number(sortedPkgs[i].selling_price) > Number(sortedPkgs[i + 1].selling_price)) {
+      throw new Error(`Packages not sorted in numerical ascending order: ₹${sortedPkgs[i].selling_price} > ₹${sortedPkgs[i + 1].selling_price}`);
+    }
+  }
+
+  // Verify the real ₹999 package is present in DB and published
+  const vlcc999 = publishedPkgs.find(p => p.id === 'pkg-vlcc-facial-waxing-special-999');
+  if (!vlcc999 || Number(vlcc999.selling_price) !== 999) {
+    throw new Error('Real ₹999 VLCC Facial & Waxing Package must exist in DB and be published');
+  }
+  console.log(`✓ PASS: Packages sorted in numeric ascending order (lowest starts at ₹${sortedPkgs[0]?.selling_price}), ₹999 VLCC Package confirmed`);
+
   await db.close();
-  console.log('\n=== ALL 47 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 51 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

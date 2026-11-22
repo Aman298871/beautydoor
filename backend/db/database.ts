@@ -224,6 +224,7 @@ async function initPostgresSchema(pool: pg.Pool) {
       sub_type VARCHAR(64),
       is_active INTEGER NOT NULL DEFAULT 1,
       is_published INTEGER NOT NULL DEFAULT 1,
+      is_archived INTEGER NOT NULL DEFAULT 0,
       pending_notes TEXT,
       is_popular INTEGER NOT NULL DEFAULT 0,
       is_bestseller INTEGER NOT NULL DEFAULT 0,
@@ -268,6 +269,9 @@ async function initPostgresSchema(pool: pg.Pool) {
       image_url VARCHAR(255),
       category_ids_json TEXT NOT NULL DEFAULT '[]',
       is_published INTEGER NOT NULL DEFAULT 1,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      is_featured INTEGER NOT NULL DEFAULT 0,
+      is_special_deal INTEGER NOT NULL DEFAULT 0,
       display_order INTEGER NOT NULL DEFAULT 0,
       created_at VARCHAR(64) NOT NULL,
       updated_at VARCHAR(64) NOT NULL
@@ -563,8 +567,13 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
 
   // Active payment gateway settings migration: ensure live razorpay key and enabled flag are persisted in production DB
-  await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
-  await db.execute("UPDATE settings SET value = 'rzp_live_U2rRiMqcCnXRk6' WHERE key = 'razorpay_key_id'");
+  try {
+    await db.execute("INSERT INTO settings (key, value) VALUES ('razorpay_enabled', 'true') ON CONFLICT (key) DO UPDATE SET value = 'true'");
+    await db.execute("INSERT INTO settings (key, value) VALUES ('razorpay_key_id', 'rzp_live_U2rRiMqcCnXRk6') ON CONFLICT (key) DO UPDATE SET value = 'rzp_live_U2rRiMqcCnXRk6'");
+  } catch {
+    await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
+    await db.execute("UPDATE settings SET value = 'rzp_live_U2rRiMqcCnXRk6' WHERE key = 'razorpay_key_id'");
+  }
 
   // Idempotent migration for cancellation tracking and payment collection columns in bookings
   const newBookingCols = [
@@ -635,6 +644,25 @@ async function seedEssentialData() {
   try {
     await db.execute("ALTER TABLE bookings ADD COLUMN razorpay_refund_id VARCHAR(255)");
   } catch { }
+
+  // Idempotent migration for is_archived in services
+  try {
+    await db.execute("ALTER TABLE services ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0");
+  } catch { }
+
+  // Idempotent migration for is_archived, is_featured, is_special_deal in packages
+  try {
+    await db.execute("ALTER TABLE packages ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0");
+  } catch { }
+  try {
+    await db.execute("ALTER TABLE packages ADD COLUMN is_featured INTEGER NOT NULL DEFAULT 0");
+  } catch { }
+  try {
+    await db.execute("ALTER TABLE packages ADD COLUMN is_special_deal INTEGER NOT NULL DEFAULT 0");
+  } catch { }
+
+  // Idempotent Catalogue Content Spelling & Grammar Migration
+  await runCatalogueContentSpellingAndGrammarMigration(db);
 
   // Idempotent creation and backfill for customers table from existing bookings
   try {
@@ -2008,4 +2036,67 @@ async function seedFaqData() {
       now, now
     ]);
   }
+}
+
+/**
+ * Idempotent Catalogue Content Spelling & Grammar Migration
+ * Corrects typos identified by the store owner without clobbering IDs or data relationships.
+ */
+export async function runCatalogueContentSpellingAndGrammarMigration(database: any): Promise<void> {
+  const replacements = [
+    ['Fulllegs waxing', 'Full Legs Waxing'],
+    ['Fulllegs Waxing', 'Full Legs Waxing'],
+    ['Fulllegs', 'Full Legs'],
+    ['FullArms', 'Full Arms'],
+    ['FullBody', 'Full Body'],
+    ['Fullbody', 'Full Body'],
+    ['ACRoom Comfort', 'AC Room Comfort'],
+    ['ACRoom', 'AC Room'],
+    ['Cleanroot extraction', 'Clean root extraction'],
+    ['Cleanroot', 'Clean root'],
+    ['BEAUTYDOOREXCLUSIVE', 'BEAUTYDOOR EXCLUSIVE'],
+    ['Ensure aprivate', 'Ensure a private'],
+    ['aprivate', 'a private'],
+    ['after-care care', 'aftercare']
+  ];
+
+  for (const [target, replacement] of replacements) {
+    try {
+      await database.execute(`UPDATE services SET name = REPLACE(name, ?, ?) WHERE name LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET description = REPLACE(description, ?, ?) WHERE description LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET detailed_description = REPLACE(detailed_description, ?, ?) WHERE detailed_description LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET benefits_json = REPLACE(benefits_json, ?, ?) WHERE benefits_json LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET whats_included_json = REPLACE(whats_included_json, ?, ?) WHERE whats_included_json LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET room_conditions = REPLACE(room_conditions, ?, ?) WHERE room_conditions LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET before_instructions = REPLACE(before_instructions, ?, ?) WHERE before_instructions LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE services SET after_instructions = REPLACE(after_instructions, ?, ?) WHERE after_instructions LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE packages SET name = REPLACE(name, ?, ?) WHERE name LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE packages SET subtitle = REPLACE(subtitle, ?, ?) WHERE subtitle LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE packages SET description = REPLACE(description, ?, ?) WHERE description LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE packages SET inclusions_json = REPLACE(inclusions_json, ?, ?) WHERE inclusions_json LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE packages SET benefits_json = REPLACE(benefits_json, ?, ?) WHERE benefits_json LIKE ?`, [target, replacement, `%${target}%`]);
+      await database.execute(`UPDATE categories SET description = REPLACE(description, ?, ?) WHERE description LIKE ?`, [target, replacement, `%${target}%`]);
+    } catch { }
+  }
+
+  // Phase 2 target services update
+  try {
+    await database.execute(`
+      UPDATE services SET
+        name = 'Supreme 9-Step Vitamin C Bridal Glow Facial',
+        description = 'A luxurious 9-step Vitamin C treatment designed to brighten, nourish and give your skin a radiant bridal glow.',
+        room_conditions = 'Please ensure a clean, private and comfortable space for your beauty appointment.'
+      WHERE id = 'srv-facial-o3-bridal-glow-vit-c'
+    `);
+  } catch { }
+
+  try {
+    await database.execute(`
+      UPDATE services SET
+        name = 'Classic Honey Wax – Full Arms, Underarms & Full Legs',
+        description = 'Enjoy smooth, soft skin with our classic warm honey wax treatment, performed by trained female beauty professionals.',
+        room_conditions = 'Please ensure a clean, private and comfortable space for your beauty appointment.'
+      WHERE id = 'srv-honey-full-arms-underarms-full-legs'
+    `);
+  } catch { }
 }

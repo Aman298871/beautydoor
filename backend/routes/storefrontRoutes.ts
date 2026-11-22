@@ -25,9 +25,9 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   }
 
   // Refresh credentials if DB or env has keys and service is not yet configured
-  if (!razorpayService.isConfigured() && (settings.razorpay_key_id || process.env.RAZORPAY_KEY_ID)) {
-    const key = settings.razorpay_key_id || process.env.RAZORPAY_KEY_ID;
-    const secret = process.env.RAZORPAY_KEY_SECRET || (process.env.NODE_ENV !== 'production' ? 'test_secret_for_automated_suite_123' : '');
+  if (!razorpayService.isConfigured() || !razorpayService.getKeyId()) {
+    const key = settings.razorpay_key_id || process.env.RAZORPAY_KEY_ID || 'rzp_live_U2rRiMqcCnXRk6';
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'mep2sWSV6gGt2vqXBf049v9Z';
     if (key && secret) {
       razorpayService.refreshCredentials(key, secret);
     }
@@ -39,7 +39,7 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   const isConfigured = razorpayService.isConfigured();
   const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6';
 
-  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : envExplicitEnable;
+  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : (envExplicitEnable || isConfigured);
   const isAvailable = isEnabled && isConfigured;
 
   let disabledReason: string | null = null;
@@ -64,7 +64,7 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
 storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<void> => {
   try {
     const categories = await db.query('SELECT * FROM categories WHERE is_active = 1 ORDER BY display_order ASC', []);
-    const rawServices = (await db.query('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 ORDER BY created_at DESC', [])) as any[];
+    const rawServices = (await db.query('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0 ORDER BY created_at DESC', [])) as any[];
 
     // Fetch all variants and addons in single queries to optimize performance
     const allVariants = (await db.query('SELECT * FROM service_variants', [])) as any[];
@@ -93,7 +93,7 @@ storefrontRouter.get('/catalog', async (_req: Request, res: Response): Promise<v
       addons: addonsByServiceId[s.id] || []
     }));
 
-    const rawPackages = (await db.query('SELECT * FROM packages WHERE is_published = 1 ORDER BY display_order ASC', [])) as any[];
+    const rawPackages = (await db.query('SELECT * FROM packages WHERE is_published = 1 AND COALESCE(is_archived, 0) = 0 ORDER BY display_order ASC', [])) as any[];
     const packages = rawPackages.map((p) => ({
       ...p,
       inclusions: JSON.parse(p.inclusions_json || '[]'),
@@ -155,7 +155,7 @@ storefrontRouter.get('/settings', async (_req: Request, res: Response): Promise<
 // 1b. Packages List & Detail
 storefrontRouter.get('/packages', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const rawPackages = (await db.query('SELECT * FROM packages WHERE is_published = 1 ORDER BY display_order ASC', [])) as any[];
+    const rawPackages = (await db.query('SELECT * FROM packages WHERE is_published = 1 AND COALESCE(is_archived, 0) = 0 ORDER BY display_order ASC', [])) as any[];
     const packages = rawPackages.map((p) => ({
       ...p,
       inclusions: JSON.parse(p.inclusions_json || '[]'),
@@ -282,7 +282,7 @@ storefrontRouter.get('/bestsellers', async (_req: Request, res: Response): Promi
 // 4b. All Active Services List
 storefrontRouter.get('/services', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const rawServices = (await db.query('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 ORDER BY created_at DESC', [])) as any[];
+    const rawServices = (await db.query('SELECT * FROM services WHERE is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0 ORDER BY created_at DESC', [])) as any[];
     const allVariants = (await db.query('SELECT * FROM service_variants', [])) as any[];
     const allAddons = (await db.query('SELECT * FROM service_addons', [])) as any[];
 
@@ -540,7 +540,7 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
 
         for (const cs of it.customizedServices) {
           const csId = typeof cs === 'string' ? cs : (cs.id || cs.serviceId);
-          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [csId])) as any;
+          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [csId])) as any;
           if (sRow) {
             pkgCustomSubtotal += sRow.selling_price;
             pkgCustomDuration += sRow.duration_mins;
@@ -575,7 +575,7 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
         }
       }
 
-      const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
+      const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
         const chosenVariantName = it.variantName || it.variantId || null;
@@ -594,7 +594,7 @@ const calculatePricingHandler = async (req: Request, res: Response): Promise<voi
         continue;
       }
 
-      const srv = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [it.serviceId])) as any;
+      const srv = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [it.serviceId])) as any;
       if (!srv) continue;
 
       let itemPrice = srv.selling_price;
@@ -842,7 +842,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
 
         for (const cs of it.customizedServices) {
           const csId = typeof cs === 'string' ? cs : (cs.id || cs.serviceId);
-          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [csId])) as any;
+          const sRow = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [csId])) as any;
           if (sRow) {
             pkgCustomSubtotal += sRow.selling_price;
             pkgCustomDuration += sRow.duration_mins;
@@ -877,7 +877,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         }
       }
 
-      const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1', [it.packageId || it.serviceId])) as any : null;
+      const pkg = (it.packageId || it.serviceId) ? (await db.queryRow('SELECT * FROM packages WHERE id = ? AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [it.packageId || it.serviceId])) as any : null;
       if (pkg) {
         subtotal += pkg.selling_price;
         const chosenVariantName = it.variantName || it.variantId || null;
@@ -896,7 +896,7 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         continue;
       }
 
-      const srv = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1', [it.serviceId])) as any;
+      const srv = (await db.queryRow('SELECT * FROM services WHERE id = ? AND is_active = 1 AND is_published = 1 AND COALESCE(is_archived, 0) = 0', [it.serviceId])) as any;
       if (!srv) continue;
       let itemPrice = srv.selling_price;
       let varName: string | undefined = undefined;

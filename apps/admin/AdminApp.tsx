@@ -93,6 +93,9 @@ export default function AdminApp() {
 
   // Filter & Modal states for Waxing/Catalog, Packages, and Pending
   const [selectedServiceCatFilter, setSelectedServiceCatFilter] = useState('all');
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceStatusFilter, setServiceStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
+  const [serviceSortOrder, setServiceSortOrder] = useState<'order' | 'price_asc' | 'price_desc' | 'name_asc'>('order');
   const [editingPackage, setEditingPackage] = useState<any | null>(null);
   const [isNewPackage, setIsNewPackage] = useState(false);
   const [editingHygiene, setEditingHygiene] = useState<any | null>(null);
@@ -896,6 +899,83 @@ export default function AdminApp() {
     }
   };
 
+  const handleArchiveService = async (serviceId: string) => {
+    try {
+      const res = await fetch(`/api/admin/services/${serviceId}/archive`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(data.message || 'Service archived and removed from storefront.');
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to archive service.');
+      }
+    } catch (err: any) {
+      alert('Error archiving service: ' + err.message);
+    }
+  };
+
+  const handleRestoreService = async (serviceId: string) => {
+    try {
+      const res = await fetch(`/api/admin/services/${serviceId}/restore`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(data.message || 'Service restored to storefront.');
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to restore service.');
+      }
+    } catch (err: any) {
+      alert('Error restoring service: ' + err.message);
+    }
+  };
+
+  const handleTogglePublishService = async (serviceId: string) => {
+    try {
+      const res = await fetch(`/api/admin/services/${serviceId}/toggle-publish`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(`Service ${data.is_published ? 'published' : 'hidden'}.`);
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to toggle service status.');
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  const handleDeleteService = async (service: any) => {
+    if (!confirm(`Are you sure you want to delete "${service.name}"? If it has historical booking references, it will be safely archived instead of permanently deleted.`)) return;
+    try {
+      const res = await fetch(`/api/admin/services/${service.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.archived) {
+          notify(data.message || 'Service safely archived to protect booking records.');
+        } else {
+          notify('Service deleted.');
+        }
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to delete service.');
+      }
+    } catch (err: any) {
+      alert('Error deleting service: ' + err.message);
+    }
+  };
+
   // Campaign Handlers
   const handleOpenCreateCampaign = () => {
     setEditingCampaign(null);
@@ -1104,6 +1184,42 @@ export default function AdminApp() {
     } catch (err: any) {
       console.error(err);
       alert('Failed to delete package: ' + err.message);
+    }
+  };
+
+  const handleArchivePackage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/packages/${id}/archive`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(data.message || 'Package archived.');
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to archive package.');
+      }
+    } catch (err: any) {
+      alert('Error archiving package: ' + err.message);
+    }
+  };
+
+  const handleRestorePackage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/packages/${id}/restore`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(data.message || 'Package restored.');
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to restore package.');
+      }
+    } catch (err: any) {
+      alert('Error restoring package: ' + err.message);
     }
   };
 
@@ -1871,38 +1987,132 @@ export default function AdminApp() {
               </button>
             </div>
 
-            {/* Category Quick Filter Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none text-xs font-semibold">
-              <button
-                onClick={() => setSelectedServiceCatFilter('all')}
-                className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'all'
-                  ? 'bg-[#4A0417] text-white shadow-xs'
-                  : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                  }`}
-              >
-                All Treatments ({services.length})
-              </button>
-              {categories.map((c) => {
-                const count = services.filter((s) => s.category_id === c.id || s.categoryId === c.id).length;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedServiceCatFilter(c.id)}
-                    className={`px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === c.id
-                      ? 'bg-[#4A0417] text-white shadow-xs'
-                      : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
-                      }`}
+            {/* Service Filters & Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* Search query */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider mb-1">
+                    Search Treatments
+                  </label>
+                  <input
+                    type="text"
+                    value={serviceSearchQuery}
+                    onChange={(e) => setServiceSearchQuery(e.target.value)}
+                    placeholder="Search by name or description..."
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-lg text-xs focus:ring-1 focus:ring-[#4A0417] focus:outline-none"
+                  />
+                </div>
+
+                {/* Category filter */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider mb-1">
+                    Filter Category
+                  </label>
+                  <select
+                    value={selectedServiceCatFilter}
+                    onChange={(e) => setSelectedServiceCatFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-lg text-xs focus:ring-1 focus:ring-[#4A0417] focus:outline-none cursor-pointer"
                   >
-                    {c.name} ({count})
-                  </button>
-                );
-              })}
+                    <option value="all">All Categories ({services.length})</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({services.filter((s) => s.category_id === c.id || s.categoryId === c.id).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status filter */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider mb-1">
+                    Catalogue Status
+                  </label>
+                  <select
+                    value={serviceStatusFilter}
+                    onChange={(e) => setServiceStatusFilter(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-lg text-xs focus:ring-1 focus:ring-[#4A0417] focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="published">Live / Published on Storefront</option>
+                    <option value="draft">Draft / Hidden</option>
+                    <option value="archived">Archived Services</option>
+                  </select>
+                </div>
+
+                {/* Sort order */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#8C7A7C] uppercase tracking-wider mb-1">
+                    Sort Order
+                  </label>
+                  <select
+                    value={serviceSortOrder}
+                    onChange={(e) => setServiceSortOrder(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-lg text-xs focus:ring-1 focus:ring-[#4A0417] focus:outline-none cursor-pointer"
+                  >
+                    <option value="order">Display Order (Catalogue Default)</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                    <option value="name_asc">Name: A to Z</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Category Quick Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1 scrollbar-none text-xs font-semibold border-t border-[#F4EFEA]">
+                <button
+                  onClick={() => setSelectedServiceCatFilter('all')}
+                  className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === 'all'
+                    ? 'bg-[#4A0417] text-white shadow-xs'
+                    : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                    }`}
+                >
+                  All ({services.length})
+                </button>
+                {categories.map((c) => {
+                  const count = services.filter((s) => s.category_id === c.id || s.categoryId === c.id).length;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedServiceCatFilter(c.id)}
+                      className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors ${selectedServiceCatFilter === c.id
+                        ? 'bg-[#4A0417] text-white shadow-xs'
+                        : 'bg-white text-[#554749] hover:bg-[#FAF7F2] border border-[#E8DDD3]'
+                        }`}
+                    >
+                      {c.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Services Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {services
-                .filter(s => selectedServiceCatFilter === 'all' || s.category_id === selectedServiceCatFilter)
+                .filter((s: any) => {
+                  if (selectedServiceCatFilter !== 'all' && s.category_id !== selectedServiceCatFilter && s.categoryId !== selectedServiceCatFilter) return false;
+                  if (serviceStatusFilter === 'published') {
+                    if (s.is_published === 0 || s.is_archived === 1 || s.is_active === 0) return false;
+                  } else if (serviceStatusFilter === 'draft') {
+                    if (s.is_archived === 1 || (s.is_published === 1 && s.is_active === 1)) return false;
+                  } else if (serviceStatusFilter === 'archived') {
+                    if (s.is_archived !== 1) return false;
+                  }
+                  if (serviceSearchQuery.trim()) {
+                    const q = serviceSearchQuery.toLowerCase();
+                    const matchName = (s.name || '').toLowerCase().includes(q);
+                    const matchDesc = (s.description || '').toLowerCase().includes(q);
+                    if (!matchName && !matchDesc) return false;
+                  }
+                  return true;
+                })
+                .sort((a: any, b: any) => {
+                  if (serviceSortOrder === 'price_asc') return Number(a.selling_price) - Number(b.selling_price);
+                  if (serviceSortOrder === 'price_desc') return Number(b.selling_price) - Number(a.selling_price);
+                  if (serviceSortOrder === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+                  return 0;
+                })
                 .map((s) => (
                   <div key={s.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs flex flex-col justify-between">
                     <div>
@@ -1936,39 +2146,90 @@ export default function AdminApp() {
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#F4EFEA] flex justify-between items-center text-xs">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${s.is_active === 1 && s.is_published !== 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                    <div className="mt-4 pt-3 border-t border-[#F4EFEA] space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          s.is_archived === 1
+                            ? 'bg-slate-100 text-slate-700 border-slate-300'
+                            : s.is_active === 1 && s.is_published !== 0
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
                         }`}>
-                        {s.is_active === 1 && s.is_published !== 0 ? 'Live on Storefront' : 'Hidden / Draft'}
-                      </span>
+                          {s.is_archived === 1
+                            ? 'Archived'
+                            : s.is_active === 1 && s.is_published !== 0
+                            ? 'Live on Storefront'
+                            : 'Draft / Hidden'}
+                        </span>
 
-                      <button
-                        onClick={() => {
-                          let steps: string[] = [];
-                          if (Array.isArray(s.treatmentSteps)) {
-                            steps = s.treatmentSteps;
-                          } else if (typeof s.steps_json === 'string') {
-                            try { steps = JSON.parse(s.steps_json); } catch { }
-                          }
-                          setEditingService({
-                            ...s,
-                            categoryId: s.category_id,
-                            durationMins: s.duration_mins,
-                            originalPrice: s.original_price,
-                            sellingPrice: s.selling_price,
-                            discountPercent: s.discount_percent,
-                            treatmentSteps: steps,
-                            steps_count: steps.length || s.steps_count || 0,
-                            brand: s.brand || '',
-                            isActive: s.is_active === 1,
-                            isPublished: s.is_published !== 0
-                          });
-                          setIsNewService(false);
-                        }}
-                        className="px-3 py-1 bg-[#FAF7F2] hover:bg-[#EAE2D8] border border-[#E8DDD3] rounded-md text-[#4A0417] font-semibold text-xs"
-                      >
-                        Edit Details & Price
-                      </button>
+                        <button
+                          onClick={() => handleTogglePublishService(s.id)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${
+                            s.is_published !== 0
+                              ? 'bg-white text-[#4A0417] border-[#E8DDD3] hover:bg-[#FAF7F2]'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                          }`}
+                          title={s.is_published !== 0 ? 'Hide from storefront' : 'Publish to storefront'}
+                        >
+                          {s.is_published !== 0 ? 'Unpublish' : 'Publish'}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1.5 pt-1">
+                        <button
+                          onClick={() => {
+                            let steps: string[] = [];
+                            if (Array.isArray(s.treatmentSteps)) {
+                              steps = s.treatmentSteps;
+                            } else if (typeof s.steps_json === 'string') {
+                              try { steps = JSON.parse(s.steps_json); } catch { }
+                            }
+                            setEditingService({
+                              ...s,
+                              categoryId: s.category_id,
+                              durationMins: s.duration_mins,
+                              originalPrice: s.original_price,
+                              sellingPrice: s.selling_price,
+                              discountPercent: s.discount_percent,
+                              treatmentSteps: steps,
+                              steps_count: steps.length || s.steps_count || 0,
+                              brand: s.brand || '',
+                              isActive: s.is_active === 1,
+                              isPublished: s.is_published !== 0
+                            });
+                            setIsNewService(false);
+                          }}
+                          className="flex-1 py-1 bg-[#FAF7F2] hover:bg-[#EAE2D8] border border-[#E8DDD3] rounded-md text-[#4A0417] font-semibold text-xs text-center"
+                        >
+                          Edit Details
+                        </button>
+
+                        {s.is_archived === 1 ? (
+                          <button
+                            onClick={() => handleRestoreService(s.id)}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-md text-emerald-800 font-semibold text-xs"
+                            title="Restore service to storefront"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleArchiveService(s.id)}
+                            className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-md text-slate-700 font-semibold text-xs"
+                            title="Archive service"
+                          >
+                            Archive
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteService(s)}
+                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                          title="Delete Service (Soft-archives if in past bookings)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2076,15 +2337,15 @@ export default function AdminApp() {
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <button
-                          onClick={() => handleTogglePackagePublish(pkg)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${pkg.is_published === 1
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          pkg.is_archived === 1
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                            : pkg.is_published === 1
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                            }`}
-                        >
-                          {pkg.is_published === 1 ? 'Published' : 'Draft'}
-                        </button>
+                            : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          {pkg.is_archived === 1 ? 'Archived' : pkg.is_published === 1 ? 'Published' : 'Draft'}
+                        </span>
                       </td>
                       <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                         <button
@@ -2101,6 +2362,23 @@ export default function AdminApp() {
                         >
                           Edit
                         </button>
+                        {pkg.is_archived === 1 ? (
+                          <button
+                            onClick={() => handleRestorePackage(pkg.id)}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded text-emerald-800 font-semibold text-xs"
+                            title="Restore package"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleArchivePackage(pkg.id)}
+                            className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded text-slate-700 font-semibold text-xs"
+                            title="Archive package"
+                          >
+                            Archive
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeletePackage(pkg.id)}
                           className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
@@ -5505,18 +5783,46 @@ export default function AdminApp() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="pkg_published"
-                    checked={editingPackage.is_published === 1 || editingPackage.is_published === true}
-                    onChange={(e) => setEditingPackage({ ...editingPackage, is_published: e.target.checked ? 1 : 0 })}
-                    className="accent-[#4A0417]"
-                  />
-                  <label htmlFor="pkg_published" className="font-semibold cursor-pointer">
-                    Live & Bookable on Storefront
-                  </label>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-[#F4EFEA]">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="pkg_published"
+                      checked={editingPackage.is_published === 1 || editingPackage.is_published === true}
+                      onChange={(e) => setEditingPackage({ ...editingPackage, is_published: e.target.checked ? 1 : 0 })}
+                      className="accent-[#4A0417]"
+                    />
+                    <label htmlFor="pkg_published" className="font-semibold cursor-pointer">
+                      Live & Bookable on Storefront
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="pkg_featured"
+                      checked={editingPackage.is_featured === 1 || editingPackage.is_featured === true}
+                      onChange={(e) => setEditingPackage({ ...editingPackage, is_featured: e.target.checked ? 1 : 0 })}
+                      className="accent-[#4A0417]"
+                    />
+                    <label htmlFor="pkg_featured" className="font-semibold text-[#4A0417] cursor-pointer">
+                      Featured on Homepage
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="pkg_special_deal"
+                      checked={editingPackage.is_special_deal === 1 || editingPackage.is_special_deal === true}
+                      onChange={(e) => setEditingPackage({ ...editingPackage, is_special_deal: e.target.checked ? 1 : 0 })}
+                      className="accent-amber-600"
+                    />
+                    <label htmlFor="pkg_special_deal" className="font-semibold text-amber-900 cursor-pointer">
+                      Special Price Highlight
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">

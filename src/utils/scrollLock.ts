@@ -46,10 +46,9 @@ export function lockScroll(): void {
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overscrollBehavior = 'contain';
     document.documentElement.style.overscrollBehavior = 'contain';
-    if (!document.body.dataset) {
-      document.body.dataset = {} as DOMStringMap;
+    if (document.body.dataset) {
+      document.body.dataset.scrollLocked = 'true';
     }
-    document.body.dataset.scrollLocked = 'true';
     document.body.setAttribute('data-scroll-locked', 'true');
   }
 }

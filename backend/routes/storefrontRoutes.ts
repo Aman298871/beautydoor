@@ -1586,27 +1586,45 @@ export const twilioStatusWebhookHandler = async (req: Request, res: Response): P
       return;
     }
 
-    // 4. Distinguish queued/accepted from delivered and prevent stale events from downgrading terminal status
-    const isCurrentTerminal = existing.status === 'delivered' || existing.status === 'failed';
-    let updatedStatus = existing.status;
-
-    if (normStatus === 'delivered') {
-      updatedStatus = 'delivered';
-    } else if (normStatus === 'undelivered' || normStatus === 'failed') {
-      updatedStatus = 'failed';
-    } else if (!isCurrentTerminal) {
-      // Non-terminal records transition through intermediate states
-      if (normStatus === 'sent') {
-        updatedStatus = 'sent';
-      } else if (normStatus === 'accepted') {
-        updatedStatus = 'accepted';
-      } else {
-        updatedStatus = 'queued';
-      }
+    // 4. Strict Terminal-State Protection:
+    // - 'delivered' is immutable and must NEVER be downgraded by any event (undelivered, failed, queued, sent)
+    // - 'failed' is immutable and must NEVER be overwritten by stale intermediate events or out-of-order delivered events
+    // - Intermediate states (queued, accepted, sending, sent) must NEVER overwrite terminal states
+    if (existing.status === 'delivered') {
+      await db.execute(
+        "UPDATE booking_notifications SET error_message = COALESCE(error_message, '') || ' | Preserved terminal delivered (ignored: ' || ? || ')' WHERE message_id = ? AND provider = 'twilio'",
+        [messageStatus, messageSid]
+      );
+      res.type('text/xml').send('<Response></Response>');
+      return;
     }
 
+    if (existing.status === 'failed') {
+      await db.execute(
+        "UPDATE booking_notifications SET error_message = COALESCE(error_message, '') || ' | Preserved terminal failed (ignored: ' || ? || ')' WHERE message_id = ? AND provider = 'twilio'",
+        [messageStatus, messageSid]
+      );
+      res.type('text/xml').send('<Response></Response>');
+      return;
+    }
+
+    // Non-terminal transitions:
+    let updatedStatus: string;
+    if (normStatus === 'delivered') {
+      updatedStatus = 'delivered';
+    } else if (normStatus === 'undelivered' || normStatus === 'failed' || normStatus === 'canceled' || normStatus === 'cancelled') {
+      updatedStatus = 'failed';
+    } else if (normStatus === 'sent') {
+      updatedStatus = 'sent';
+    } else if (normStatus === 'accepted') {
+      updatedStatus = 'accepted';
+    } else {
+      updatedStatus = 'queued';
+    }
+
+    // Conditional atomic update to prevent concurrent webhook requests from bypassing the terminal-state check
     await db.execute(
-      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Twilio status: ' || ? WHERE message_id = ? AND provider = 'twilio'",
+      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Twilio status: ' || ? WHERE message_id = ? AND provider = 'twilio' AND status NOT IN ('delivered', 'failed')",
       [updatedStatus, messageStatus, messageSid]
     );
 
@@ -1636,23 +1654,30 @@ export function verifyResendWebhookSignatureDetailed(
     return { valid: false, error: 'Missing required Svix headers', code: 'MISSING_HEADERS' };
   }
 
-  // Prevent replay attacks (5 minutes / 300 seconds tolerance)
-  const timestampNum = parseInt(svixTimestamp, 10);
-  if (isNaN(timestampNum)) {
-    return { valid: false, error: 'Invalid timestamp format', code: 'INVALID_TIMESTAMP' };
+  // Prevent replay attacks (strict numeric Unix timestamp + 5 minutes / 300 seconds tolerance)
+  if (!/^\d+$/.test(svixTimestamp)) {
+    return { valid: false, error: 'Invalid timestamp format: must be a strict numeric Unix timestamp', code: 'INVALID_TIMESTAMP' };
   }
+  const timestampNum = parseInt(svixTimestamp, 10);
   const currentTimestamp = Math.floor(Date.now() / 1000);
   if (Math.abs(currentTimestamp - timestampNum) > 300) {
     return { valid: false, error: 'Webhook timestamp too old or too far in future (replayed event)', code: 'REPLAYED_EVENT' };
   }
 
-  // Extract secret key bytes (strip whsec_ prefix if present)
+  // Extract secret key bytes (strip whsec_ prefix if present, validate base64 format)
   let key: Buffer;
   if (signingSecret.startsWith('whsec_')) {
+    const rawSecretKey = signingSecret.substring(6);
+    if (!rawSecretKey || !/^[A-Za-z0-9+/]+={0,2}$/.test(rawSecretKey)) {
+      return { valid: false, error: 'Malformed whsec_ secret: invalid base64 format', code: 'INVALID_SECRET_FORMAT' };
+    }
     try {
-      key = Buffer.from(signingSecret.substring(6), 'base64');
+      key = Buffer.from(rawSecretKey, 'base64');
+      if (key.length === 0) {
+        return { valid: false, error: 'Decoded secret key is empty', code: 'INVALID_SECRET_KEY' };
+      }
     } catch {
-      key = Buffer.from(signingSecret, 'utf-8');
+      return { valid: false, error: 'Failed to decode base64 secret key', code: 'INVALID_SECRET_FORMAT' };
     }
   } else {
     key = Buffer.from(signingSecret, 'utf-8');
@@ -1773,34 +1798,57 @@ export const emailStatusWebhookHandler = async (req: Request, res: Response): Pr
       return;
     }
 
-    // Do not trust arbitrary webhook payloads: verify email ID exists in audit records
+    // Whitelist supported Resend webhook event types (reject unknown/unsupported events with HTTP 400)
+    const SUPPORTED_RESEND_EVENTS = new Set(['email.delivered', 'email.bounced', 'email.complained']);
+    if (!SUPPORTED_RESEND_EVENTS.has(eventType)) {
+      res.status(400).json({
+        error: `Unsupported Resend webhook event type: ${eventType}. Only email.delivered, email.bounced, and email.complained are processed.`,
+        code: 'UNSUPPORTED_EVENT_TYPE'
+      });
+      return;
+    }
+
+    // Do not trust arbitrary webhook payloads: verify email ID exists in audit records and provider is Resend
     const existing = (await db.queryRow(
-      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ?",
+      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ? AND provider = 'resend'",
       [emailId]
     )) as any;
 
     if (!existing) {
-      res.status(404).json({ error: 'Email message ID not found in notification audit records.' });
+      res.status(404).json({ error: 'Email message ID not found in notification audit records for provider resend.', code: 'RECORD_NOT_FOUND' });
       return;
     }
 
-    const isSuccess = eventType === 'email.delivered';
-    const isFailed = eventType === 'email.bounced' || eventType === 'email.complained';
-
-    // Prevent duplicate or stale events from incorrectly changing a terminal delivery status
-    if (existing.status === 'delivered' && !isFailed) {
+    // Strict Terminal-State Protection:
+    // - 'delivered' is immutable and must NEVER be downgraded by bounced, complained, or duplicates
+    // - 'failed' is immutable and must NEVER be overwritten by late delivered events
+    if (existing.status === 'delivered') {
+      await db.execute(
+        "UPDATE booking_notifications SET error_message = COALESCE(error_message, '') || ' | Preserved terminal delivered (ignored: ' || ? || ')' WHERE message_id = ? AND provider = 'resend'",
+        [eventType, emailId]
+      );
       res.json({ received: true, status: 'already_terminal_delivered' });
       return;
     }
 
-    const updatedStatus = isSuccess ? 'delivered' : (isFailed ? 'failed' : 'sent');
+    if (existing.status === 'failed') {
+      await db.execute(
+        "UPDATE booking_notifications SET error_message = COALESCE(error_message, '') || ' | Preserved terminal failed (ignored: ' || ? || ')' WHERE message_id = ? AND provider = 'resend'",
+        [eventType, emailId]
+      );
+      res.json({ received: true, status: 'already_terminal_failed' });
+      return;
+    }
 
+    const updatedStatus = eventType === 'email.delivered' ? 'delivered' : 'failed';
+
+    // Conditional atomic update to prevent concurrent webhook requests from bypassing the terminal-state check
     await db.execute(
-      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Email event: ' || ? WHERE message_id = ?",
+      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Email event: ' || ? WHERE message_id = ? AND provider = 'resend' AND status NOT IN ('delivered', 'failed')",
       [updatedStatus, eventType, emailId]
     );
 
-    res.json({ received: true });
+    res.json({ received: true, status: updatedStatus });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Email status webhook processing error' });
   }

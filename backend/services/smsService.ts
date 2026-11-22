@@ -365,9 +365,28 @@ export class SmsService {
       };
     }
 
-    const rawStatus = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : 'queued';
-    // Ensure queued/accepted status is strictly distinguished from delivered
-    const initialStatus = (rawStatus === 'delivered') ? 'delivered' : (rawStatus === 'accepted' ? 'accepted' : 'queued');
+    const rawStatus = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : '';
+
+    // Initial HTTP dispatch response must NEVER claim delivery. Delivery requires webhook confirmation.
+    if (rawStatus === 'delivered') {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: 'Initial Twilio dispatch cannot claim delivered status; delivery requires webhook confirmation.'
+      };
+    }
+
+    // Strictly validate initial provider status: only non-terminal states (queued, accepted, sending) are valid
+    const SUPPORTED_INITIAL_STATUSES = new Set(['queued', 'accepted', 'sending']);
+    if (!SUPPORTED_INITIAL_STATUSES.has(rawStatus)) {
+      return {
+        success: false,
+        provider: 'twilio',
+        error: `Unexpected initial Twilio status: ${parsed.status}. Initial status must be queued, accepted, or sending.`
+      };
+    }
+
+    const initialStatus = rawStatus === 'accepted' ? 'accepted' : 'queued';
 
     const masked = phone ? ` for delivery to +91 ${this.maskPhoneNumber(phone)}` : '';
     return {

@@ -1983,6 +1983,7 @@ async function verifyAll() {
   const testWebhookUrl = 'https://beautydoor-rclz.onrender.com/api/webhooks/twilio/sms-status';
   const prevTwilioWebhookUrl = process.env.TWILIO_WEBHOOK_URL;
   process.env.TWILIO_WEBHOOK_URL = testWebhookUrl;
+  try {
   const testParams = {
     MessageSid: twilioTestSid,
     MessageStatus: 'delivered',
@@ -2308,6 +2309,13 @@ async function verifyAll() {
   }
   console.log('  ✓ Stale sent event correctly prevented from overwriting terminal failed status (handler returned 200 XML)');
   await db.execute('DELETE FROM booking_notifications WHERE id = ?', [twilioFailedNotifId]);
+  } finally {
+    if (prevTwilioWebhookUrl !== undefined) {
+      process.env.TWILIO_WEBHOOK_URL = prevTwilioWebhookUrl;
+    } else {
+      delete process.env.TWILIO_WEBHOOK_URL;
+    }
+  }
 
   // 5. Test Resend Svix Webhook Signature Verification & Replay Protection
   const resendSecret = 'whsec_dGhpcyBpcyBhIHNhbXBsZSBzZWNyZXQgdGVzdGluZw==';

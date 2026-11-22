@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { db } from '../db/database.ts';
 import { emailService } from '../services/emailService.ts';
 import { smsService } from '../services/smsService.ts';
@@ -1491,17 +1492,110 @@ const razorpayWebhookHandler = async (req: Request, res: Response): Promise<void
 storefrontRouter.post('/payments/razorpay/webhook', razorpayWebhookHandler);
 storefrontRouter.post('/payment/razorpay/webhook', razorpayWebhookHandler);
 
-// Twilio SMS Delivery Status Webhook
-const twilioStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
+/**
+ * Verify Twilio Webhook Authenticity via HMAC-SHA1
+ */
+export function verifyTwilioWebhookSignature(
+  authToken: string,
+  twilioSignature: string,
+  url: string,
+  params: Record<string, any>
+): boolean {
+  if (!authToken || !twilioSignature) return false;
+
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const key of sortedKeys) {
+    data += key + (params[key] !== undefined && params[key] !== null ? String(params[key]) : '');
+  }
+
+  const expected = crypto
+    .createHmac('sha1', authToken)
+    .update(Buffer.from(data, 'utf-8'))
+    .digest('base64');
+
   try {
-    const messageSid = req.body.MessageSid || req.body.SmsSid;
-    const messageStatus = req.body.MessageStatus || req.body.SmsStatus;
-    if (messageSid && messageStatus) {
-      await db.execute(
-        "UPDATE booking_notifications SET status = ?, telemetry = telemetry || ' | Twilio status: ' || ? WHERE message_id = ? OR telemetry LIKE ?",
-        [messageStatus === 'delivered' ? 'sent' : (messageStatus === 'failed' || messageStatus === 'undelivered' ? 'failed' : 'pending'), messageStatus, messageSid, `%${messageSid}%`]
-      );
+    const a = Buffer.from(twilioSignature, 'utf-8');
+    const b = Buffer.from(expected, 'utf-8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+// Twilio SMS Delivery Status Webhook
+export const twilioStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+    const twilioSignature = (req.headers['x-twilio-signature'] as string) || '';
+
+    // Verify webhook authenticity: reject unauthenticated webhook events
+    if (!authToken && process.env.NODE_ENV === 'production') {
+      res.status(403).json({ error: 'Twilio webhook verification failed: TWILIO_AUTH_TOKEN is not configured.' });
+      return;
     }
+
+    if (authToken) {
+      if (!twilioSignature) {
+        res.status(401).json({ error: 'Missing Twilio signature header (X-Twilio-Signature).' });
+        return;
+      }
+      const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
+      const defaultUrl = `${proto}://${host}${req.originalUrl}`;
+      const candidateUrls = [
+        process.env.TWILIO_WEBHOOK_URL,
+        defaultUrl,
+        `https://${host}${req.originalUrl}`,
+        `http://${host}${req.originalUrl}`
+      ].filter(Boolean) as string[];
+
+      const isValid = candidateUrls.some(u => verifyTwilioWebhookSignature(authToken, twilioSignature, u, req.body || {}));
+      if (!isValid) {
+        res.status(403).json({ error: 'Invalid Twilio webhook signature.' });
+        return;
+      }
+    }
+
+    const messageSid = req.body?.MessageSid || req.body?.SmsSid;
+    const messageStatus = req.body?.MessageStatus || req.body?.SmsStatus;
+
+    if (!messageSid || !messageStatus) {
+      res.status(400).json({ error: 'Missing MessageSid or MessageStatus in webhook payload.' });
+      return;
+    }
+
+    // Do not trust arbitrary webhook payloads: verify message SID exists in audit records
+    const existing = (await db.queryRow(
+      "SELECT id, status, provider FROM booking_notifications WHERE message_id = ?",
+      [messageSid]
+    )) as any;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Message SID not found in notification audit records.' });
+      return;
+    }
+
+    // Distinguish queued/accepted from delivered. Only claim delivery when confirmed by provider.
+    let updatedStatus: string;
+    if (messageStatus === 'delivered') {
+      updatedStatus = 'delivered';
+    } else if (messageStatus === 'undelivered' || messageStatus === 'failed') {
+      updatedStatus = 'failed';
+    } else if (messageStatus === 'sent') {
+      updatedStatus = 'sent';
+    } else if (messageStatus === 'accepted') {
+      updatedStatus = 'accepted';
+    } else {
+      updatedStatus = 'queued';
+    }
+
+    await db.execute(
+      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Twilio status: ' || ? WHERE message_id = ?",
+      [updatedStatus, messageStatus, messageSid]
+    );
+
     res.type('text/xml').send('<Response></Response>');
   } catch (err: any) {
     res.status(500).send(err.message || 'Twilio webhook processing error');
@@ -1510,21 +1604,52 @@ const twilioStatusWebhookHandler = async (req: Request, res: Response): Promise<
 storefrontRouter.post('/webhooks/twilio/sms-status', twilioStatusWebhookHandler);
 
 // Email Delivery Status Webhook (Resend / SMTP provider delivery notifications)
-const emailStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
+export const emailStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
   try {
+    const configuredSecret = process.env.EMAIL_WEBHOOK_SECRET || process.env.RESEND_WEBHOOK_SECRET || '';
+    const incomingAuth = (req.headers['x-webhook-secret'] as string) || (req.headers['authorization'] as string) || '';
+
+    // Verify webhook authenticity: reject unauthenticated webhook events
+    if (configuredSecret) {
+      const token = incomingAuth.replace(/^Bearer\s+/i, '');
+      if (!token || token !== configuredSecret) {
+        res.status(403).json({ error: 'Invalid or missing email webhook secret/signature.' });
+        return;
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      res.status(403).json({ error: 'Email webhook secret not configured. Unauthenticated webhooks rejected.' });
+      return;
+    }
+
     const event = req.body;
     const emailId = event?.data?.email_id || event?.id;
     const eventType = event?.type;
-    if (emailId && eventType) {
-      const isSuccess = eventType === 'email.delivered';
-      const isFailed = eventType === 'email.bounced' || eventType === 'email.complained';
-      if (isSuccess || isFailed) {
-        await db.execute(
-          "UPDATE booking_notifications SET status = ?, telemetry = telemetry || ' | Email event: ' || ? WHERE message_id = ? OR telemetry LIKE ?",
-          [isSuccess ? 'sent' : 'failed', eventType, emailId, `%${emailId}%`]
-        );
-      }
+
+    if (!emailId || !eventType) {
+      res.status(400).json({ error: 'Missing emailId or event type in webhook payload.' });
+      return;
     }
+
+    // Do not trust arbitrary webhook payloads: verify email ID exists in audit records
+    const existing = (await db.queryRow(
+      "SELECT id, status FROM booking_notifications WHERE message_id = ?",
+      [emailId]
+    )) as any;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Email message ID not found in notification audit records.' });
+      return;
+    }
+
+    const isSuccess = eventType === 'email.delivered';
+    const isFailed = eventType === 'email.bounced' || eventType === 'email.complained';
+    const updatedStatus = isSuccess ? 'delivered' : (isFailed ? 'failed' : 'sent');
+
+    await db.execute(
+      "UPDATE booking_notifications SET status = ?, error_message = COALESCE(error_message, '') || ' | Email event: ' || ? WHERE message_id = ?",
+      [updatedStatus, eventType, emailId]
+    );
+
     res.json({ received: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Email status webhook processing error' });

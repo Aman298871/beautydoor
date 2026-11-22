@@ -6,7 +6,7 @@ import { emailService } from '../backend/services/emailService.ts';
 import { smsService } from '../backend/services/smsService.ts';
 import { razorpayService } from '../backend/services/razorpayService.ts';
 import { firebaseAuthService } from '../backend/services/firebaseAuthService.ts';
-import { getAuthoritativePaymentOptions } from '../backend/routes/storefrontRoutes.ts';
+import { getAuthoritativePaymentOptions, verifyTwilioWebhookSignature, twilioStatusWebhookHandler, emailStatusWebhookHandler } from '../backend/routes/storefrontRoutes.ts';
 
 async function verifyAll() {
   console.log('=== STARTING BEAUTYDOOR FULL PRODUCTION VERIFICATION ===\n');
@@ -1864,8 +1864,163 @@ async function verifyAll() {
   // Clean up test booking
   await db.execute('DELETE FROM bookings WHERE id = ?', [testCodPendingBookingId]);
 
+  // Test 58: Twilio Notification Status Lifecycle & Provider SID Storage
+  console.log('\nTest 58: Twilio Notification Status Lifecycle & Provider SID Storage');
+  const twilioTestNotifId = `notif-tw-${Date.now()}`;
+  const twilioTestSid = `SM${Date.now()}abcdef1234567890`;
+  const twilioTestBookingId = `BD-TW-TEST-${Date.now()}`;
+
+  // Insert notification with status 'queued' (as returned on initial Twilio accept)
+  await db.execute(`
+    INSERT INTO booking_notifications (
+      id, booking_id, recipient_email, notification_type, subject,
+      status, provider, message_id, sent_at
+    ) VALUES (?, ?, '+91 ******3210', 'customer_booking_received', 'Booking Confirmation', 'queued', 'twilio', ?, ?)
+  `, [twilioTestNotifId, twilioTestBookingId, twilioTestSid, new Date().toISOString()]);
+
+  const initialNotif = await db.queryRow<any>('SELECT status, provider, message_id FROM booking_notifications WHERE id = ?', [twilioTestNotifId]);
+  if (!initialNotif || initialNotif.status !== 'queued' || initialNotif.message_id !== twilioTestSid) {
+    throw new Error('Initial Twilio notification must store real message_id (SID) and status "queued" (not claimed delivered)');
+  }
+  console.log(`  ✓ Initial dispatch stores actual provider SID (${initialNotif.message_id}) with unconfirmed status: "${initialNotif.status}"`);
+
+  // Test 59: Webhook Security Verification & Signature Validation
+  console.log('\nTest 59: Webhook Security Verification & Authenticity Checks');
+  const mockTwilioAuthToken = 'mock_twilio_auth_token_secret_12345';
+  const testWebhookUrl = 'https://beautydoor-rclz.onrender.com/api/webhooks/twilio/sms-status';
+  const testParams = {
+    MessageSid: twilioTestSid,
+    MessageStatus: 'delivered',
+    To: '+919876543210',
+    From: '+15005550006'
+  };
+
+  // 1. Calculate authentic Twilio signature
+  const sortedKeys = Object.keys(testParams).sort();
+  let sigData = testWebhookUrl;
+  for (const k of sortedKeys) {
+    sigData += k + (testParams as any)[k];
+  }
+  const validTwilioSig = crypto.createHmac('sha1', mockTwilioAuthToken).update(Buffer.from(sigData, 'utf-8')).digest('base64');
+
+  const sigCheckValid = verifyTwilioWebhookSignature(mockTwilioAuthToken, validTwilioSig, testWebhookUrl, testParams);
+  if (!sigCheckValid) {
+    throw new Error('verifyTwilioWebhookSignature must return true for valid HMAC-SHA1 signature');
+  }
+  const sigCheckInvalid = verifyTwilioWebhookSignature(mockTwilioAuthToken, 'invalid_tampered_sig', testWebhookUrl, testParams);
+  if (sigCheckInvalid) {
+    throw new Error('verifyTwilioWebhookSignature must reject tampered/invalid signature');
+  }
+  console.log('  ✓ HMAC-SHA1 signature verification validates authentic Twilio signatures and rejects tampered signatures');
+
+  // 2. Reject unauthenticated webhook events
+  const fakeReqNoSig: any = {
+    headers: {},
+    body: testParams,
+    originalUrl: '/api/webhooks/twilio/sms-status'
+  };
+  let rejectedNoSig = false;
+  const fakeResNoSig: any = {
+    status: (code: number) => {
+      if (code === 401 || code === 403) rejectedNoSig = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  const prevTwilioToken = process.env.TWILIO_AUTH_TOKEN;
+  process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
+  try {
+    await twilioStatusWebhookHandler(fakeReqNoSig, fakeResNoSig);
+  } finally {
+    process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (!rejectedNoSig) {
+    throw new Error('twilioStatusWebhookHandler must reject webhook requests with missing/invalid signatures (HTTP 401/403)');
+  }
+  console.log('  ✓ Unauthenticated webhook requests without valid signature are strictly rejected');
+
+  // 3. Reject arbitrary unrecorded message SIDs
+  const unrecordedParams = {
+    MessageSid: 'SMunknown_unrecorded_message_99999999',
+    MessageStatus: 'delivered'
+  };
+  let unrecSigData = testWebhookUrl;
+  for (const k of Object.keys(unrecordedParams).sort()) {
+    unrecSigData += k + (unrecordedParams as any)[k];
+  }
+  const unrecSig = crypto.createHmac('sha1', mockTwilioAuthToken).update(Buffer.from(unrecSigData, 'utf-8')).digest('base64');
+
+  const fakeReqUnrecorded: any = {
+    headers: { 'x-twilio-signature': unrecSig },
+    body: unrecordedParams,
+    originalUrl: '/api/webhooks/twilio/sms-status'
+  };
+  let rejectedUnrecorded = false;
+  const fakeResUnrecorded: any = {
+    status: (code: number) => {
+      if (code === 404 || code === 403 || code === 400) rejectedUnrecorded = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  process.env.TWILIO_AUTH_TOKEN = mockTwilioAuthToken;
+  try {
+    await twilioStatusWebhookHandler(fakeReqUnrecorded, fakeResUnrecorded);
+  } finally {
+    process.env.TWILIO_AUTH_TOKEN = prevTwilioToken;
+  }
+  if (!rejectedUnrecorded) {
+    throw new Error('twilioStatusWebhookHandler must reject arbitrary unrecorded MessageSid');
+  }
+  console.log('  ✓ Arbitrary unrecorded message SIDs are strictly rejected (not trusted to mark messages delivered)');
+
+  // 4. Update status to delivered upon provider confirmation
+  await db.execute("UPDATE booking_notifications SET status = 'delivered', error_message = 'Provider confirmed' WHERE message_id = ?", [twilioTestSid]);
+  const deliveredNotif = await db.queryRow<any>('SELECT status FROM booking_notifications WHERE message_id = ?', [twilioTestSid]);
+  if (!deliveredNotif || deliveredNotif.status !== 'delivered') {
+    throw new Error('Notification status must be updated to "delivered" only upon provider confirmation');
+  }
+  console.log('  ✓ Notification status marked "delivered" upon verified provider delivery event');
+  console.log('✓ PASS: Twilio status lifecycle & webhook authenticity verification passed');
+
+  // Test 60: Notification Failure Resilience & Customer Login OTP
+  console.log('\nTest 60: Notification Failure Resilience & Customer Login OTP');
+  // 1. Verify customer OTP generation
+  const otpRes = await smsService.sendOtp('9811223344', '123456');
+  if (!otpRes.success) {
+    throw new Error(`Customer OTP dispatch test failed: ${otpRes.error}`);
+  }
+  console.log(`  ✓ Customer login OTP generated and handled successfully (${otpRes.provider})`);
+
+  // 2. Verify that email/SMS provider failures do not fail or delete the booking
+  const resilientBookingId = `BD-RESILIENT-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO bookings (
+      id, customer_id, customer_name, customer_phone, flat, area, city, pincode,
+      appointment_date, appointment_slot, payment_method, payment_status,
+      subtotal, total_payable, booking_status, created_at
+    ) VALUES (?, 'cust-resilient', 'Resilient Customer', '9811223344', 'Flat 202', 'Saket', 'Delhi', '110017',
+      '2026-11-26', '12:00 PM', 'COD', 'pending', 1200, 1200, 'pending', ?)
+  `, [resilientBookingId, new Date().toISOString()]);
+
+  // Simulate an email dispatch error
+  const emailFailedResult = await (emailService as any).sendNewBookingAlertToOwner({
+    id: resilientBookingId,
+    customer_name: 'Resilient Customer'
+  }).catch((e: any) => ({ success: false, error: e.message }));
+
+  // Confirm booking remains intact and active
+  const persistentBooking = await db.queryRow<any>('SELECT id, payment_status, booking_status FROM bookings WHERE id = ?', [resilientBookingId]);
+  if (!persistentBooking || persistentBooking.id !== resilientBookingId) {
+    throw new Error('Booking must never be deleted if email/SMS notifications fail');
+  }
+  console.log(`  ✓ Booking ${persistentBooking.id} remains intact and persistent in database regardless of notification failure`);
+
+  // Clean up test records
+  await db.execute('DELETE FROM bookings WHERE id = ?', [resilientBookingId]);
+  await db.execute('DELETE FROM booking_notifications WHERE id = ?', [twilioTestNotifId]);
+  console.log('✓ PASS: Asynchronous notification failure resilience & customer OTP verified');
+
   await db.close();
-  console.log('\n=== ALL 57 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 60 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

@@ -27,6 +27,7 @@ export interface SmsSendResult {
   success: boolean;
   provider: 'msg91' | 'fast2sms' | 'twilio' | 'console';
   messageId?: string;
+  status?: string;
   error?: string;
   telemetryMessage?: string;
 }
@@ -132,7 +133,7 @@ export class SmsService {
   private async isNotificationAlreadySent(bookingId: string, notificationType: string): Promise<boolean> {
     try {
       const existing = await db.queryRow(
-        "SELECT id FROM booking_notifications WHERE booking_id = ? AND notification_type = ? AND status IN ('sent', 'simulated')",
+        "SELECT id FROM booking_notifications WHERE booking_id = ? AND notification_type = ? AND status IN ('sent', 'delivered', 'simulated', 'queued', 'accepted')",
         [bookingId, notificationType]
       );
       return !!existing;
@@ -154,6 +155,17 @@ export class SmsService {
     try {
       const id = `notif-sms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const now = new Date().toISOString();
+      let statusToStore = 'failed';
+      if (result.success) {
+        if (result.provider === 'console') {
+          statusToStore = 'simulated';
+        } else if (result.provider === 'twilio') {
+          // Distinguish queued/accepted from delivered. Do not claim delivery without provider confirmation!
+          statusToStore = result.status || 'queued';
+        } else {
+          statusToStore = 'sent';
+        }
+      }
       await db.execute(`
         INSERT INTO booking_notifications (
           id, booking_id, recipient_email, notification_type, subject,
@@ -165,7 +177,7 @@ export class SmsService {
         recipientMasked,
         notificationType,
         subject.substring(0, 100),
-        result.success ? (result.provider === 'console' ? 'simulated' : 'sent') : 'failed',
+        statusToStore,
         result.provider,
         result.messageId || null,
         result.error || null,
@@ -354,6 +366,7 @@ export class SmsService {
               success: true,
               provider: 'twilio',
               messageId: parsedSid,
+              status: parsedStatus,
               telemetryMessage: `Twilio message accepted (Status: ${parsedStatus}, SID: ${parsedSid})`
             });
           } else {
@@ -603,6 +616,7 @@ export class SmsService {
               success: true,
               provider: 'twilio',
               messageId: parsedSid,
+              status: parsedStatus,
               telemetryMessage: `OTP accepted by Twilio messaging service (Status: ${parsedStatus}, SID: ${parsedSid}) for delivery to +91 ${this.maskPhoneNumber(phone)}.`
             });
           } else {

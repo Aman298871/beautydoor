@@ -713,6 +713,9 @@ async function seedEssentialData() {
   try {
     await db.execute("CREATE INDEX IF NOT EXISTS idx_booking_notifications_bid ON booking_notifications(booking_id)");
   } catch { }
+  try {
+    await db.execute("ALTER TABLE booking_notifications ADD COLUMN IF NOT EXISTS telemetry TEXT");
+  } catch { }
 
   // Idempotent migration to make pincode column nullable in bookings for existing databases
   try {

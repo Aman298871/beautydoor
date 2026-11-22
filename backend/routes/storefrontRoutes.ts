@@ -1048,18 +1048,64 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
     }
 
     const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
-    const paymentOptions = await getAuthoritativePaymentOptions();
-    if (paymentMethod === 'RAZORPAY' && !paymentOptions.razorpayAvailable) {
-      res.status(400).json({
-        error: paymentOptions.disabledReason || 'Online payment via Razorpay is currently disabled. Please select Cash on Delivery (Pay After Service).',
-        code: 'RAZORPAY_DISABLED'
-      });
+    const paymentMethodChoice = (paymentMethod || 'COD').toString().toUpperCase().trim();
+    if (paymentMethodChoice !== 'COD' && paymentMethodChoice !== 'RAZORPAY') {
+      res.status(400).json({ error: 'Invalid payment method selected. Must be Cash on Delivery (COD) or Online Payment (RAZORPAY).' });
       return;
     }
-    const chosenPaymentMethod = (paymentOptions.razorpayAvailable && paymentMethod === 'RAZORPAY') ? 'RAZORPAY' : 'COD';
+
+    const paymentOptions = await getAuthoritativePaymentOptions();
+    if (paymentMethodChoice === 'RAZORPAY') {
+      if (!paymentOptions.razorpayAvailable) {
+        res.status(400).json({
+          error: paymentOptions.disabledReason || 'Online payment via Razorpay is currently disabled or unconfigured. Please select Cash on Delivery (Pay After Service).',
+          code: 'RAZORPAY_DISABLED'
+        });
+        return;
+      }
+    }
+
+    // STRICT PAYMENT INTEGRITY: Never silently fallback a Razorpay selection to COD.
+    const chosenPaymentMethod: 'COD' | 'RAZORPAY' = paymentMethodChoice === 'RAZORPAY' ? 'RAZORPAY' : 'COD';
     // Payments start as pending until verified through gateway webhook / signature or collected on doorstep
     const paymentStatus = 'pending';
     const nowIso = new Date().toISOString();
+
+    // Create official Razorpay Order BEFORE persisting booking if online payment was chosen
+    let razorpayOrderData: any = null;
+    if (chosenPaymentMethod === 'RAZORPAY') {
+      const amountInPaise = Math.round(totalPayable * 100);
+      if (isNaN(amountInPaise) || amountInPaise <= 0) {
+        res.status(400).json({ error: 'Online payment order amount must be greater than zero.' });
+        return;
+      }
+      try {
+        const order = await razorpayService.createOrder({
+          bookingId,
+          amountInPaise,
+          currency: 'INR',
+          notes: {
+            bookingId,
+            customerName,
+            customerPhone: `+91 ${cleanPhone}`
+          }
+        });
+        razorpayOrderData = {
+          orderId: order.id,
+          amount: amountInPaise,
+          currency: 'INR',
+          keyId: razorpayService.getKeyId(),
+          bookingId
+        };
+      } catch (rpErr: any) {
+        console.error('[Razorpay] Order creation on booking checkout failed:', rpErr.message);
+        res.status(502).json({
+          error: `Online payment gateway error: ${rpErr.message || 'Could not initiate Razorpay order'}. Please retry online payment or choose Pay After Service (COD).`,
+          code: 'RAZORPAY_ORDER_FAILED'
+        });
+        return;
+      }
+    }
 
     // Upsert customer record
     const customerId = `cust-${cleanPhone}`;
@@ -1094,8 +1140,9 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
           flat, landmark, area, city, pincode,
           subtotal, package_discount, campaign_discount, coupon_discount, coupon_code,
           delivery_fee, slot_charge, total_payable, appointment_date, appointment_slot,
-          payment_method, payment_status, booking_status, internal_notes, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          payment_method, payment_status, booking_status, internal_notes, created_at,
+          razorpay_order_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
       `, [
         bookingId,
         customerId,
@@ -1119,7 +1166,8 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         chosenPaymentMethod,
         paymentStatus,
         notes || 'Booked via BeautyDoor Customer Web Application.',
-        nowIso
+        nowIso,
+        razorpayOrderData?.orderId || null
       ]);
 
       for (let idx = 0; idx < validatedItems.length; idx++) {
@@ -1144,41 +1192,6 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
         ]);
       }
     });
-
-    // Real Razorpay Order creation if customer chose online payment
-    let razorpayOrderData: any = null;
-    if (chosenPaymentMethod === 'RAZORPAY') {
-      try {
-        const amountInPaise = Math.round(totalPayable * 100);
-        const order = await razorpayService.createOrder({
-          bookingId,
-          amountInPaise,
-          currency: 'INR',
-          notes: {
-            bookingId,
-            customerName,
-            customerPhone: `+91 ${cleanPhone}`
-          }
-        });
-        await db.execute('UPDATE bookings SET razorpay_order_id = ? WHERE id = ?', [order.id, bookingId]);
-        razorpayOrderData = {
-          orderId: order.id,
-          amount: amountInPaise,
-          currency: 'INR',
-          keyId: razorpayService.getKeyId(),
-          bookingId
-        };
-      } catch (rpErr: any) {
-        console.error('[Razorpay] Order creation on booking checkout failed:', rpErr.message);
-        res.status(502).json({
-          error: `Online payment gateway error: ${rpErr.message || 'Could not initiate Razorpay order'}. Please retry online payment or choose Pay After Service (COD).`,
-          bookingId,
-          canRetryRazorpay: true,
-          canFallbackCod: true
-        });
-        return;
-      }
-    }
 
     const fullBooking = {
       id: bookingId,

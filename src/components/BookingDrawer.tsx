@@ -143,21 +143,18 @@ export const BookingDrawer: React.FC<Props> = ({
           data?.paymentOptions?.razorpayKeyId ||
           data?.razorpay?.keyId ||
           data?.settings?.razorpay_key_id ||
+          (import.meta as any).env?.VITE_RAZORPAY_KEY_ID ||
           '';
         const isAvailable = Boolean(isOnlineEnabled && keyId);
         setRazorpayAvailable(isAvailable);
         if (keyId) {
           setRazorpayKeyId(keyId);
         }
-        if (!isAvailable) {
-          setPaymentMethodChoice('COD');
-        }
       })
       .catch(() => {
-        // Network errors fail safe to COD-only
+        // Network errors fail safe
         setRazorpayAvailable(false);
         setRazorpayKeyId('');
-        setPaymentMethodChoice('COD');
       });
   }, []);
 
@@ -434,28 +431,36 @@ export const BookingDrawer: React.FC<Props> = ({
               if (verRes.ok && verData.success) {
                 confirmedBooking.paymentStatus = 'paid';
                 confirmedBooking.paymentMethod = 'RAZORPAY';
+                setCreatedBooking(confirmedBooking);
+                setStep(5);
+                onBookingSuccess(confirmedBooking);
+                onClearCart();
               } else {
-                confirmedBooking.paymentStatus = 'pending';
-                setSubmitError(verData.error || 'Payment signature verification pending. Booking saved.');
+                setSubmitError(verData.error || 'Payment signature verification failed. Online payment could not be validated.');
               }
             } catch (verErr: any) {
               console.warn('[Razorpay] Signature verification error:', verErr.message);
-              confirmedBooking.paymentStatus = 'pending';
+              setSubmitError(`Network error while verifying payment signature (${response.razorpay_payment_id}). Please contact customer support.`);
+            } finally {
+              isSubmittingRef.current = false;
+              setIsSubmitting(false);
             }
-            setCreatedBooking(confirmedBooking);
-            setStep(5);
-            onBookingSuccess(confirmedBooking);
-            onClearCart();
           },
           modal: {
             ondismiss: () => {
-              // If modal is closed, appointment remains booked as pending payment
-              setCreatedBooking(confirmedBooking);
-              setStep(5);
-              onBookingSuccess(confirmedBooking);
-              onClearCart();
+              // Customer closed or dismissed the Razorpay checkout without completing payment
+              // Strictly keep user on checkout with cart intact, never mark paid or show confirmation
+              isSubmittingRef.current = false;
+              setIsSubmitting(false);
+              setSubmitError('Online payment was cancelled or closed. You can retry paying online or choose Cash on Delivery (Pay After Service).');
             }
           }
+        });
+        rzpInstance.on('payment.failed', (failResp: any) => {
+          isSubmittingRef.current = false;
+          setIsSubmitting(false);
+          const reason = failResp?.error?.description || failResp?.error?.reason || 'Payment declined by gateway';
+          setSubmitError(`Payment failed: ${reason}. Please retry online payment or choose Cash on Delivery.`);
         });
         rzpInstance.open();
         return;
@@ -1030,7 +1035,9 @@ export const BookingDrawer: React.FC<Props> = ({
 
                       {/* Prominent BEAUTYFIRST Banner */}
                       <div
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           setCouponCode('BEAUTYFIRST');
                         }}
                         className="p-2.5 bg-gradient-to-r from-[#FAF7F2] to-amber-50/50 border border-[#C5A880]/40 rounded-lg text-xs flex items-center justify-between cursor-pointer hover:border-[#4A0417] transition-all"
@@ -1048,7 +1055,7 @@ export const BookingDrawer: React.FC<Props> = ({
                         </span>
                       </div>
 
-                      <div className="flex gap-2 pt-0.5">
+                      <div className="flex gap-2 pt-0.5" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
                           value={couponCode}
@@ -1059,7 +1066,11 @@ export const BookingDrawer: React.FC<Props> = ({
                         <button
                           type="button"
                           disabled={couponLoading || !couponCode}
-                          onClick={handleApplyCoupon}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleApplyCoupon();
+                          }}
                           className="px-4 py-2 bg-[#1F1A1C] text-white text-xs font-semibold rounded-md hover:bg-black transition-colors disabled:opacity-40"
                         >
                           {couponLoading ? '...' : 'Apply'}
@@ -1076,24 +1087,38 @@ export const BookingDrawer: React.FC<Props> = ({
                     </div>
 
                     {/* Payment Method Selector - COD / Pay After Service & Online Payment */}
-                    <div className="pt-2 space-y-2">
+                    <div className="pt-2 space-y-2 border-t border-[#E8DDD3]/80">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-[#1F1A1C]">Select Payment Method</label>
                         <span className="text-[10px] text-[#7A6B6D]">Choose Doorstep or Online</span>
                       </div>
 
                       {/* Cash on Delivery / Pay After Service */}
-                      <div
-                        onClick={() => {
+                      <label
+                        htmlFor="payment-option-cod"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setPaymentMethodChoice('COD');
                           setSubmitError(null);
                         }}
                         className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                           paymentMethodChoice === 'COD'
-                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
+                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs ring-1 ring-[#4A0417]'
                             : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
                         }`}
                       >
+                        <input
+                          type="radio"
+                          id="payment-option-cod"
+                          name="paymentMethodGroup"
+                          value="COD"
+                          checked={paymentMethodChoice === 'COD'}
+                          onChange={() => {
+                            setPaymentMethodChoice('COD');
+                            setSubmitError(null);
+                          }}
+                          className="sr-only"
+                        />
                         <div className="flex items-center gap-3">
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
                             paymentMethodChoice === 'COD' ? 'border-[#4A0417]' : 'border-stone-300'
@@ -1115,11 +1140,13 @@ export const BookingDrawer: React.FC<Props> = ({
                           </div>
                         </div>
                         <Banknote className="w-4 h-4 text-[#4A0417] shrink-0" />
-                      </div>
+                      </label>
 
                       {/* Online Payment via Razorpay */}
-                      <div
-                        onClick={() => {
+                      <label
+                        htmlFor="payment-option-razorpay"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setPaymentMethodChoice('RAZORPAY');
                           if (!razorpayAvailable) {
                             setSubmitError('Online payment via Razorpay is not configured on this server. Please select Cash on Delivery (Pay After Service).');
@@ -1129,10 +1156,26 @@ export const BookingDrawer: React.FC<Props> = ({
                         }}
                         className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                           paymentMethodChoice === 'RAZORPAY'
-                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs'
+                            ? 'border-[#4A0417] bg-[#FAF7F2] shadow-xs ring-1 ring-[#4A0417]'
                             : 'border-[#E8DDD3] bg-white hover:bg-[#FAF7F2]/60'
                         }`}
                       >
+                        <input
+                          type="radio"
+                          id="payment-option-razorpay"
+                          name="paymentMethodGroup"
+                          value="RAZORPAY"
+                          checked={paymentMethodChoice === 'RAZORPAY'}
+                          onChange={() => {
+                            setPaymentMethodChoice('RAZORPAY');
+                            if (!razorpayAvailable) {
+                              setSubmitError('Online payment via Razorpay is not configured on this server. Please select Cash on Delivery (Pay After Service).');
+                            } else {
+                              setSubmitError(null);
+                            }
+                          }}
+                          className="sr-only"
+                        />
                         <div className="flex items-center gap-3">
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
                             paymentMethodChoice === 'RAZORPAY' ? 'border-[#4A0417]' : 'border-stone-300'
@@ -1154,7 +1197,7 @@ export const BookingDrawer: React.FC<Props> = ({
                           </div>
                         </div>
                         <CreditCard className="w-4 h-4 text-[#4A0417] shrink-0" />
-                      </div>
+                      </label>
                     </div>
 
                     {isBelowMin ? (
@@ -1195,7 +1238,7 @@ export const BookingDrawer: React.FC<Props> = ({
                       <p className="text-[11px] leading-relaxed text-[#554749]">
                         • <strong>Free Cancellation:</strong> 100% free (₹0 fee) if cancelled at least <strong>2 hours</strong> before your appointment.<br />
                         • <strong>Late Cancellation:</strong> Within 2 hours of slot, a <strong>₹200 convenience fee</strong> applies.<br />
-                        • <strong>Payment Mode:</strong> Pay cash or UPI QR after service. No advance required for Cash-on-Delivery.
+                        • <strong>Payment Mode:</strong> {paymentMethodChoice === 'RAZORPAY' ? 'Instant & secure online payment via Razorpay. Your appointment is confirmed upon payment verification.' : 'Pay cash or UPI QR after service. No advance required for Cash-on-Delivery.'}
                       </p>
                     </div>
 
@@ -1402,7 +1445,7 @@ export const BookingDrawer: React.FC<Props> = ({
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold text-[#1F1A1C] pt-2 border-t border-[#E8DDD3]">
-                    <span>Payable at Doorstep:</span>
+                    <span>{paymentMethodChoice === 'RAZORPAY' ? 'Total Payable Online:' : 'Payable at Doorstep:'}</span>
                     <span className="tabular-nums text-[#4A0417]">₹{finalTotal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>

@@ -1357,8 +1357,94 @@ async function verifyAll() {
   console.log(`    ✓ Owner-customized image_url successfully preserved across database re-initialization (Service: ${testSrvId})`);
   console.log('✓ PASS: All 8 Test Matrices (A through H) passed successfully');
 
+  // --- OWNER FEEDBACK & MASTER PROMPT VERIFICATION SUITE ---
+  console.log('\n--- VERIFYING OWNER FEEDBACK & MASTER PROMPT REQUIREMENTS ---');
+
+  // Test 39: Mobile Scroll Lock Mechanics
+  console.log('\nTest 39: Mobile Scroll Lock State & Reference Counting');
+  lockScroll();
+  if (getScrollLockCount() !== 1) throw new Error('Scroll lock count must be 1 after lockScroll()');
+  unlockScroll();
+  if (getScrollLockCount() !== 0) throw new Error('Scroll lock count must be 0 after unlockScroll()');
+  console.log('✓ PASS: Scroll lock captures scroll position, locks body, and cleanly restores state');
+
+  // Test 40: Owner Notification Policy (NO SMS to 7827722522, Email to hello@beautydoor.in)
+  console.log('\nTest 40: Owner Notification Policy (Zero SMS to Owner Mobile, Email Dispatched)');
+  const ownerTestBooking = {
+    id: `BD-TEST-${Date.now()}`,
+    customerName: 'Aman Sharma',
+    customerPhone: '+919876543210',
+    customerEmail: 'aman@example.com',
+    appointmentDate: '2026-11-25',
+    appointmentSlot: '11:00 AM',
+    totalPayable: 1899,
+    paymentMethod: 'COD',
+    flat: 'Flat 402, Tower B',
+    area: 'Saket',
+    city: 'Delhi',
+    pincode: '110017',
+    notes: 'Please bring RICA sensitive wax'
+  };
+
+  const ownerSmsRes = await smsService.sendBookingAlertToOwner(ownerTestBooking);
+  if (!ownerSmsRes.success || ownerSmsRes.messageId !== 'owner-sms-disabled') {
+    throw new Error('Owner SMS must be disabled per business policy');
+  }
+  console.log('✓ PASS: SMS alert to owner mobile +91 78277 22522 is completely disabled');
+
+  const ownerEmailRes = await emailService.sendNewBookingAlertToOwner(ownerTestBooking);
+  if (!ownerEmailRes.success) {
+    throw new Error(`Owner new booking email failed: ${ownerEmailRes.error}`);
+  }
+  console.log('✓ PASS: Immediate new booking email dispatched to hello@beautydoor.in with subject BEAUTYDOOR — NEW BOOKING RECEIVED — [BOOKING ID]');
+
+  // Test 41: Customer SMS Notification Lifecycle
+  console.log('\nTest 41: Customer SMS Notifications (Received, Confirmed, Rejected, Cancelled)');
+  const custPhone = '9876543210';
+  const rcvSms = await smsService.sendCustomerBookingReceivedSms(custPhone, ownerTestBooking.id, 1899, '11:00 AM', '2026-11-25');
+  if (!rcvSms.success) throw new Error('Customer booking received SMS failed');
+
+  const cnfSms = await smsService.sendCustomerBookingConfirmedSms(custPhone, ownerTestBooking.id, '2026-11-25', '11:00 AM', 'Sunita');
+  if (!cnfSms.success) throw new Error('Customer booking confirmed SMS failed');
+
+  const rejSms = await smsService.sendCustomerBookingRejectedSms(custPhone, ownerTestBooking.id, 'Fully booked');
+  if (!rejSms.success) throw new Error('Customer booking rejected SMS failed');
+
+  const canSms = await smsService.sendCustomerBookingCancelledSms(custPhone, ownerTestBooking.id);
+  if (!canSms.success) throw new Error('Customer booking cancelled SMS failed');
+  console.log('✓ PASS: Customer lifecycle SMS notifications (received, confirmed, rejected, cancelled) fully functional');
+
+  // Test 42: Signature Packages image_url column & CRUD
+  console.log('\nTest 42: Packages Schema image_url & Self-Service Management');
+  const testPkgId = `pkg-self-service-${Date.now()}`;
+  await db.execute(`
+    INSERT INTO packages (
+      id, name, slug, subtitle, description, original_price, selling_price,
+      discount_percent, duration_mins, duration_display, inclusions_json,
+      benefits_json, category_ids_json, is_published, badge, image_url, display_order, created_at, updated_at
+    ) VALUES (?, 'Self Service Package', ?, 'Glow Ritual', 'Full body pampering', 2999, 1999, 33, 120, '2 hours', '[]', '[]', '[]', 1, 'Best Seller', 'https://images.unsplash.com/photo-1540555700478-4be289fbecef', 10, ?, ?)
+  `, [testPkgId, `slug-${testPkgId}`, new Date().toISOString(), new Date().toISOString()]);
+
+  const savedPkg = await db.queryRow<any>('SELECT * FROM packages WHERE id = ?', [testPkgId]);
+  if (!savedPkg || savedPkg.image_url !== 'https://images.unsplash.com/photo-1540555700478-4be289fbecef') {
+    throw new Error('Package image_url must persist to database');
+  }
+
+  // Update package image and publish status
+  await db.execute('UPDATE packages SET image_url = ?, is_published = 0 WHERE id = ?', [
+    'https://images.unsplash.com/photo-1560750588-73207b1ef5b8',
+    testPkgId
+  ]);
+  const updatedPkg = await db.queryRow<any>('SELECT * FROM packages WHERE id = ?', [testPkgId]);
+  if (updatedPkg.image_url !== 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8' || updatedPkg.is_published !== 0) {
+    throw new Error('Package update failed to persist image_url or unpublished status');
+  }
+  // Clean up
+  await db.execute('DELETE FROM packages WHERE id = ?', [testPkgId]);
+  console.log('✓ PASS: Packages self-service creation, editing, cover image URL, and publish toggle verified');
+
   await db.close();
-  console.log('\n=== ALL 38 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 42 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

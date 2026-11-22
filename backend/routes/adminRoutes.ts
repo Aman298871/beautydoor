@@ -5,6 +5,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAdminAuth, recordAuditLog } from '../middleware/auth.ts';
 import { emailService } from '../services/emailService.ts';
+import { smsService } from '../services/smsService.ts';
 import { razorpayService } from '../services/razorpayService.ts';
 
 export const adminRouter = Router();
@@ -212,6 +213,9 @@ adminRouter.patch('/bookings/:id/accept', async (req: Request, res: Response): P
   if (updated && updated.customer_email) {
     emailService.sendBookingConfirmationEmail(updated).catch(err => console.warn('[Email] Accept dispatch error:', err.message));
   }
+  if (updated && updated.customer_phone) {
+    smsService.sendCustomerBookingConfirmedSms(updated.customer_phone, updated.id, updated.appointment_date, updated.appointment_slot, updated.assigned_beautician_name).catch(err => console.warn('[SMS] Customer confirm SMS dispatch error:', err.message));
+  }
 
   res.json({ success: true, booking: updated, message: `Booking ${id} accepted and confirmed.` });
 });
@@ -252,6 +256,9 @@ adminRouter.patch('/bookings/:id/reject', async (req: Request, res: Response): P
   const updated = (await db.queryRow('SELECT * FROM bookings WHERE id = ?', [id])) as any;
   if (updated && updated.customer_email) {
     emailService.sendBookingRejectedEmail(updated, reason.trim()).catch(err => console.warn('[Email] Rejection dispatch error:', err.message));
+  }
+  if (updated && updated.customer_phone) {
+    smsService.sendCustomerBookingRejectedSms(updated.customer_phone, updated.id, reason.trim()).catch(err => console.warn('[SMS] Customer reject SMS dispatch error:', err.message));
   }
 
   res.json({ success: true, booking: updated, message: `Booking ${id} rejected. Customer has been notified.` });
@@ -1424,8 +1431,8 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     INSERT INTO packages (
       id, name, slug, subtitle, description, original_price, selling_price,
       discount_percent, duration_mins, duration_display, inclusions_json,
-      benefits_json, category_ids_json, is_published, badge, display_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      benefits_json, category_ids_json, is_published, badge, image_url, display_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [id,
     p.name,
     slug,
@@ -1441,6 +1448,7 @@ adminRouter.post('/packages', async (req: Request, res: Response): Promise<void>
     JSON.stringify(p.category_ids || []),
     p.is_published !== false ? 1 : 0,
     p.badge || null,
+    p.image_url || null,
     Number(p.display_order || 0),
     new Date().toISOString(),
     new Date().toISOString()]));
@@ -1474,7 +1482,7 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
           selling_price = ?, discount_percent = ?, duration_mins = ?, duration_display = ?,
           inclusions_json = ?, benefits_json = ?,
           category_ids_json = CASE WHEN ? IS NOT NULL THEN ? ELSE category_ids_json END,
-          is_published = ?, badge = ?,
+          is_published = ?, badge = ?, image_url = CASE WHEN ? IS NOT NULL THEN ? ELSE image_url END,
           display_order = ?, updated_at = ?
       WHERE id = ?
     `, [p.name,
@@ -1492,6 +1500,8 @@ adminRouter.put('/packages/:id', async (req: Request, res: Response): Promise<vo
       p.category_ids ? JSON.stringify(p.category_ids) : null,
       p.is_published !== undefined ? (p.is_published ? 1 : 0) : 1,
       p.badge || null,
+      p.image_url !== undefined ? p.image_url : null,
+      p.image_url !== undefined ? p.image_url : null,
       Number(p.display_order || 0),
       new Date().toISOString(),
       id]));

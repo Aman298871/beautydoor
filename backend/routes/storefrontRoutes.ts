@@ -1175,12 +1175,17 @@ storefrontRouter.post('/bookings', async (req: Request, res: Response): Promise<
       createdAt: nowIso
     };
 
-    // Dispatches automatic SMS Alert to Owner (Preeti)
-    smsService.sendBookingAlertToOwner(fullBooking).catch(err => {
-      console.warn('[SMS:Owner] Dispatch error:', err.message);
+    // 1. Dispatches immediate new booking alert email to business owner (hello@beautydoor.in)
+    emailService.sendNewBookingAlertToOwner(fullBooking).catch(err => {
+      console.warn('[Email:OwnerAlert] Dispatch error:', err.message);
     });
 
-    console.log(`[NOTIFICATION DISPATCH] Booking Confirmation SMS & WhatsApp dispatched to +91 ${cleanPhone} for Appointment ID ${bookingId}.`);
+    // 2. Dispatches customer booking received SMS
+    smsService.sendCustomerBookingReceivedSms(cleanPhone, bookingId, totalPayable, appointmentSlot, appointmentDate).catch(err => {
+      console.warn('[SMS:Customer] Dispatch error:', err.message);
+    });
+
+    console.log(`[NOTIFICATION DISPATCH] Booking Confirmation Notifications queued for Customer (+91 ${cleanPhone}) & Owner (Email) for Appointment ID ${bookingId}.`);
 
     if (customerEmail && customerEmail.trim().includes('@')) {
       emailService.sendBookingReceivedEmail({
@@ -1760,6 +1765,12 @@ const cancelBookingHandler = async (req: Request, res: Response): Promise<void> 
         refundStatus
       }).catch(err => {
         console.warn('[Email] Storefront cancellation dispatch error:', err.message);
+      });
+    }
+
+    if (booking.customer_phone) {
+      smsService.sendCustomerBookingCancelledSms(booking.customer_phone, bookingId).catch(err => {
+        console.warn('[SMS] Customer cancellation dispatch error:', err.message);
       });
     }
 

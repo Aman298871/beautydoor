@@ -24,6 +24,16 @@
   }
 }
 
+/* Background lock and pause moving animations during open drawer or modal */
+body[data-scroll-locked="true"] {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+body[data-scroll-locked="true"] * {
+  animation-play-state: paused !important;
+}
+
 /* Custom scrollbars for modals and drawer */
 ::-webkit-scrollbar {
   width: 6px;

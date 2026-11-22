@@ -58,46 +58,151 @@ export class SmsService {
   }
 
   /**
-   * Send automatic appointment alert to business owner (Preeti) on new customer booking
+   * Owner notification policy:
+   * SMS/OTP dispatch to owner phone +91 78277 22522 is explicitly disabled per owner mandate.
+   * All new booking notifications are delivered to owner via email at hello@beautydoor.in.
    */
   public async sendBookingAlertToOwner(booking: any): Promise<SmsSendResult> {
-    const ownerPhone = (process.env.OWNER_PHONE_NUMBER || '7827722522').replace(/\D/g, '').slice(-10);
     const bookingId = booking.id || booking.bookingId || 'BD-APPT';
-    const cName = booking.customer_name || booking.customerName || 'Customer';
-    const cPhone = booking.customer_phone || booking.customerPhone || '';
-    const date = booking.appointment_date || booking.appointmentDate || '';
-    const slot = booking.appointment_slot || booking.appointmentSlot || '';
-    const total = booking.total_payable || booking.totalPayable || 0;
-    const method = booking.payment_method || booking.paymentMethod || 'COD';
-    const address = `${booking.flat || booking.address?.flat || ''}, ${booking.area || booking.address?.area || 'Delhi NCR'}`;
+    console.log(`[SMS:OWNER_ALERT] Owner SMS disabled per business policy for booking ${bookingId}. Owner receives comprehensive email alert at hello@beautydoor.in instead.`);
+    return {
+      success: true,
+      provider: 'console',
+      messageId: `owner-sms-disabled`,
+      telemetryMessage: `Owner SMS disabled per business policy (notifications routed to email hello@beautydoor.in)`
+    };
+  }
 
-    const text = `New BeautyDoor Booking ${bookingId}! Client: ${cName} (${cPhone}), Slot: ${date} ${slot}, Amount: ₹${total} (${method}). Address: ${address}.`;
+  /**
+   * Customer SMS Notification: Booking Received (Pending Confirmation)
+   */
+  public async sendCustomerBookingReceivedSms(phone: string, bookingId: string, total: number, slot: string, date: string): Promise<SmsSendResult> {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!this.isValidIndianMobile(cleanPhone)) {
+      return { success: false, provider: this.provider, error: 'Invalid customer phone number' };
+    }
+    const message = `Dear Customer, your BeautyDoor doorstep salon appointment (${bookingId}) for ${date} at ${slot} (₹${total}, COD) is received and is pending confirmation. Team BeautyDoor`;
+    return this.sendCustomerSmsDirect(cleanPhone, message, bookingId);
+  }
 
-    console.log(`[SMS:OWNER_ALERT] Sending booking alert to owner (+91 ${ownerPhone}): "${text}"`);
+  /**
+   * Customer SMS Notification: Booking Confirmed / Accepted
+   */
+  public async sendCustomerBookingConfirmedSms(phone: string, bookingId: string, date: string, slot: string, beauticianName?: string): Promise<SmsSendResult> {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!this.isValidIndianMobile(cleanPhone)) {
+      return { success: false, provider: this.provider, error: 'Invalid customer phone number' };
+    }
+    const assignedText = beauticianName ? ` Esthetician: ${beauticianName}.` : '';
+    const message = `Dear Customer, your BeautyDoor appointment (${bookingId}) for ${date} at ${slot} is CONFIRMED!${assignedText} Pay cash/UPI after service. Helpline: 7827722522`;
+    return this.sendCustomerSmsDirect(cleanPhone, message, bookingId);
+  }
 
-    // In dev / console mode or test
+  /**
+   * Customer SMS Notification: Booking Rejected
+   */
+  public async sendCustomerBookingRejectedSms(phone: string, bookingId: string, reason?: string): Promise<SmsSendResult> {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!this.isValidIndianMobile(cleanPhone)) {
+      return { success: false, provider: this.provider, error: 'Invalid customer phone number' };
+    }
+    const reasonText = reason ? ` Reason: ${reason}` : '';
+    const message = `Dear Customer, we could not accommodate your BeautyDoor booking (${bookingId}).${reasonText} Any advance paid will be 100% refunded. Call 7827722522 to reschedule.`;
+    return this.sendCustomerSmsDirect(cleanPhone, message, bookingId);
+  }
+
+  /**
+   * Customer SMS Notification: Booking Cancelled
+   */
+  public async sendCustomerBookingCancelledSms(phone: string, bookingId: string): Promise<SmsSendResult> {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!this.isValidIndianMobile(cleanPhone)) {
+      return { success: false, provider: this.provider, error: 'Invalid customer phone number' };
+    }
+    const message = `Dear Customer, your BeautyDoor appointment (${bookingId}) has been cancelled. For queries or to rebook, call 7827722522 or visit beautydoor.in.`;
+    return this.sendCustomerSmsDirect(cleanPhone, message, bookingId);
+  }
+
+  /**
+   * Direct customer SMS dispatch helper
+   */
+  private async sendCustomerSmsDirect(cleanPhone: string, message: string, bookingId: string): Promise<SmsSendResult> {
+    console.log(`[SMS:Customer] To: +91 ${cleanPhone} | Booking: ${bookingId} | Message: "${message}"`);
     if (this.provider === 'console' || process.env.NODE_ENV !== 'production') {
       return {
         success: true,
         provider: 'console',
-        messageId: `owner-alert-${Date.now()}`,
-        telemetryMessage: `Owner SMS alert logged for ${bookingId} to +91 ${ownerPhone}`
+        messageId: `cust-sms-${Date.now()}`,
+        telemetryMessage: `Customer SMS simulated for ${bookingId} to +91 ${cleanPhone}`
       };
     }
-
     try {
-      if (this.provider === 'msg91') {
-        return await this.sendViaMsg91(ownerPhone, bookingId);
+      if (this.provider === 'twilio') {
+        return await this.sendCustomMessageViaTwilio(cleanPhone, message);
       } else if (this.provider === 'fast2sms') {
-        return await this.sendViaFast2Sms(ownerPhone, bookingId);
-      } else if (this.provider === 'twilio') {
-        return await this.sendViaTwilio(ownerPhone, bookingId);
+        return await this.sendViaFast2Sms(cleanPhone, message);
+      } else if (this.provider === 'msg91') {
+        return await this.sendViaMsg91(cleanPhone, message);
       }
-      return this.sendViaConsole(ownerPhone, bookingId);
+      return this.sendViaConsole(cleanPhone, message);
     } catch (err: any) {
-      console.warn('[SMS:OWNER_ALERT] Failed to deliver owner SMS:', err.message);
+      console.warn(`[SMS:Customer] Dispatch failed for ${bookingId}:`, err.message);
       return { success: false, provider: this.provider, error: err.message };
     }
+  }
+
+  private sendCustomMessageViaTwilio(phone: string, text: string): Promise<SmsSendResult> {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
+    const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+    const fromNumber = process.env.TWILIO_FROM_NUMBER || '';
+
+    const postData = new URLSearchParams({
+      To: `+91${phone}`,
+      From: fromNumber,
+      Body: text
+    }).toString();
+
+    return new Promise((resolve) => {
+      const authHeader = 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+      const options = {
+        hostname: 'api.twilio.com',
+        port: 443,
+        path: `/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData)
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({
+              success: true,
+              provider: 'twilio',
+              messageId: `tw-${Date.now()}`
+            });
+          } else {
+            resolve({
+              success: false,
+              provider: 'twilio',
+              error: `Twilio HTTP ${res.statusCode}: ${body}`
+            });
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        resolve({ success: false, provider: 'twilio', error: err.message });
+      });
+
+      req.write(postData);
+      req.end();
+    });
   }
 
   /**

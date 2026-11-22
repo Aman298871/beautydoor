@@ -35,7 +35,8 @@ import {
   Wind,
   History,
   ShieldCheck,
-  ExternalLink
+  ExternalLink,
+  BookOpen
 } from 'lucide-react';
 import { AdminChatbot } from './components/AdminChatbot.tsx';
 import { formatDuration } from '../../src/utils/formatters.ts';
@@ -57,7 +58,7 @@ export default function AdminApp() {
 
   // Active Tab: 24 modules architecture
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs' | 'notifications' | 'policies'
+    'overview' | 'dispatch' | 'services' | 'packages' | 'categories' | 'hygiene' | 'pending' | 'priceAudit' | 'campaigns' | 'beauticians' | 'territories' | 'coupons' | 'customers' | 'reviews' | 'audit' | 'settings' | 'faqs' | 'notifications' | 'policies' | 'guide'
   >('dispatch');
 
   // Module data
@@ -1425,6 +1426,7 @@ export default function AdminApp() {
             <option value="policies">Compliance & Policies ({enquiries.length} Enquiries)</option>
             <option value="settings">Settings & Policies</option>
             <option value="faqs">Chatbot FAQs ({faqsList.length})</option>
+            <option value="guide">Preeti's Operations Guide</option>
           </select>
         </div>
 
@@ -1626,6 +1628,15 @@ export default function AdminApp() {
           >
             <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
             <span>Notifications ({notificationsList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('guide')}
+            className={`py-3 px-1 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'guide' ? 'border-[#4A0417] text-[#4A0417] font-bold' : 'border-transparent hover:text-[#1F1A1C]'
+              }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#C5A880]" />
+            <span>Preeti's Guide</span>
           </button>
         </div>
       </header>
@@ -4109,6 +4120,95 @@ export default function AdminApp() {
           </div>
         )}
 
+        {/* 20. PREETI'S OPERATIONS GUIDE */}
+        {activeTab === 'guide' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-[#4A0417] to-[#7A1C30] p-6 rounded-2xl text-white shadow-md">
+              <div className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wider text-[#C5A880] mb-2">
+                <BookOpen className="w-4 h-4 text-[#C5A880]" />
+                <span>BeautyDoor Business Operations Manual</span>
+              </div>
+              <h3 className="font-serif text-2xl font-bold">Welcome, Preeti!</h3>
+              <p className="text-xs text-white/80 max-w-2xl mt-1 leading-relaxed">
+                This management system is directly connected to your live database. Here is your quick operational guide to managing bookings, beauticians, packages, and payments independently.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Card 1: Managing Bookings */}
+              <div className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#4A0417]">
+                  <Clock className="w-4 h-4 text-[#C5A880]" />
+                  <h4>1. How to Handle Customer Bookings</h4>
+                </div>
+                <div className="text-xs text-[#554749] space-y-2 leading-relaxed">
+                  <p>• <strong>Instant Alerts:</strong> Every time a customer books on your website, an email alert with full client and address details is sent to <strong>hello@beautydoor.in</strong>.</p>
+                  <p>• <strong>Dispatch Queue:</strong> Open the <strong>Dispatch & Bookings</strong> tab. New appointments appear in the <strong>Pending</strong> state.</p>
+                  <p>• <strong>Accepting Bookings:</strong> Click <strong>Accept & Confirm</strong> on any pending appointment. This immediately sends an official confirmation email & SMS to the customer.</p>
+                  <p>• <strong>Rejecting Bookings:</strong> If no specialists are available for that slot, click <strong>Reject Booking</strong>, enter a polite reason, and submit. The customer receives an explanatory email.</p>
+                </div>
+              </div>
+
+              {/* Card 2: Beauticians & WhatsApp Coordination */}
+              <div className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#4A0417]">
+                  <Users className="w-4 h-4 text-[#C5A880]" />
+                  <h4>2. Beautician Assignment (Purely Optional)</h4>
+                </div>
+                <div className="text-xs text-[#554749] space-y-2 leading-relaxed">
+                  <p>• <strong>No Blockers:</strong> You do <strong>not</strong> need to assign a beautician in the admin panel to confirm an appointment. You can confirm immediately!</p>
+                  <p>• <strong>WhatsApp Management:</strong> You can continue coordinating directly with your female specialists via your existing WhatsApp group or calls.</p>
+                  <p>• <strong>Optional Tagging:</strong> If you want to keep internal notes in the admin panel, you can select the assigned beautician from the dropdown at any time.</p>
+                </div>
+              </div>
+
+              {/* Card 3: Payments & COD Policy */}
+              <div className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#4A0417]">
+                  <ShieldCheck className="w-4 h-4 text-[#C5A880]" />
+                  <h4>3. Payment Collection (COD / Pay After Service)</h4>
+                </div>
+                <div className="text-xs text-[#554749] space-y-2 leading-relaxed">
+                  <p>• <strong>Current Storefront Mode:</strong> All customer bookings are set to <strong>Cash on Delivery (Pay After Service)</strong>.</p>
+                  <p>• <strong>Zero Advance:</strong> Customers do not need to pay in advance. They pay after their treatments are completed at home.</p>
+                  <p>• <strong>Collection Options:</strong> Beauticians can collect payment via cash or ask the customer to scan any UPI QR code (Google Pay, PhonePe, Paytm).</p>
+                  <p>• <strong>Marking as Paid:</strong> In the admin panel, you can update the payment status to <strong>Paid / Collected</strong> once your beautician confirms receipt.</p>
+                </div>
+              </div>
+
+              {/* Card 4: Signature Packages & Price Updates */}
+              <div className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#4A0417]">
+                  <Gift className="w-4 h-4 text-[#C5A880]" />
+                  <h4>4. Managing Packages & Service Prices</h4>
+                </div>
+                <div className="text-xs text-[#554749] space-y-2 leading-relaxed">
+                  <p>• <strong>Signature Packages:</strong> Go to the <strong>Signature Packages</strong> tab. Click <strong>Create New Package</strong> or <strong>Edit</strong> on existing packages.</p>
+                  <p>• <strong>Free Gifts:</strong> In the package editor, you can check <strong>Complimentary (FREE)</strong> for gifts like free bikini wax or head massage.</p>
+                  <p>• <strong>Publish / Pause:</strong> Toggle the <strong>Live & Bookable on Storefront</strong> checkbox to make packages visible or hide them.</p>
+                  <p>• <strong>Live Sync:</strong> Price or description updates save immediately to the database and reflect in real time on the customer website.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Contact & Escalations */}
+            <div className="bg-[#FAF7F2] p-4 rounded-xl border border-[#E8DDD3] text-xs text-[#554749] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <span className="font-bold text-[#4A0417]">BeautyDoor Concierge & Support Contacts</span>
+                <p className="text-[11px] text-[#7A6B6D] mt-0.5">Phone: +91 78277 22522 · Email: hello@beautydoor.in · Operating in Delhi, Gurugram, and Noida</p>
+              </div>
+              <a
+                href="https://wa.me/917827722522"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 bg-[#4A0417] text-white rounded-lg text-xs font-semibold hover:bg-[#36020F] transition-colors shrink-0"
+              >
+                Owner WhatsApp
+              </a>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* DISPATCH ASSIGNMENT MODAL */}
@@ -4211,7 +4311,7 @@ export default function AdminApp() {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#1F1A1C]">Select Beautician for this Slot:</label>
+              <label className="text-xs font-semibold text-[#1F1A1C]">Assign Beautician (Optional - you can confirm booking immediately and coordinate via WhatsApp):</label>
               <select
                 value={selectedBeauticianId}
                 onChange={(e) => setSelectedBeauticianId(e.target.value)}
@@ -5184,6 +5284,27 @@ export default function AdminApp() {
                     placeholder="e.g. Best Value, Signature Glow"
                     className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Package Cover Image URL</label>
+                <div className="flex gap-2.5 items-center">
+                  <input
+                    type="text"
+                    value={editingPackage.image_url || ''}
+                    onChange={(e) => setEditingPackage({ ...editingPackage, image_url: e.target.value })}
+                    placeholder="https://images.unsplash.com/... or paste image URL"
+                    className="flex-1 px-3 py-2 bg-[#FAF7F2] border border-[#E8DDD3] rounded-md font-mono text-xs"
+                  />
+                  {editingPackage.image_url && (
+                    <img
+                      src={editingPackage.image_url}
+                      alt="Preview"
+                      className="w-9 h-9 rounded-md object-cover border border-[#E8DDD3] shrink-0"
+                      onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                    />
+                  )}
                 </div>
               </div>
 

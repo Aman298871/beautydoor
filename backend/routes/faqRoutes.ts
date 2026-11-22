@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../db/database.ts';
-import { requireAdminAuth } from '../middleware/auth.ts';
+import { requireAdminAuth, JWT_SECRET } from '../middleware/auth.ts';
 
 export const faqRouter = Router();
 
@@ -558,7 +558,7 @@ faqRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const token = authHeader.split(' ')[1];
-      jwt.verify(token, process.env.JWT_SECRET || 'beautydoor-secret-key-production-2026');
+      jwt.verify(token, JWT_SECRET);
       const audience = req.query.audience as string | undefined;
       let query = 'SELECT * FROM faqs';
       const params: any[] = [];

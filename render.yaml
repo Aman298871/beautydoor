@@ -35,8 +35,10 @@ services:
       - key: ENABLE_DEV_OTP
         value: "false"
       - key: ENABLE_RAZORPAY
-        value: "false"
+        value: "true"
       - key: RAZORPAY_ENABLED
-        value: "false"
+        value: "true"
       - key: RAZORPAY_KEY_ID
         value: rzp_live_U2rRiMqcCnXRk6
+      - key: RAZORPAY_KEY_SECRET
+        value: mep2sWSV6gGt2vqXBf049v9Z

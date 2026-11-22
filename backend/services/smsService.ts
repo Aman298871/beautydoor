@@ -77,35 +77,51 @@ export class SmsService {
   }
 
   /**
-   * DLT Template ID Resolution per Transactional Event
+   * DLT Template ID Resolution per Transactional Event - Strict & Event-Specific
+   * Every booking event requires its own approved DLT template ID.
+   * Never fall back to an OTP template for booking notifications.
    */
-  private getTemplateConfig(type: SmsNotificationType) {
+  private getTemplateConfig(type: SmsNotificationType): {
+    msg91TemplateId: string;
+    fast2smsMessageId: string;
+    isOtp: boolean;
+  } {
     switch (type) {
       case 'customer_booking_received':
         return {
-          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_RECEIVED || process.env.MSG91_TEMPLATE_ID || '',
-          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_RECEIVED || process.env.FAST2SMS_MESSAGE_ID || ''
+          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_RECEIVED || '',
+          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_RECEIVED || '',
+          isOtp: false
         };
       case 'customer_booking_confirmed':
         return {
-          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_CONFIRMED || process.env.MSG91_TEMPLATE_ID || '',
-          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_CONFIRMED || process.env.FAST2SMS_MESSAGE_ID || ''
+          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_CONFIRMED || '',
+          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_CONFIRMED || '',
+          isOtp: false
         };
       case 'customer_booking_rejected':
         return {
-          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_REJECTED || process.env.MSG91_TEMPLATE_ID || '',
-          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_REJECTED || process.env.FAST2SMS_MESSAGE_ID || ''
+          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_REJECTED || '',
+          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_REJECTED || '',
+          isOtp: false
         };
       case 'customer_booking_cancelled':
         return {
-          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_CANCELLED || process.env.MSG91_TEMPLATE_ID || '',
-          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_CANCELLED || process.env.FAST2SMS_MESSAGE_ID || ''
+          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_CANCELLED || '',
+          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_CANCELLED || '',
+          isOtp: false
         };
       case 'customer_otp':
+        return {
+          msg91TemplateId: process.env.MSG91_TEMPLATE_ID_OTP || process.env.MSG91_TEMPLATE_ID || '',
+          fast2smsMessageId: process.env.FAST2SMS_TEMPLATE_ID_OTP || process.env.FAST2SMS_MESSAGE_ID || '',
+          isOtp: true
+        };
       default:
         return {
-          msg91TemplateId: process.env.MSG91_TEMPLATE_ID || '',
-          fast2smsMessageId: process.env.FAST2SMS_MESSAGE_ID || ''
+          msg91TemplateId: '',
+          fast2smsMessageId: '',
+          isOtp: false
         };
     }
   }
@@ -327,10 +343,18 @@ export class SmsService {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            let parsedSid = `tw-${Date.now()}`;
+            let parsedStatus = 'queued';
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed.sid) parsedSid = parsed.sid;
+              if (parsed.status) parsedStatus = parsed.status;
+            } catch {}
             resolve({
               success: true,
               provider: 'twilio',
-              messageId: `tw-${Date.now()}`
+              messageId: parsedSid,
+              telemetryMessage: `Twilio message accepted (Status: ${parsedStatus}, SID: ${parsedSid})`
             });
           } else {
             resolve({
@@ -392,6 +416,15 @@ export class SmsService {
     const authKey = process.env.MSG91_AUTH_KEY || '';
     const templateId = templateIdOverride || process.env.MSG91_TEMPLATE_ID || '';
     const senderId = process.env.MSG91_SENDER_ID || 'BTYDOR';
+
+    if (!templateId) {
+      return Promise.resolve({
+        success: false,
+        provider: 'msg91',
+        error: 'MSG91 DLT template ID is missing for this event. Booking message blocked from generic or OTP fallback.',
+        telemetryMessage: 'Missing event-specific MSG91 DLT template ID'
+      });
+    }
 
     const postData = JSON.stringify({
       template_id: templateId,
@@ -459,6 +492,15 @@ export class SmsService {
     const apiKey = process.env.FAST2SMS_API_KEY || '';
     const senderId = process.env.FAST2SMS_SENDER_ID || 'BTYDOR';
     const messageId = messageIdOverride || process.env.FAST2SMS_MESSAGE_ID || '';
+
+    if (!messageId) {
+      return Promise.resolve({
+        success: false,
+        provider: 'fast2sms',
+        error: 'Fast2SMS DLT template ID is missing for this event. Booking message blocked from generic or OTP fallback.',
+        telemetryMessage: 'Missing event-specific Fast2SMS DLT template ID'
+      });
+    }
 
     const postData = JSON.stringify({
       route: 'dlt',
@@ -550,11 +592,18 @@ export class SmsService {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            let parsedSid = `tw-${Date.now()}`;
+            let parsedStatus = 'queued';
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed.sid) parsedSid = parsed.sid;
+              if (parsed.status) parsedStatus = parsed.status;
+            } catch {}
             resolve({
               success: true,
               provider: 'twilio',
-              messageId: `tw-${Date.now()}`,
-              telemetryMessage: `OTP successfully dispatched via Twilio cellular network to +91 ${this.maskPhoneNumber(phone)}.`
+              messageId: parsedSid,
+              telemetryMessage: `OTP accepted by Twilio messaging service (Status: ${parsedStatus}, SID: ${parsedSid}) for delivery to +91 ${this.maskPhoneNumber(phone)}.`
             });
           } else {
             resolve({

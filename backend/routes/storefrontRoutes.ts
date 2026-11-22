@@ -34,12 +34,18 @@ export async function getAuthoritativePaymentOptions(providedSettings?: Record<s
   }
 
   const envExplicitEnable = process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true';
+  const envExplicitDisable = process.env.ENABLE_RAZORPAY === 'false' || process.env.RAZORPAY_ENABLED === 'false';
   const dbExplicitDisable = settings.razorpay_enabled === 'false';
   const dbExplicitEnable = settings.razorpay_enabled === 'true';
   const isConfigured = razorpayService.isConfigured();
   const razorpayKey = razorpayService.getKeyId() || settings.razorpay_key_id || 'rzp_live_U2rRiMqcCnXRk6';
 
-  const isEnabled = settings.razorpay_enabled !== undefined ? dbExplicitEnable : (envExplicitEnable || isConfigured);
+  // Explicit priority:
+  // 1. If DB explicitly enabled: true
+  // 2. If DB explicitly disabled: false
+  // 3. If env explicitly disabled without DB override: false
+  // 4. Otherwise if credentials configured: true
+  const isEnabled = dbExplicitDisable ? false : (dbExplicitEnable ? true : (!envExplicitDisable && isConfigured));
   const isAvailable = isEnabled && isConfigured;
 
   let disabledReason: string | null = null;
@@ -1478,6 +1484,47 @@ const razorpayWebhookHandler = async (req: Request, res: Response): Promise<void
 
 storefrontRouter.post('/payments/razorpay/webhook', razorpayWebhookHandler);
 storefrontRouter.post('/payment/razorpay/webhook', razorpayWebhookHandler);
+
+// Twilio SMS Delivery Status Webhook
+const twilioStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const messageSid = req.body.MessageSid || req.body.SmsSid;
+    const messageStatus = req.body.MessageStatus || req.body.SmsStatus;
+    if (messageSid && messageStatus) {
+      await db.execute(
+        "UPDATE booking_notifications SET status = ?, telemetry = telemetry || ' | Twilio status: ' || ? WHERE message_id = ? OR telemetry LIKE ?",
+        [messageStatus === 'delivered' ? 'sent' : (messageStatus === 'failed' || messageStatus === 'undelivered' ? 'failed' : 'pending'), messageStatus, messageSid, `%${messageSid}%`]
+      );
+    }
+    res.type('text/xml').send('<Response></Response>');
+  } catch (err: any) {
+    res.status(500).send(err.message || 'Twilio webhook processing error');
+  }
+};
+storefrontRouter.post('/webhooks/twilio/sms-status', twilioStatusWebhookHandler);
+
+// Email Delivery Status Webhook (Resend / SMTP provider delivery notifications)
+const emailStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const event = req.body;
+    const emailId = event?.data?.email_id || event?.id;
+    const eventType = event?.type;
+    if (emailId && eventType) {
+      const isSuccess = eventType === 'email.delivered';
+      const isFailed = eventType === 'email.bounced' || eventType === 'email.complained';
+      if (isSuccess || isFailed) {
+        await db.execute(
+          "UPDATE booking_notifications SET status = ?, telemetry = telemetry || ' | Email event: ' || ? WHERE message_id = ? OR telemetry LIKE ?",
+          [isSuccess ? 'sent' : 'failed', eventType, emailId, `%${emailId}%`]
+        );
+      }
+    }
+    res.json({ received: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Email status webhook processing error' });
+  }
+};
+storefrontRouter.post('/webhooks/email-status', emailStatusWebhookHandler);
 
 // 11. Customer Booking Management (Protected with Firebase / OTP Customer Auth)
 const trackBookingsHandler = async (req: Request, res: Response): Promise<void> => {

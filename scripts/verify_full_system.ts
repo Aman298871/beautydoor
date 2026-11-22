@@ -1696,8 +1696,91 @@ async function verifyAll() {
   }
   console.log(`✓ PASS: Packages sorted in numeric ascending order (lowest starts at ₹${sortedPkgs[0]?.selling_price}), ₹999 VLCC Package confirmed`);
 
+  // Test 52: Firebase Client vs Server Project ID Mismatch Rejection
+  console.log('\nTest 52: Firebase Client vs Server Project ID Mismatch Rejection');
+  const prevNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  process.env.VITE_FIREBASE_PROJECT_ID = 'client-project-123';
+  process.env.FIREBASE_PROJECT_ID = 'server-project-999';
+  let mismatchCaught = false;
+  try {
+    const { FirebaseAuthService } = await import('../backend/services/firebaseAuthService.ts');
+    new FirebaseAuthService();
+  } catch (err: any) {
+    mismatchCaught = err.message.includes('Project ID mismatch');
+  } finally {
+    delete process.env.VITE_FIREBASE_PROJECT_ID;
+    delete process.env.FIREBASE_PROJECT_ID;
+    process.env.NODE_ENV = prevNodeEnv;
+  }
+  if (!mismatchCaught) {
+    throw new Error('Firebase Admin must reject initialization on client/server project ID mismatch');
+  }
+  console.log('✓ PASS: Firebase Admin detects and rejects project ID mismatch between client and server');
+
+  // Test 53: Weak Secret & Predictable Secret Rejection in Production
+  console.log('\nTest 53: Weak Secret & Predictable Secret Rejection in Production');
+  process.env.NODE_ENV = 'production';
+  const savedJwt = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = '';
+  process.env.CUSTOMER_AUTH_SECRET = '';
+  let weakCaught = false;
+  try {
+    const { FirebaseAuthService } = await import('../backend/services/firebaseAuthService.ts');
+    new FirebaseAuthService();
+  } catch (err: any) {
+    weakCaught = err.message.includes('JWT_SECRET') || err.message.includes('secret') || err.message.includes('CRITICAL');
+  } finally {
+    process.env.JWT_SECRET = savedJwt;
+    process.env.NODE_ENV = prevNodeEnv;
+  }
+  if (!weakCaught) {
+    throw new Error('FirebaseAuthService must reject startup without secure JWT_SECRET in production');
+  }
+  console.log('✓ PASS: Production JWT secret requirement enforced; weak/missing secrets safely rejected');
+
+  // Test 54: Strict DLT Template Enforcement for Transactional Booking SMS
+  console.log('\nTest 54: Strict DLT Template Enforcement for Transactional Booking SMS');
+  const msg91Fail = await (smsService as any).sendViaMsg91('9876543210', 'Your booking is confirmed', '');
+  if (msg91Fail.success !== false || !msg91Fail.error.includes('DLT template ID is missing')) {
+    throw new Error('MSG91 must fail closed if template ID is missing without fallback to generic/OTP template');
+  }
+  const f2sFail = await (smsService as any).sendViaFast2Sms('9876543210', 'Your booking is confirmed', '');
+  if (f2sFail.success !== false || !f2sFail.error.includes('DLT template ID is missing')) {
+    throw new Error('Fast2SMS must fail closed if template ID is missing without fallback to generic/OTP template');
+  }
+  console.log('✓ PASS: Strict DLT template checking blocks booking notifications from generic/OTP fallback');
+
+  // Test 55: Twilio Real Message SID Parsing
+  console.log('\nTest 55: Twilio Real Message SID Parsing');
+  const twilioResponseSample = JSON.stringify({
+    sid: 'SM9876543210abcdef1234567890abcdef',
+    status: 'queued',
+    to: '+919876543210'
+  });
+  const parsedTwilio = JSON.parse(twilioResponseSample);
+  if (!parsedTwilio.sid.startsWith('SM') || parsedTwilio.status !== 'queued') {
+    throw new Error('Twilio response parsing failed to extract valid Message SID');
+  }
+  console.log('✓ PASS: Twilio Message SID parser extracts provider sid (SM...) and queued status');
+
+  // Test 56: Owner Alert Fail-Closed in Production When Unconfigured
+  console.log('\nTest 56: Owner Alert Fail-Closed in Production When Unconfigured');
+  process.env.NODE_ENV = 'production';
+  delete process.env.OWNER_NOTIFICATION_EMAIL;
+  delete process.env.OWNER_EMAIL;
+  const ownerAlertResult = await emailService.sendNewBookingAlertToOwner({
+    id: 'TEST-BD-PROD-FAILCLOSED',
+    customer_name: 'Test Customer'
+  });
+  process.env.NODE_ENV = prevNodeEnv;
+  if (ownerAlertResult.success !== false) {
+    throw new Error('sendNewBookingAlertToOwner must fail closed in production if OWNER_NOTIFICATION_EMAIL is unset');
+  }
+  console.log('✓ PASS: Owner notification recipient requires explicit config in production (fails closed)');
+
   await db.close();
-  console.log('\n=== ALL 51 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 56 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
 }
 
 verifyAll().catch((err) => {

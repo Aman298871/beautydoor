@@ -16,7 +16,28 @@ export class FirebaseAuthService {
 
   constructor() {
     this.projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'beautydoor-production';
-    this.jwtSecret = process.env.JWT_SECRET || process.env.CUSTOMER_AUTH_SECRET || 'beautydoor_customer_jwt_secret_salt_2026';
+
+    // Verify project IDs match between client and server if both are defined
+    const clientProjectId = process.env.VITE_FIREBASE_PROJECT_ID;
+    const serverProjectId = process.env.FIREBASE_PROJECT_ID;
+    if (clientProjectId && serverProjectId && clientProjectId !== serverProjectId) {
+      const mismatchMsg = `[FirebaseAuthService:SECURITY] Project ID mismatch: Client (VITE_FIREBASE_PROJECT_ID=${clientProjectId}) does not match Server (FIREBASE_PROJECT_ID=${serverProjectId}).`;
+      console.error(mismatchMsg);
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(mismatchMsg);
+      }
+    }
+
+    // Require non-fallback secret in production mode
+    const secret = process.env.CUSTOMER_AUTH_SECRET || process.env.JWT_SECRET;
+    if (process.env.NODE_ENV === 'production') {
+      if (!secret || secret === 'beautydoor_customer_jwt_secret_salt_2026' || secret === 'default_secret' || secret === 'change_this_secret') {
+        throw new Error('CRITICAL: JWT_SECRET or CUSTOMER_AUTH_SECRET must be explicitly configured to a secure random value in production mode.');
+      }
+      this.jwtSecret = secret;
+    } else {
+      this.jwtSecret = secret || 'beautydoor_customer_jwt_secret_salt_2026';
+    }
   }
 
   public getProjectId(): string {
@@ -26,10 +47,10 @@ export class FirebaseAuthService {
   /**
    * Initializes Firebase Admin SDK safely.
    * Supports:
-   * 1. Service account file path via FIREBASE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS
+   * 1. Service account file path via FIREBASE_SERVICE_ACCOUNT_PATH, FIREBASE_SERVICE_ACCOUNT_KEY, or GOOGLE_APPLICATION_CREDENTIALS
    * 2. Raw JSON string via FIREBASE_SERVICE_ACCOUNT_JSON
    * 3. Discrete env vars: FIREBASE_CLIENT_EMAIL & FIREBASE_PRIVATE_KEY
-   * 4. Project ID default initialization
+   * In production mode, fails closed if valid service account credentials are not provided.
    */
   public initFirebaseAdmin(): void {
     if (this.isInitialized || getApps().length > 0) {
@@ -38,26 +59,37 @@ export class FirebaseAuthService {
     }
 
     try {
-      // 1. JSON file path
-      const credPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      // 1. JSON file path (supporting FIREBASE_SERVICE_ACCOUNT_PATH explicitly)
+      const credPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+                       process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH ||
+                       process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+                       (process.env.FIREBASE_SERVICE_ACCOUNT_KEY && fs.existsSync(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) ? process.env.FIREBASE_SERVICE_ACCOUNT_KEY : undefined);
+
       if (credPath && fs.existsSync(credPath)) {
         const fileContent = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+        const effectiveProjectId = fileContent.project_id || this.projectId;
         initializeApp({
           credential: cert(fileContent),
-          projectId: this.projectId
+          projectId: effectiveProjectId
         });
+        this.projectId = effectiveProjectId;
         this.isInitialized = true;
-        console.log('[FirebaseAuthService] Firebase Admin initialized from service account file.');
+        console.log(`[FirebaseAuthService] Firebase Admin initialized from service account file: ${credPath}`);
         return;
       }
 
-      // 2. Direct JSON string in environment
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-        const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      // 2. Direct JSON string in environment (supporting FIREBASE_SERVICE_ACCOUNT_JSON and fallback string FIREBASE_SERVICE_ACCOUNT_KEY)
+      const jsonRaw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
+                      (process.env.FIREBASE_SERVICE_ACCOUNT_KEY && process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim().startsWith('{') ? process.env.FIREBASE_SERVICE_ACCOUNT_KEY : undefined);
+
+      if (jsonRaw) {
+        const parsed = JSON.parse(jsonRaw);
+        const effectiveProjectId = parsed.project_id || this.projectId;
         initializeApp({
           credential: cert(parsed),
-          projectId: this.projectId
+          projectId: effectiveProjectId
         });
+        this.projectId = effectiveProjectId;
         this.isInitialized = true;
         console.log('[FirebaseAuthService] Firebase Admin initialized from service account JSON string.');
         return;
@@ -79,14 +111,22 @@ export class FirebaseAuthService {
         return;
       }
 
-      // 4. Fallback project initialization
+      // 4. In production, fail closed: do not initialize unverified default app
+      if (process.env.NODE_ENV === 'production') {
+        this.isInitialized = false;
+        console.warn('[FirebaseAuthService:SECURITY] No valid service account credentials found (FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON). Refusing unverified fallback in production.');
+        return;
+      }
+
+      // 5. Development/Test mode fallback
       initializeApp({
         projectId: this.projectId
       });
       this.isInitialized = true;
-      console.log(`[FirebaseAuthService] Firebase Admin initialized with default projectId: ${this.projectId}`);
+      console.log(`[FirebaseAuthService] Firebase Admin initialized with local development projectId: ${this.projectId}`);
     } catch (err: any) {
-      console.warn('[FirebaseAuthService] Firebase Admin initialization note:', err.message);
+      this.isInitialized = false;
+      console.warn('[FirebaseAuthService] Firebase Admin initialization error:', err.message);
     }
   }
 
@@ -98,7 +138,18 @@ export class FirebaseAuthService {
     idToken: string
   ): Promise<{ valid: boolean; uid?: string; phone?: string; error?: string }> {
     if (!idToken || typeof idToken !== 'string') {
-      return { valid: false, error: 'No Firebase ID token provided.' };
+      return { valid: false, error: 'Empty or invalid token format' };
+    }
+
+    if (!this.isInitialized) {
+      this.initFirebaseAdmin();
+    }
+
+    if (!this.isInitialized) {
+      return {
+        valid: false,
+        error: 'Firebase Admin authentication is not configured. Configure FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON.'
+      };
     }
 
     const cleanToken = idToken.startsWith('Bearer ') ? idToken.slice(7).trim() : idToken.trim();
@@ -107,7 +158,6 @@ export class FirebaseAuthService {
     }
 
     try {
-      this.initFirebaseAdmin();
       // Verifies RS256 cryptographic signature against Google's public key endpoint
       const decoded = await getAuth().verifyIdToken(cleanToken, true);
 

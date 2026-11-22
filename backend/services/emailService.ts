@@ -769,8 +769,28 @@ export class EmailService {
    * Mandated Subject: BEAUTYDOOR — NEW BOOKING RECEIVED — [BOOKING ID]
    */
   public async sendNewBookingAlertToOwner(booking: any): Promise<EmailDispatchResult> {
-    const ownerEmail = (process.env.OWNER_NOTIFICATION_EMAIL || process.env.OWNER_EMAIL || 'hello@beautydoor.in').trim();
     const bookingId = booking.id || booking.bookingId || 'BD-APPT';
+
+    // Duplicate protection
+    if (bookingId && await this.isNotificationAlreadySent(bookingId, 'owner_new_booking_alert')) {
+      console.log(`[Email:OwnerAlert] Skipped duplicate alert for ${bookingId}`);
+      return {
+        success: true,
+        provider: 'simulated',
+        messageId: `idempotent-skip-${bookingId}`
+      };
+    }
+
+    const explicitOwnerEmail = (process.env.OWNER_NOTIFICATION_EMAIL || process.env.OWNER_EMAIL || '').trim();
+    if (process.env.NODE_ENV === 'production' && !explicitOwnerEmail) {
+      console.warn('[EmailService] Production owner notification recipient is not configured via OWNER_NOTIFICATION_EMAIL or OWNER_EMAIL.');
+      return {
+        success: false,
+        provider: 'simulated',
+        error: 'Production owner notification recipient is not configured. Set OWNER_NOTIFICATION_EMAIL or OWNER_EMAIL.'
+      };
+    }
+    const ownerEmail = explicitOwnerEmail || 'hello@beautydoor.in';
     const customerName = booking.customer_name || booking.customerName || 'Customer';
     const customerPhone = booking.customer_phone || booking.customerPhone || 'Not provided';
     const customerEmail = booking.customer_email || booking.customerEmail || 'Not provided';

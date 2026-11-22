@@ -355,13 +355,34 @@ export class SmsService {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            let parsedSid = `tw-${Date.now()}`;
+            let parsedSid = '';
             let parsedStatus = 'queued';
             try {
               const parsed = JSON.parse(body);
-              if (parsed.sid) parsedSid = parsed.sid;
-              if (parsed.status) parsedStatus = parsed.status;
-            } catch {}
+              if (parsed.sid && typeof parsed.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsed.sid)) {
+                parsedSid = parsed.sid;
+              }
+              if (parsed.status && typeof parsed.status === 'string') {
+                parsedStatus = parsed.status;
+              }
+            } catch (err: any) {
+              resolve({
+                success: false,
+                provider: 'twilio',
+                error: `Failed to parse Twilio response JSON: ${err.message}`
+              });
+              return;
+            }
+
+            if (!parsedSid) {
+              resolve({
+                success: false,
+                provider: 'twilio',
+                error: 'Twilio API did not return a valid provider Message SID (must start with SM/MM and contain 34 characters).'
+              });
+              return;
+            }
+
             resolve({
               success: true,
               provider: 'twilio',
@@ -605,13 +626,34 @@ export class SmsService {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            let parsedSid = `tw-${Date.now()}`;
+            let parsedSid = '';
             let parsedStatus = 'queued';
             try {
               const parsed = JSON.parse(body);
-              if (parsed.sid) parsedSid = parsed.sid;
-              if (parsed.status) parsedStatus = parsed.status;
-            } catch {}
+              if (parsed.sid && typeof parsed.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsed.sid)) {
+                parsedSid = parsed.sid;
+              }
+              if (parsed.status && typeof parsed.status === 'string') {
+                parsedStatus = parsed.status;
+              }
+            } catch (err: any) {
+              resolve({
+                success: false,
+                provider: 'twilio',
+                error: `Failed to parse Twilio response JSON: ${err.message}`
+              });
+              return;
+            }
+
+            if (!parsedSid) {
+              resolve({
+                success: false,
+                provider: 'twilio',
+                error: 'Twilio API did not return a valid provider Message SID (must start with SM/MM and contain 34 characters).'
+              });
+              return;
+            }
+
             resolve({
               success: true,
               provider: 'twilio',

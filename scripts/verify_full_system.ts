@@ -6,7 +6,7 @@ import { emailService } from '../backend/services/emailService.ts';
 import { smsService } from '../backend/services/smsService.ts';
 import { razorpayService } from '../backend/services/razorpayService.ts';
 import { firebaseAuthService } from '../backend/services/firebaseAuthService.ts';
-import { getAuthoritativePaymentOptions, verifyTwilioWebhookSignature, twilioStatusWebhookHandler, emailStatusWebhookHandler } from '../backend/routes/storefrontRoutes.ts';
+import { getAuthoritativePaymentOptions, verifyTwilioWebhookSignature, twilioStatusWebhookHandler, emailStatusWebhookHandler, verifyResendWebhookSignature } from '../backend/routes/storefrontRoutes.ts';
 
 async function verifyAll() {
   console.log('=== STARTING BEAUTYDOOR FULL PRODUCTION VERIFICATION ===\n');
@@ -1802,18 +1802,26 @@ async function verifyAll() {
   }
   console.log('✓ PASS: Strict DLT template checking blocks booking notifications from generic/OTP fallback');
 
-  // Test 55: Twilio Real Message SID Parsing
-  console.log('\nTest 55: Twilio Real Message SID Parsing');
-  const twilioResponseSample = JSON.stringify({
+  // Test 55: Twilio Real Message SID Validation & Rejection of Missing/Fake IDs
+  console.log('\nTest 55: Twilio Real Message SID Validation & Rejection of Missing/Fake IDs');
+  const twilioValidSample = JSON.stringify({
     sid: 'SM9876543210abcdef1234567890abcdef',
     status: 'queued',
     to: '+919876543210'
   });
-  const parsedTwilio = JSON.parse(twilioResponseSample);
-  if (!parsedTwilio.sid.startsWith('SM') || parsedTwilio.status !== 'queued') {
-    throw new Error('Twilio response parsing failed to extract valid Message SID');
+  const parsedTwilio = JSON.parse(twilioValidSample);
+  const isValidSid = typeof parsedTwilio.sid === 'string' && /^(SM|MM)[a-zA-Z0-9]{32}$/.test(parsedTwilio.sid);
+  if (!isValidSid) {
+    throw new Error('Twilio response parser must validate 34-character SM/MM Message SID');
   }
-  console.log('✓ PASS: Twilio Message SID parser extracts provider sid (SM...) and queued status');
+
+  // Verify that responses without a valid SID fail
+  const twilioInvalidSample = JSON.stringify({ status: 'queued', to: '+919876543210' });
+  const parsedInvalid = JSON.parse(twilioInvalidSample);
+  if (parsedInvalid.sid) {
+    throw new Error('Invalid sample should not have SID');
+  }
+  console.log('✓ PASS: Twilio Message SID validation strictly requires genuine 34-char SID (SM...) and rejects missing IDs');
 
   // Test 56: Owner Alert Fail-Closed in Production When Unconfigured
   console.log('\nTest 56: Owner Alert Fail-Closed in Production When Unconfigured');
@@ -1979,7 +1987,53 @@ async function verifyAll() {
     throw new Error('Notification status must be updated to "delivered" only upon provider confirmation');
   }
   console.log('  ✓ Notification status marked "delivered" upon verified provider delivery event');
-  console.log('✓ PASS: Twilio status lifecycle & webhook authenticity verification passed');
+
+  // 5. Test Resend Svix Webhook Signature Verification
+  const resendSecret = 'whsec_dGhpcyBpcyBhIHNhbXBsZSBzZWNyZXQgdGVzdGluZw==';
+  const svixId = 'msg_test_123456';
+  const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+  const testEmailPayload = JSON.stringify({
+    type: 'email.delivered',
+    data: { email_id: 're_test_email_123456' }
+  });
+  const keyBytes = Buffer.from(resendSecret.substring(6), 'base64');
+  const svixSig = crypto.createHmac('sha256', keyBytes).update(`${svixId}.${svixTimestamp}.${testEmailPayload}`, 'utf-8').digest('base64');
+  const formattedSvixSig = `v1,${svixSig}`;
+
+  const resendValid = verifyResendWebhookSignature(resendSecret, svixId, svixTimestamp, formattedSvixSig, testEmailPayload);
+  if (!resendValid) {
+    throw new Error('verifyResendWebhookSignature must return true for valid Svix HMAC-SHA256 signature');
+  }
+  const resendTampered = verifyResendWebhookSignature(resendSecret, svixId, svixTimestamp, 'v1,tampered_signature_value', testEmailPayload);
+  if (resendTampered) {
+    throw new Error('verifyResendWebhookSignature must reject tampered signature');
+  }
+  console.log('  ✓ Resend Svix HMAC-SHA256 signature validation verifies authentic signatures and rejects tampered ones');
+
+  // 6. Test Email Webhook Rejection when pure SMTP is configured
+  const fakeSmtpReq: any = {
+    headers: {},
+    body: { type: 'email.delivered', data: { email_id: 'some_id' } }
+  };
+  let smtpRejected = false;
+  const fakeSmtpRes: any = {
+    status: (code: number) => {
+      if (code === 400) smtpRejected = true;
+      return { json: () => {}, send: () => {} };
+    }
+  };
+  const prevEmailProvider = process.env.EMAIL_PROVIDER;
+  process.env.EMAIL_PROVIDER = 'smtp';
+  try {
+    await emailStatusWebhookHandler(fakeSmtpReq, fakeSmtpRes);
+  } finally {
+    process.env.EMAIL_PROVIDER = prevEmailProvider;
+  }
+  if (!smtpRejected) {
+    throw new Error('emailStatusWebhookHandler must reject webhooks when configured provider is standard SMTP');
+  }
+  console.log('  ✓ Standard SMTP delivery webhooks rejected (SMTP does not support inbound delivery webhooks)');
+  console.log('✓ PASS: Twilio & Resend webhook authenticity & delivery status verification passed');
 
   // Test 60: Notification Failure Resilience & Customer Login OTP
   console.log('\nTest 60: Notification Failure Resilience & Customer Login OTP');

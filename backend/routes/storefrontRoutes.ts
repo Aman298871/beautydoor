@@ -1603,18 +1603,103 @@ export const twilioStatusWebhookHandler = async (req: Request, res: Response): P
 };
 storefrontRouter.post('/webhooks/twilio/sms-status', twilioStatusWebhookHandler);
 
-// Email Delivery Status Webhook (Resend / SMTP provider delivery notifications)
+/**
+ * Verify Resend Webhook Signature via Svix HMAC-SHA256 procedure
+ * Standard Resend webhook headers: svix-id, svix-timestamp, svix-signature
+ * Secret format: whsec_<base64> or raw secret string
+ */
+export function verifyResendWebhookSignature(
+  signingSecret: string,
+  svixId: string | undefined,
+  svixTimestamp: string | undefined,
+  svixSignature: string | undefined,
+  rawBody: string | Buffer
+): boolean {
+  if (!signingSecret || !svixId || !svixTimestamp || !svixSignature) {
+    return false;
+  }
+
+  // Prevent replay attacks (5 minutes tolerance)
+  const timestampNum = parseInt(svixTimestamp, 10);
+  if (isNaN(timestampNum)) return false;
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  if (Math.abs(currentTimestamp - timestampNum) > 300) {
+    return false;
+  }
+
+  // Extract secret key bytes (strip whsec_ prefix if present)
+  let key: Buffer;
+  if (signingSecret.startsWith('whsec_')) {
+    key = Buffer.from(signingSecret.substring(6), 'base64');
+  } else {
+    key = Buffer.from(signingSecret, 'utf-8');
+  }
+
+  const payloadString = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf-8');
+  const toSign = `${svixId}.${svixTimestamp}.${payloadString}`;
+  const computedSignature = crypto
+    .createHmac('sha256', key)
+    .update(toSign, 'utf-8')
+    .digest('base64');
+
+  // Check against all space-separated signatures in svix-signature
+  const signatures = svixSignature.split(' ');
+  for (const sig of signatures) {
+    const [version, signature] = sig.split(',');
+    if (version === 'v1' && signature) {
+      try {
+        const a = Buffer.from(signature, 'base64');
+        const b = Buffer.from(computedSignature, 'base64');
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+          return true;
+        }
+      } catch {}
+    }
+  }
+
+  return false;
+}
+
+// Email Delivery Status Webhook (Resend provider delivery notifications)
+// Note: Standard SMTP protocols do NOT support inbound HTTP delivery webhooks.
+// Inbound HTTP delivery webhooks are only available when using API providers like Resend.
 export const emailStatusWebhookHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const configuredSecret = process.env.EMAIL_WEBHOOK_SECRET || process.env.RESEND_WEBHOOK_SECRET || '';
-    const incomingAuth = (req.headers['x-webhook-secret'] as string) || (req.headers['authorization'] as string) || '';
+    const configuredProvider = (process.env.EMAIL_PROVIDER || 'smtp').toLowerCase();
 
-    // Verify webhook authenticity: reject unauthenticated webhook events
-    if (configuredSecret) {
-      const token = incomingAuth.replace(/^Bearer\s+/i, '');
-      if (!token || token !== configuredSecret) {
-        res.status(403).json({ error: 'Invalid or missing email webhook secret/signature.' });
-        return;
+    // Explicitly reject if configured provider is pure SMTP, as standard SMTP does not support inbound webhooks
+    if (configuredProvider === 'smtp') {
+      res.status(400).json({
+        error: 'Standard SMTP does not support inbound delivery webhooks. Inbound delivery status webhooks require an API provider like Resend.',
+        code: 'SMTP_WEBHOOK_UNSUPPORTED'
+      });
+      return;
+    }
+
+    const signingSecret = process.env.RESEND_WEBHOOK_SECRET || process.env.EMAIL_WEBHOOK_SECRET || '';
+    const svixId = (req.headers['svix-id'] as string) || '';
+    const svixTimestamp = (req.headers['svix-timestamp'] as string) || '';
+    const svixSignature = (req.headers['svix-signature'] as string) || '';
+    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
+    const incomingBearer = (req.headers['x-webhook-secret'] as string) || (req.headers['authorization'] as string) || '';
+
+    // Verify webhook authenticity
+    if (signingSecret) {
+      // 1. Try Resend Svix signature if svix headers are present
+      if (svixSignature && svixId && svixTimestamp) {
+        const isSvixValid = verifyResendWebhookSignature(signingSecret, svixId, svixTimestamp, svixSignature, rawBody);
+        if (!isSvixValid) {
+          res.status(403).json({ error: 'Invalid Resend webhook signature.' });
+          return;
+        }
+      } else {
+        // 2. Otherwise verify shared webhook secret / bearer token
+        const token = incomingBearer.replace(/^Bearer\s+/i, '');
+        if (!token || token !== signingSecret) {
+          res.status(403).json({ error: 'Invalid or missing email webhook secret/signature.' });
+          return;
+        }
       }
     } else if (process.env.NODE_ENV === 'production') {
       res.status(403).json({ error: 'Email webhook secret not configured. Unauthenticated webhooks rejected.' });

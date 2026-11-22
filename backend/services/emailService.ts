@@ -116,7 +116,7 @@ export class EmailService {
       };
     }
 
-    console.log(`[EmailService:Simulated] To: ${to} | Subject: "${subject}" | Delivered successfully to simulated inbox.`);
+    console.log(`[EmailService:Simulated] To: ${to} | Subject: "${subject}" | Simulated audit record created (not delivered to real inbox).`);
     return {
       success: true,
       provider: 'simulated',

@@ -4,6 +4,7 @@ import {
   ExternalLink, ArrowRight, RotateCcw, ShieldCheck, CheckCircle2,
   Sparkles
 } from 'lucide-react';
+import { lockScroll, unlockScroll } from '../../../src/utils/scrollLock.ts';
 
 interface AdminQuestion {
   id: string;
@@ -34,6 +35,15 @@ export const AdminChatbot: React.FC<AdminChatbotProps> = ({ token, onNavigateTab
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => {
+        unlockScroll();
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (token) {
@@ -240,7 +250,7 @@ export const AdminChatbot: React.FC<AdminChatbotProps> = ({ token, onNavigateTab
 
       {/* Admin Help Drawer */}
       {isOpen && (
-        <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 flex flex-col border-l border-stone-200 animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] h-full h-[100dvh] max-h-[100dvh] pb-[max(0rem,env(safe-area-inset-bottom))] bg-white shadow-2xl z-50 flex flex-col border-l border-stone-200 overflow-hidden overscroll-contain animate-in slide-in-from-right duration-300">
           
           {/* Header */}
           <div className="bg-[#1F1A1C] text-white p-4.5 flex items-center justify-between border-b border-stone-800">

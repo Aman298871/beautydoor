@@ -22,6 +22,56 @@ export const AccountPage: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState<number>(0);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+  const otpAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Web OTP API listener for Android Chrome and supported browsers
+  useEffect(() => {
+    // Only listen when OTP has been sent and user is not yet logged in
+    if (!isOtpSent || isLoggedIn) {
+      if (otpAbortControllerRef.current) {
+        otpAbortControllerRef.current.abort();
+        otpAbortControllerRef.current = null;
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined' && 'OTPCredential' in window && navigator.credentials) {
+      try {
+        const ac = new AbortController();
+        otpAbortControllerRef.current = ac;
+
+        navigator.credentials
+          .get({
+            otp: { transport: ['sms'] },
+            signal: ac.signal
+          } as any)
+          .then((content: any) => {
+            if (content && typeof content.code === 'string') {
+              const detectedDigits = content.code.replace(/\D/g, '').slice(0, 6);
+              if (detectedDigits.length === 6) {
+                setOtp(detectedDigits);
+                setInfoMessage('OTP automatically detected from SMS.');
+              }
+            }
+          })
+          .catch((err: any) => {
+            // AbortError is normal when cancelled or timed out
+            if (err?.name !== 'AbortError') {
+              console.debug('[WebOTP] SMS detection ended:', err?.message || err);
+            }
+          });
+      } catch (err: any) {
+        console.debug('[WebOTP] Not supported or failed to initialize:', err?.message || err);
+      }
+    }
+
+    return () => {
+      if (otpAbortControllerRef.current) {
+        otpAbortControllerRef.current.abort();
+        otpAbortControllerRef.current = null;
+      }
+    };
+  }, [isOtpSent, isLoggedIn, phone]);
 
   // Restore authenticated customer session if available
   useEffect(() => {
@@ -322,10 +372,14 @@ export const AccountPage: React.FC = () => {
                   </div>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
                     maxLength={6}
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="••••••"
+                    aria-label="6-digit verification code"
                     className="w-full px-3.5 py-2.5 text-center text-xl font-mono tracking-widest bg-white border border-[#E8DDD3] rounded-md focus:outline-none focus:border-[#4A0417]"
                   />
                   <div className="flex justify-between items-center pt-1 text-[11px] text-[#7A6B6D]">

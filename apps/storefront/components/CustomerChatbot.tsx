@@ -13,6 +13,7 @@ import {
   ChatbotCategory,
   ChatbotAnswer
 } from '../data/chatbotKnowledgeBase.ts';
+import { lockScroll, unlockScroll } from '../../../src/utils/scrollLock.ts';
 
 interface Message {
   id: string;
@@ -49,6 +50,16 @@ export const CustomerChatbot: React.FC<CustomerChatbotProps> = ({ onOpenBookingM
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Manage background scroll lock on mobile when floating chat panel is open
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => {
+        unlockScroll();
+      };
+    }
+  }, [isOpen]);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -263,7 +274,7 @@ While I don't have an exact match for "${query}", you can:
 
       {/* Floating Inline Chat Panel */}
       {isOpen && (
-        <div className="fixed inset-x-3 bottom-20 sm:bottom-24 sm:right-6 sm:left-auto sm:w-[420px] max-h-[82vh] sm:max-h-[640px] h-[580px] bg-white rounded-3xl shadow-2xl border border-[#E8DDD3] flex flex-col z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-x-2.5 sm:inset-x-auto sm:right-6 sm:left-auto sm:w-[420px] bottom-[max(4.5rem,calc(env(safe-area-inset-bottom)+3.75rem))] sm:bottom-24 max-h-[calc(100dvh-5.5rem)] sm:max-h-[640px] h-[min(580px,calc(100dvh-5.5rem))] bg-white rounded-3xl shadow-2xl border border-[#E8DDD3] flex flex-col z-50 overflow-hidden overscroll-contain animate-in fade-in zoom-in-95 duration-200">
 
           {/* Header */}
           <div className="bg-[#4A0417] text-white px-5 py-4 flex items-center justify-between border-b border-[#C5A880]/30 shrink-0">
@@ -299,7 +310,7 @@ While I don't have an exact match for "${query}", you can:
           </div>
 
           {/* Chat Messages Body */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#FAF7F2]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#FAF7F2] overscroll-contain -webkit-overflow-scrolling-touch">
 
             {messages.map((m) => (
               <div

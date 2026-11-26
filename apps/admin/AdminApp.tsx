@@ -2934,17 +2934,107 @@ export default function AdminApp() {
         {/* 7. COUPONS */}
         {activeTab === 'coupons' && (
           <div className="space-y-6">
-            <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
-              Discount & Coupon Management
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Discount & Promo Code Management
+                </h3>
+                <p className="text-xs text-[#7A6B6D]">
+                  Manage customer promo codes, minimum order requirements, discount caps, and expiry dates.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCoupon({
+                    code: '',
+                    discountType: 'flat',
+                    discountValue: 100,
+                    minOrderAmount: 1100,
+                    maxDiscount: 100,
+                    expiresAt: '2028-12-31',
+                    isActive: 1,
+                    description: ''
+                  });
+                  setIsNewCoupon(true);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#4A0417] hover:bg-[#36020F] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#C5A880]" />
+                <span>Create New Coupon</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {coupons.map((c) => (
-                <div key={c.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs space-y-2">
-                  <span className="font-mono text-base font-bold text-[#4A0417]">{c.code}</span>
-                  <p className="text-xs text-[#554749]">{c.description}</p>
-                  <p className="text-xs text-[#7A6B6D]">
-                    {c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value} FLAT`} (Min ₹{c.min_order_amount})
-                  </p>
+                <div key={c.id} className="bg-white p-5 rounded-2xl border border-[#E8DDD3] shadow-xs flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-base font-bold text-[#4A0417] tracking-wider bg-[#FAF7F2] px-2.5 py-1 rounded border border-[#C5A880]/30">{c.code}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        c.is_active === 1 || c.isActive === 1 || c.isActive === true
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-stone-100 text-stone-500 border border-stone-200'
+                      }`}>
+                        {c.is_active === 1 || c.isActive === 1 || c.isActive === true ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#554749] line-clamp-2">{c.description || 'No description provided.'}</p>
+                    <div className="text-xs text-[#7A6B6D] space-y-1 pt-1 border-t border-[#F0E6DE]">
+                      <div className="flex justify-between">
+                        <span>Benefit:</span>
+                        <strong className="text-[#1F1A1C]">
+                          {c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value} FLAT`}
+                        </strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Min Cart Value:</span>
+                        <strong className="text-[#1F1A1C]">₹{c.min_order_amount?.toLocaleString('en-IN') || 0}</strong>
+                      </div>
+                      {c.discount_type === 'percentage' && (
+                        <div className="flex justify-between">
+                          <span>Max Discount:</span>
+                          <strong className="text-[#1F1A1C]">₹{c.max_discount?.toLocaleString('en-IN') || 'No Limit'}</strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Expires:</span>
+                        <span className="text-[#554749] font-medium">{c.expires_at ? c.expires_at.split('T')[0] : 'Never'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#E8DDD3]">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCouponActive(c.id, c.is_active ?? c.isActive ?? 1)}
+                      className={`flex-1 py-1.5 px-2 text-[11px] font-semibold rounded-lg border transition-colors cursor-pointer ${
+                        c.is_active === 1 || c.isActive === 1 || c.isActive === true
+                          ? 'border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100'
+                          : 'border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {c.is_active === 1 || c.isActive === 1 || c.isActive === true ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCoupon(c);
+                        setIsNewCoupon(false);
+                      }}
+                      className="py-1.5 px-3 text-[11px] font-semibold text-[#4A0417] bg-[#FAF7F2] hover:bg-[#F2ECE3] border border-[#E8DDD3] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCoupon(c.id)}
+                      className="py-1.5 px-2 text-[11px] font-semibold text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors cursor-pointer"
+                      title="Delete coupon"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -4529,7 +4619,7 @@ export default function AdminApp() {
 
       {/* DISPATCH ASSIGNMENT MODAL */}
       {selectedBookingForDispatch && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div>
@@ -4702,7 +4792,7 @@ export default function AdminApp() {
 
       {/* SERVICE EDIT MODAL */}
       {editingService && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
@@ -4987,7 +5077,7 @@ export default function AdminApp() {
 
       {/* CAMPAIGN CREATE / EDIT MODAL */}
       {isNewCampaignModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">
@@ -5167,7 +5257,7 @@ export default function AdminApp() {
 
       {/* NEW CATEGORY MODAL */}
       {isNewCategoryModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <h4 className="font-serif text-lg font-bold text-[#1F1A1C]">Add New Service Category</h4>
@@ -5232,7 +5322,7 @@ export default function AdminApp() {
 
       {/* REJECT BOOKING REASON MODAL */}
       {rejectingBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-red-200 p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -5286,7 +5376,7 @@ export default function AdminApp() {
 
       {/* BEAUTICIAN ADD / EDIT MODAL */}
       {editingBeautician && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -5401,7 +5491,7 @@ export default function AdminApp() {
 
       {/* EDIT / CREATE FAQ MODAL */}
       {editingFaq && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -5560,7 +5650,7 @@ export default function AdminApp() {
 
       {/* EDIT / CREATE PACKAGE MODAL */}
       {editingPackage && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -5887,7 +5977,7 @@ export default function AdminApp() {
 
       {/* EDIT / CREATE HYGIENE COMMITMENT MODAL */}
       {editingHygiene && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -5976,7 +6066,7 @@ export default function AdminApp() {
 
       {/* CONFIRM PENDING PRICE & PUBLISH MODAL */}
       {confirmingPriceService && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2 text-[#4A0417]">
@@ -6057,7 +6147,7 @@ export default function AdminApp() {
 
       {/* CREATE / EDIT COUPON MODAL */}
       {editingCoupon && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2 text-[#4A0417]">
@@ -6194,7 +6284,7 @@ export default function AdminApp() {
 
       {/* CREATE / EDIT TERRITORY MODAL */}
       {editingTerritory && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2 text-[#4A0417]">
@@ -6315,7 +6405,7 @@ export default function AdminApp() {
 
       {/* CANCEL BOOKING MODAL */}
       {cancellingBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2 text-red-700">
@@ -6390,7 +6480,7 @@ export default function AdminApp() {
 
       {/* COLLECT PAYMENT MODAL (Ledger & Partial Payment Support) */}
       {collectingPaymentBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-2">
@@ -6538,7 +6628,7 @@ export default function AdminApp() {
 
       {/* VIEW BEAUTICIAN APPOINTMENTS MODAL */}
       {viewingBeauticianAppointments && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-[#E8DDD3] p-6 space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-[#E8DDD3]">
               <div>
@@ -6591,7 +6681,7 @@ export default function AdminApp() {
 
       {/* SAMPLE INVOICE / RECEIPT MODAL */}
       {isSampleInvoiceOpen && selectedSampleBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-[#E8DDD3] p-6 space-y-5">
             <div className="flex justify-between items-start pb-4 border-b border-[#E8DDD3]">
               <div className="flex items-center gap-3">

@@ -24,6 +24,7 @@ export interface MasterService {
   brand?: string;
   steps_count?: number;
   treatment_steps?: string[];
+  benefits?: string[];
   service_type: 'single' | 'combo' | 'full_body';
   is_combo: number;
   combo_items?: string[];
@@ -1851,6 +1852,42 @@ export const MASTER_SERVICES: MasterService[] = [
     room_conditions: 'Comfortable room with bathroom or shower access nearby.',
     equipment_requirements: 'Bed or mat; BeautyDoor specialist provides disposable protective sheets and sanitized towels.',
     hygiene_precautions: '100% single-use disposable protective sheets, fresh sealed botanical scrub packs, and sanitized towels.'
+  },
+  {
+    id: 'srv-fyc-hydra-boost-body-polishing-1499',
+    category_id: 'cat-body-scrub',
+    name: 'FYC Hydra Boost 4-Step Body Polishing',
+    slug: 'fyc-hydra-boost-body-polishing',
+    description: 'Professional 4-step single-use body polishing ritual with genuine FYC Professional Hydra Boost kit for intense hydration, deep exfoliation, and radiant skin texture.',
+    detailed_description: 'Single-use FYC Professional Hydra Boost Body Polishing Kit ceremony. Four dedicated steps: Step 1: Gentle Body Cleansing, Step 2: Hydrating Micro-Scrub Exfoliation, Step 3: Hydra Boost Polishing Cream Massage, and Step 4: Nourishing Body Pack & Moisture Shield. Leaves whole-body skin silky, supple, and radiant.',
+    duration_mins: 60,
+    duration_display: '1 hour',
+    original_price: 1949,
+    selling_price: 1499,
+    discount_percent: 23,
+    brand: 'FYC Professional',
+    steps_count: 4,
+    service_type: 'single',
+    is_combo: 0,
+    is_published: 1,
+    is_bestseller: 1,
+    deal_badge: 'Hydra Boost Single-Use',
+    treatment_steps: [
+      'Step 1: Gentle Body Cleansing — Prepares and purifies skin surface',
+      'Step 2: Hydrating Body Scrub — Sloughs dead skin cells with gentle micro-crystals',
+      'Step 3: Hydra Boost Polishing Massage — Nourishing cream massage for deep skin hydration',
+      'Step 4: Nourishing Body Pack & Moisture Shield — Locks in moisture for luminous, velvety skin'
+    ],
+    benefits: [
+      '100% single-use sealed FYC Professional Hydra Boost kit unsealed before you',
+      'Deep 4-step exfoliation and intense hydration for all skin types',
+      'Restores velvety softness, removes dullness, and improves skin texture'
+    ],
+    before_instructions: 'Ensure a warm, private room with bathroom access for rinsing. Keep skin clean and dry before therapist arrival.',
+    after_instructions: 'Avoid harsh chemical soaps for 24 hours. Apply gentle moisturizing lotion daily to prolong your glow.',
+    room_conditions: 'Comfortable room with bathroom or shower access nearby.',
+    equipment_requirements: 'Bed or mat; BeautyDoor specialist provides disposable protective sheets and sanitized towels.',
+    hygiene_precautions: '100% single-use disposable protective sheets, sealed FYC Hydra Boost single-use kit, and sanitized towels.'
   },
   {
     id: 'srv-body-scrub-pack-499',

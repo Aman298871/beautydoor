@@ -601,7 +601,7 @@ export const CustomerAccountModal: React.FC<Props> = ({
                       {cancelBookingId === b.id && (
                         <div className="p-3 bg-red-50 rounded-lg border border-red-200 space-y-2 text-xs text-red-950">
                           <p className="font-semibold">Confirm Cancellation?</p>
-                          <p className="text-[11px]">Free cancellation up to 4 hours prior. Reason:</p>
+                          <p className="text-[11px]">Free cancellation up to 2 hours prior (₹200 late fee under 2 hours). Reason:</p>
                           <select
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}

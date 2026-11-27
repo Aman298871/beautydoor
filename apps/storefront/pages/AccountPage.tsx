@@ -243,38 +243,50 @@ export const AccountPage: React.FC = () => {
 
   const handleCancel = async (bookingId: string) => {
     try {
+      const token = sessionStorage.getItem('beautydoor_customer_token') || '';
       const res = await fetch('/api/storefront/customer/cancel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ bookingId, phone, reason: cancelReason })
       });
       const data = await res.json();
       if (res.ok) {
-        setActionMessage(data.message || 'Appointment cancelled.');
+        setActionMessage(data.message || 'Appointment cancelled successfully.');
         setCancelBookingId(null);
-        await fetchBookings(phone);
+        await fetchBookings(phone, token);
+      } else {
+        setErrorMessage(data.error || 'Failed to cancel appointment.');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to cancel appointment.');
     }
   };
 
   const handleReschedule = async () => {
     if (!rescheduleBookingId) return;
     try {
+      const token = sessionStorage.getItem('beautydoor_customer_token') || '';
       const res = await fetch('/api/storefront/customer/reschedule', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ bookingId: rescheduleBookingId, phone, newDate, newSlot })
       });
       const data = await res.json();
       if (res.ok) {
-        setActionMessage(data.message || 'Appointment rescheduled.');
+        setActionMessage(data.message || 'Appointment rescheduled successfully.');
         setRescheduleBookingId(null);
-        await fetchBookings(phone);
+        await fetchBookings(phone, token);
+      } else {
+        setErrorMessage(data.error || 'Failed to reschedule appointment.');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to reschedule appointment.');
     }
   };
 

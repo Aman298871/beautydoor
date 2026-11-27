@@ -101,7 +101,7 @@ export const BookingDrawer: React.FC<Props> = ({
   const isSubmittingRef = useRef(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(true);
 
   // Dynamically load Razorpay SDK when needed
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -308,13 +308,29 @@ export const BookingDrawer: React.FC<Props> = ({
   const handleConfirmBooking = async () => {
     if (isSubmittingRef.current || isSubmitting) return;
 
-    if (!customerName || !customerPhone) {
-      setSubmitError('Please enter your name and contact phone number.');
+    if (!customerName || !customerName.trim()) {
+      setSubmitError('Please enter your full name to proceed with booking.');
+      return;
+    }
+
+    const cleanDigits = customerPhone.replace(/\D/g, '');
+    if (!customerPhone || !customerPhone.trim() || cleanDigits.length < 10) {
+      setSubmitError('Please enter a valid 10-digit mobile number for booking confirmation & arrival calls.');
       return;
     }
 
     if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
       setSubmitError('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+
+    if (isBelowMin) {
+      setSubmitError(`Minimum booking order of ₹${activeMinOrder.toLocaleString('en-IN')} is required for ${city || 'your area'}. Current subtotal: ₹${subtotal.toLocaleString('en-IN')}. Please add services to proceed.`);
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setSubmitError('Please accept BeautyDoor Terms & Cancellation Policy to place your booking.');
       return;
     }
 
@@ -587,7 +603,7 @@ export const BookingDrawer: React.FC<Props> = ({
             )}
 
             {/* Drawer Content Area with safe-area padding so sticky footer never obscures fields */}
-            <div className="p-5 sm:p-6 pb-36 sm:pb-40 overflow-y-auto flex-1 space-y-6 overscroll-contain">
+            <div className="p-5 sm:p-6 pb-48 sm:pb-52 overflow-y-auto flex-1 space-y-6 overscroll-contain">
               <AnimatePresence mode="wait">
                 {/* STEP 1: CART REVIEW */}
                 {step === 1 && (
@@ -1419,7 +1435,7 @@ export const BookingDrawer: React.FC<Props> = ({
 
             {/* Sticky Drawer Footer with Pricing & Step Navigation (Hidden on Success) */}
             {step < 5 && cartItems.length > 0 && (
-              <div className="bg-[#FAF7F2] p-4 sm:p-5 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-[#E8DDD3] space-y-3 shrink-0">
+              <div className="bg-[#FAF7F2] p-4 sm:p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-[#E8DDD3] space-y-3 shrink-0 z-20">
                 {/* Price breakdown summary */}
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-[#6B5A5C]">
@@ -1502,7 +1518,7 @@ export const BookingDrawer: React.FC<Props> = ({
                   {step === 4 && (
                     <button
                       type="button"
-                      disabled={isSubmitting || !customerName.trim() || !customerPhone.trim() || isBelowMin || !agreedToTerms}
+                      disabled={isSubmitting}
                       onClick={handleConfirmBooking}
                       className="flex-1 py-3 bg-[#4A0417] hover:bg-[#36020F] text-[#FAF7F2] text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-md cursor-pointer"
                     >
@@ -1511,9 +1527,9 @@ export const BookingDrawer: React.FC<Props> = ({
                         {isSubmitting
                           ? 'Confirming...'
                           : isBelowMin
-                            ? `Min Order ₹${activeMinOrder}`
+                            ? `Min Order ₹${activeMinOrder.toLocaleString('en-IN')} Required`
                             : !agreedToTerms
-                              ? 'Accept Terms to Continue'
+                              ? 'Accept Terms & Confirm'
                               : paymentMethodChoice === 'RAZORPAY'
                                 ? `Pay Online via Razorpay (₹${finalTotal.toLocaleString('en-IN')})`
                                 : 'Place Booking (Pay After Service)'}

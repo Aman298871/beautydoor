@@ -523,7 +523,7 @@ async function seedEssentialData() {
     cancellation_window_hours: '2',
     cancellation_fee_late: '200',
     cancellation_policy: 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.',
-    announcement_text: '✨ Delhi NCR Official Catalogue: RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
+    announcement_text: '✨ RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service',
     announcement_active: 'true',
     razorpay_enabled: 'true',
     razorpay_key_id: '',
@@ -565,6 +565,7 @@ async function seedEssentialData() {
   await db.execute("UPDATE settings SET value = '2' WHERE key = 'cancellation_window_hours' AND (value = '4' OR value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = '200' WHERE key = 'cancellation_fee_late' AND (value = '' OR value IS NULL)");
   await db.execute("UPDATE settings SET value = 'Free cancellation up to 2 hours before your scheduled appointment slot. Cancellations under 2 hours incur a ₹200 convenience charge.' WHERE key = 'cancellation_policy' AND (value LIKE '%4 hours%' OR value = '' OR value IS NULL)");
+  await db.execute("UPDATE settings SET value = '✨ RICA, Roll-On, Honey, Korean & Brazilian Peel-Off Waxing | Cash after service' WHERE key = 'announcement_text' AND (value LIKE '%Official Catalogue%' OR value LIKE '%Delhi NCR Official%')");
   if (process.env.ENABLE_RAZORPAY === 'true' || process.env.RAZORPAY_ENABLED === 'true') {
     await db.execute("UPDATE settings SET value = 'true' WHERE key = 'razorpay_enabled'");
   }
@@ -1590,6 +1591,89 @@ async function seedEssentialData() {
       category_ids_json = '["cat-facials", "cat-threading"]'
     WHERE id = 'pkg-glow-and-groom-combo'
   `);
+
+  // Ensure owner-approved FYC Hydra Boost 4-Step Body Polishing (₹1,499) is fully seeded and synced
+  const fycSteps = JSON.stringify([
+    'Step 1: Gentle Body Cleansing — Prepares and purifies skin surface',
+    'Step 2: Hydrating Body Scrub — Sloughs dead skin cells with gentle micro-crystals',
+    'Step 3: Hydra Boost Polishing Massage — Nourishing cream massage for deep skin hydration',
+    'Step 4: Nourishing Body Pack & Moisture Shield — Locks in moisture for luminous, velvety skin'
+  ]);
+  const fycBenefits = JSON.stringify([
+    '100% single-use sealed FYC Professional Hydra Boost kit unsealed before you',
+    'Deep 4-step exfoliation and intense hydration for all skin types',
+    'Restores velvety softness, removes dullness, and improves skin texture'
+  ]);
+  const existingFyc = await db.queryRow('SELECT id FROM services WHERE id = ?', ['srv-fyc-hydra-boost-body-polishing-1499']);
+  if (!existingFyc) {
+    await db.execute(`
+      INSERT INTO services (
+        id, category_id, name, slug, description, detailed_description,
+        benefits_json, duration_mins, original_price, selling_price, discount_percent,
+        whats_included_json, ingredients_json, steps_json,
+        before_instructions, after_instructions, room_conditions, equipment_requirements, hygiene_precautions,
+        brand, service_type, is_combo, combo_items_json, steps_count, sub_type,
+        is_active, is_published, pending_notes, is_popular, is_bestseller, is_featured_deal, deal_badge,
+        image_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'srv-fyc-hydra-boost-body-polishing-1499',
+      'cat-body-scrub',
+      'FYC Hydra Boost 4-Step Body Polishing',
+      'fyc-hydra-boost-body-polishing',
+      'Professional 4-step single-use body polishing ritual with genuine FYC Professional Hydra Boost kit for intense hydration, deep exfoliation, and radiant skin texture.',
+      'Single-use FYC Professional Hydra Boost Body Polishing Kit ceremony. Four dedicated steps: Step 1: Gentle Body Cleansing, Step 2: Hydrating Micro-Scrub Exfoliation, Step 3: Hydra Boost Polishing Cream Massage, and Step 4: Nourishing Body Pack & Moisture Shield. Leaves whole-body skin silky, supple, and radiant.',
+      fycBenefits,
+      60,
+      1949,
+      1499,
+      23,
+      JSON.stringify(['FYC Hydra Boost Body Polishing Kit (Single-Use)', 'Cleansing', 'Scrub', 'Massage', 'Pack']),
+      JSON.stringify([]),
+      fycSteps,
+      'Ensure a warm, private room with bathroom access for rinsing. Keep skin clean and dry before therapist arrival.',
+      'Avoid harsh chemical soaps for 24 hours. Apply gentle moisturizing lotion daily to prolong your glow.',
+      'Comfortable room with bathroom or shower access nearby.',
+      'Bed or mat; BeautyDoor specialist provides disposable protective sheets and sanitized towels.',
+      '100% single-use disposable protective sheets, sealed FYC Hydra Boost single-use kit, and sanitized towels.',
+      'FYC Professional',
+      'single',
+      0,
+      JSON.stringify([]),
+      4,
+      'body_polishing',
+      1,
+      1,
+      null,
+      1,
+      1,
+      0,
+      'Hydra Boost',
+      '/images/service_body_polishing.jpg',
+      now,
+      now
+    ]);
+  } else {
+    await db.execute(`
+      UPDATE services SET
+        name = 'FYC Hydra Boost 4-Step Body Polishing',
+        slug = 'fyc-hydra-boost-body-polishing',
+        description = 'Professional 4-step single-use body polishing ritual with genuine FYC Professional Hydra Boost kit for intense hydration, deep exfoliation, and radiant skin texture.',
+        detailed_description = 'Single-use FYC Professional Hydra Boost Body Polishing Kit ceremony. Four dedicated steps: Step 1: Gentle Body Cleansing, Step 2: Hydrating Micro-Scrub Exfoliation, Step 3: Hydra Boost Polishing Cream Massage, and Step 4: Nourishing Body Pack & Moisture Shield. Leaves whole-body skin silky, supple, and radiant.',
+        selling_price = 1499,
+        original_price = 1949,
+        discount_percent = 23,
+        duration_mins = 60,
+        brand = 'FYC Professional',
+        steps_count = 4,
+        steps_json = ?,
+        benefits_json = ?,
+        is_active = 1,
+        is_published = 1,
+        image_url = '/images/service_body_polishing.jpg'
+      WHERE id = 'srv-fyc-hydra-boost-body-polishing-1499'
+    `, [fycSteps, fycBenefits]);
+  }
 
   // 8. HYGIENE & SAFETY COMMITMENTS (idempotent)
   const hygCountRow = await db.queryRow<{ count: string | number }>('SELECT COUNT(*) as count FROM hygiene_commitments');

@@ -213,6 +213,159 @@ export const HomePage: React.FC<Props> = ({
         </div>
       </section>
 
+      {/* 1.25 PROMINENT FEATURED OFFER: ₹999 VLCC FACIAL & WAXING PACKAGE */}
+      {(() => {
+        const special999 = (packages || []).find(
+          (p: any) => p.id === 'pkg-vlcc-facial-waxing-special-999' || p.selling_price === 999 || p.sellingPrice === 999
+        ) || {
+          id: 'pkg-vlcc-facial-waxing-special-999',
+          name: 'VLCC Facial & Waxing Package',
+          slug: 'vlcc-facial-waxing-special-999',
+          subtitle: 'VLCC Facial (Glow / Anti-Tan) + Full Hand Waxing + Full Legs Waxing + Underarms Waxing + Free Eyebrows',
+          description: 'Official BeautyDoor promotional beauty package featuring your choice of VLCC Facial (Glow or Anti-Tan), full hand waxing, full legs waxing, underarms waxing, and complimentary free eyebrows.',
+          duration_mins: 75,
+          selling_price: 999,
+          original_price: 1499,
+          discount_percent: 33,
+          badge: 'Special Offer ₹999 Only',
+          image_url: '/images/package_vlcc_special_999.jpg',
+          inclusions: [
+            { name: 'VLCC Facial (Choice of Glow or Anti-Tan)', is_free: false },
+            { name: 'Full Hand Waxing', is_free: false },
+            { name: 'Full Legs Waxing', is_free: false },
+            { name: 'Underarms Waxing', is_free: false },
+            { name: 'Free Eyebrows', is_free: true }
+          ]
+        };
+
+        const isAdded = cartItemIds.some((id: string) => id.includes(special999.id));
+
+        return (
+          <section className="bg-gradient-to-b from-[#FAF7F2] to-white border-b border-[#E8DDD3] py-10 sm:py-14">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="relative rounded-3xl overflow-hidden border-2 border-[#C5A880]/60 bg-gradient-to-br from-[#4A0417] via-[#36020F] to-[#250009] text-white shadow-2xl">
+                {/* Decorative Background Accents */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-[#C5A880]/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 sm:p-10 lg:p-12">
+                  {/* Left Column: Offer Details (7 cols) */}
+                  <div className="lg:col-span-7 space-y-6">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="px-3 py-1 bg-[#C5A880] text-[#1F1A1C] text-xs font-bold tracking-wider rounded-full uppercase shadow-xs">
+                        Featured Offer • ₹999 Only
+                      </span>
+                      <span className="px-3 py-1 bg-white/10 backdrop-blur-xs text-[#FAF7F2] text-xs font-semibold rounded-full flex items-center gap-1.5 border border-white/15">
+                        <Sparkles className="w-3.5 h-3.5 text-[#C5A880]" />
+                        <span>33% Savings</span>
+                      </span>
+                      <span className="px-3 py-1 bg-white/10 backdrop-blur-xs text-[#FAF7F2] text-xs font-medium rounded-full flex items-center gap-1.5 border border-white/15">
+                        <Clock className="w-3.5 h-3.5 text-[#C5A880]" />
+                        <span>75 Mins Ritual</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <h2 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-[#FAF7F2] leading-tight">
+                        {special999.name}
+                      </h2>
+                      <p className="text-sm sm:text-base text-[#FAF7F2]/80 mt-2 font-light leading-relaxed">
+                        {special999.subtitle || 'VLCC Facial + Full Arms Waxing + Full Legs Waxing + Underarms Waxing + Free Eyebrows'}
+                      </p>
+                    </div>
+
+                    {/* 5 Inclusions Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-white/10 text-xs sm:text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-[#C5A880] shrink-0" />
+                        <span>VLCC Facial (Glow or Anti-Tan)</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-white/10 text-xs sm:text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-[#C5A880] shrink-0" />
+                        <span>Full Arms / Hand Waxing</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-white/10 text-xs sm:text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-[#C5A880] shrink-0" />
+                        <span>Full Legs Waxing</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-white/10 text-xs sm:text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-[#C5A880] shrink-0" />
+                        <span>Underarms Waxing</span>
+                      </div>
+                      <div className="sm:col-span-2 flex items-center gap-2 bg-[#C5A880]/20 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-[#C5A880]/30 text-xs sm:text-sm text-[#FAF7F2] font-semibold">
+                        <Sparkles className="w-4 h-4 text-[#C5A880] shrink-0" />
+                        <span>Complimentary Free Eyebrows Included</span>
+                      </div>
+                    </div>
+
+                    {/* Pricing & CTA */}
+                    <div className="pt-3 flex flex-col sm:flex-row sm:items-center gap-5">
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-3xl sm:text-4xl font-serif font-bold text-[#FAF7F2] tabular-nums">
+                          ₹999
+                        </span>
+                        <span className="text-lg text-white/50 line-through tabular-nums">
+                          ₹1,499
+                        </span>
+                        <span className="text-xs text-emerald-300 font-semibold bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                          Save ₹500
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onAddPackage) {
+                            onAddPackage(special999);
+                          }
+                        }}
+                        className="w-full sm:w-auto px-8 py-3.5 bg-[#C5A880] hover:bg-[#d6ba94] text-[#1F1A1C] text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer group"
+                      >
+                        {isAdded ? (
+                          <>
+                            <Check className="w-4 h-4 text-[#1F1A1C]" />
+                            <span>Package in Cart · View & Book</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-[#1F1A1C]" />
+                            <span>Book Package for ₹999</span>
+                            <ArrowRight className="w-4 h-4 text-[#1F1A1C] group-hover:translate-x-1 transition-transform" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Visual Poster Card (5 cols) */}
+                  <div className="lg:col-span-5 flex justify-center">
+                    <div className="relative w-full max-w-sm rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-white/5 group">
+                      <img
+                        src="/images/package_vlcc_special_999.jpg"
+                        alt="VLCC Facial & Waxing Package ₹999"
+                        onError={(e) => {
+                          // Fallback to hero beauty ritual image if custom poster is not cached
+                          (e.target as HTMLImageElement).src = '/images/hero_beauty_ritual.jpg';
+                        }}
+                        className="w-full h-72 sm:h-80 object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-5">
+                        <span className="text-xs text-[#C5A880] font-bold uppercase tracking-wider">
+                          Certified Female Specialist
+                        </span>
+                        <p className="text-sm font-semibold text-white mt-1">
+                          Single-use disposable waxing spatulas & sterile facial kits
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       {/* 1.5 SERVING ALL ACROSS DELHI NCR */}
       <section className="bg-white border-b border-[#E8DDD3] py-8 sm:py-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">

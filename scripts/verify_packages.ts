@@ -41,6 +41,15 @@ async function verify() {
   const honeyUnderRica = ricaPackages.filter((p: any) => p.id === 'pkg-honey-brazilian-bikini' || p.id === 'pkg-glow-and-smooth');
   console.log(`\nHoney/Korean packages incorrectly mapped to cat-rica-waxing: ${honeyUnderRica.length} => ${honeyUnderRica.length === 0 ? 'PASS (STRICT EXCLUSION)' : 'FAIL'}`);
 
+  // Verify FYC Hydra Boost Body Polishing service
+  const fyc = await db.queryRow<any>('SELECT id, name, selling_price, original_price, steps_count, brand, category_id, is_published, steps_json FROM services WHERE id = ?', ['srv-fyc-hydra-boost-body-polishing-1499']);
+  console.log('\n--- FYC HYDRA BOOST SERVICE CHECK ---');
+  console.log('FYC in DB:', fyc?.id === 'srv-fyc-hydra-boost-body-polishing-1499' ? 'PASS' : 'FAIL');
+  console.log(`  Name: ${fyc?.name} | Price: ₹${fyc?.selling_price} (MRP: ₹${fyc?.original_price})`);
+  console.log(`  Brand: ${fyc?.brand} | Steps Count: ${fyc?.steps_count} | Published: ${fyc?.is_published}`);
+  console.log(`  Category: ${fyc?.category_id}`);
+  console.log(`  Steps: ${fyc?.steps_json}`);
+
   await db.close();
 }
 

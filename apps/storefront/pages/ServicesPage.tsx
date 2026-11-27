@@ -119,6 +119,11 @@ export const ServicesPage: React.FC<Props> = ({
       }
     }
     return Array.isArray(catIds) && catIds.includes(selectedCat);
+  }).sort((a: any, b: any) => {
+    // Feature ₹999 package prominently at the top
+    const aIs999 = (a.id === 'pkg-vlcc-facial-waxing-special-999' || a.selling_price === 999) ? 1 : 0;
+    const bIs999 = (b.id === 'pkg-vlcc-facial-waxing-special-999' || b.selling_price === 999) ? 1 : 0;
+    return bIs999 - aIs999;
   });
 
   const handleBookPackage = (pkg: any) => {
@@ -139,7 +144,7 @@ export const ServicesPage: React.FC<Props> = ({
             <button onClick={() => navigate('/')} className="hover:text-[#4A0417] transition-colors cursor-pointer">Home</button>
             <span aria-hidden="true">/</span>
             <button onClick={() => handleSelectCategory('all')} className="hover:text-[#4A0417] transition-colors cursor-pointer">
-              Beauty Catalog
+              All Services
             </button>
             {currentCategoryObj && (
               <>
@@ -298,7 +303,7 @@ export const ServicesPage: React.FC<Props> = ({
                   <span>Curated Package Bundles</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1F1A1C] mt-0.5">
-                  Official BeautyDoor Ready-Made Packages
+                  BeautyDoor Signature Packages
                 </h2>
                 <p className="text-xs sm:text-sm text-[#7A6B6D] font-light mt-0.5">
                   Save up to 30% by bundling your treatments with waxing, manicure, bleach or body polishing.

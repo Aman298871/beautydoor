@@ -69,7 +69,7 @@ export const WaxingCatalogueSection: React.FC<Props> = ({
         <div className="max-w-3xl mb-8">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#4A0417] mb-2">
             <Sparkles className="w-4 h-4 text-[#C5A880]" />
-            <span>Official BeautyDoor Waxing Menu</span>
+            <span>BeautyDoor Waxing Menu</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1F1A1C] tracking-tight">
             Precision At-Home Waxing Rituals
